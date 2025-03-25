@@ -303,8 +303,8 @@ namespace squad_dma
             // ESP Team
             //Program.Log($"LoadConfig - Before sync, SelectedTeam: {_config.SelectedTeam}");
             int index = Array.IndexOf(Enum.GetNames(typeof(Team)), _config.SelectedTeam.ToString());
-            if (index < 0) index = 0; // Sécurité
-            teamComboBox.SelectedIndex = index; // Utiliser directement teamComboBox
+            if (index < 0) index = 0;
+            teamComboBox.SelectedIndex = index;
             //Program.Log($"LoadConfig - After sync, SelectedTeam: {_config.SelectedTeam}, ComboBox Index: {index}");
             #endregion
             #endregion
@@ -946,7 +946,7 @@ namespace squad_dma
         }
         private void DrawPOIText(SKCanvas canvas, MapPosition position, float distance, float bearing, float crosshairSize)
         {
-            int distanceMeters = (int)Math.Round(distance / 100); // distance isn't good before 100m todo
+            int distanceMeters = (int)Math.Round(distance / 100); // distance isn't good before 100m really of todo
             double milliradians = MetersToMilliradians(distanceMeters);
             string[] lines =
             {
@@ -1452,28 +1452,21 @@ namespace squad_dma
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
 
-            // Remplir avec les équipes
+            // Fill with Teams
             teamComboBox.Items.AddRange(Enum.GetNames(typeof(Team)));
             int initialIndex = Array.IndexOf(Enum.GetNames(typeof(Team)), _config.SelectedTeam.ToString());
             if (initialIndex < 0) initialIndex = 0;
             teamComboBox.SelectedIndex = initialIndex;
             Program.Log($"ComboBox initialized with Index: {initialIndex}, SelectedTeam: {_config.SelectedTeam}");
 
-            // Vérifier que le ComboBox est activé
-            teamComboBox.Enabled = true; // Forcer l'activation
+            teamComboBox.Enabled = true; 
             Program.Log($"ComboBox Enabled: {teamComboBox.Enabled}");
 
-            // Attacher les événements
+            // Attach event
             teamComboBox.SelectedIndexChanged += (s, e) =>
             {
                 Program.Log($"ComboBox selection changed to Index: {teamComboBox.SelectedIndex}, Item: {teamComboBox.SelectedItem}");
                 UpdateSelectedTeam(teamComboBox);
-            };
-
-            // Ajouter un événement de clic pour déboguer
-            teamComboBox.MouseClick += (s, e) =>
-            {
-                Program.Log($"ComboBox clicked at {e.Location}");
             };
 
             grpEsp.Controls.Add(lblTeam);
@@ -1507,7 +1500,7 @@ namespace squad_dma
                 Team newTeam = (Team)Enum.Parse(typeof(Team), teamComboBox.SelectedItem.ToString());
                 _config.SelectedTeam = newTeam;
                 //Program.Log($"Selected Team updated to: {_config.SelectedTeam}, ComboBox Index: {teamComboBox.SelectedIndex}");
-                Config.SaveConfig(_config); // Sauvegarde immédiate
+                Config.SaveConfig(_config);
             }
         }
     }
