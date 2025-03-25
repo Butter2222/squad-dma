@@ -907,13 +907,40 @@ namespace squad_dma
                 DrawPOIText(canvas, poiZoomedPos, distance, bearing, crossSize);
             }
         }
+        public double MetersToMilliradians(double meters)
+        {
+            // Define the data points
+            double[] distances = { 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050, 1100, 1150, 1200, 1250 };
+            double[] milliradians = { 1579, 1558, 1538, 1517, 1496, 1475, 1453, 1431, 1409, 1387, 1364, 1341, 1317, 1292, 1267, 1240, 1212, 1183, 1152, 1118, 1081, 1039, 988, 918, 800 };
 
+            // Clamp the input to the valid range
+            if (meters <= 50)
+                return 1579.0; // Minimum limit at 50m
+            if (meters >= 1250)
+                return 800.0;  // Maximum limit at 1250m
+
+            // Find the two points to interpolate between
+            for (int i = 0; i < distances.Length - 1; i++)
+            {
+                if (meters >= distances[i] && meters <= distances[i + 1])
+                {
+                    // Linear interpolation
+                    double rate = (milliradians[i + 1] - milliradians[i]) / (distances[i + 1] - distances[i]);
+                    double result = milliradians[i] + rate * (meters - distances[i]);
+                    return Math.Round(result, 1); // Round to 1 decimal place
+                }
+                
+            }
+            return 800;
+        }
         private void DrawPOIText(SKCanvas canvas, MapPosition position, float distance, float bearing, float crosshairSize)
         {
             int distanceMeters = (int)Math.Round(distance / 100);
+            double milliradians = MetersToMilliradians(distanceMeters);
             string[] lines =
             {
-                $"{(int)Math.Round(bearing)}°",
+                $"{milliradians:F1} mil",
+                $"{bearing:F1}°",
                 $"{distanceMeters}m"
             };
 
