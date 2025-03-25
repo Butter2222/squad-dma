@@ -41,6 +41,26 @@ namespace squad_dma
 
         [JsonPropertyName("vsync")]
         public bool VSync { get; set; }
+
+        // ESP
+        [JsonPropertyName("espFontSize")]
+        public int ESPFontSize { get; set; }
+
+        [JsonPropertyName("espShowDistance")]
+        public bool EspShowDistance { get; set; }
+
+        [JsonPropertyName("espShowHealth")]
+        public bool EspShowHealth { get; set; }
+
+        [JsonPropertyName("espMaxDistance")]
+        public float EspMaxDistance { get; set; }
+
+        [JsonPropertyName("espTextColor")]
+        public PaintColor.Colors EspTextColor { get; set; }
+
+        [JsonPropertyName("selectedTeam")]
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public Team SelectedTeam { get; set; }
         #endregion
 
         #region Json Ignore
@@ -50,7 +70,8 @@ namespace squad_dma
             ["Primary"] = new PaintColor.Colors { A = 255, R = 80, G = 80, B = 80 },
             ["PrimaryDark"] = new PaintColor.Colors { A = 255, R = 50, G = 50, B = 50 },
             ["PrimaryLight"] = new PaintColor.Colors { A = 255, R = 130, G = 130, B = 130 },
-            ["Accent"] = new PaintColor.Colors { A = 255, R = 255, G = 128, B = 0 }
+            ["Accent"] = new PaintColor.Colors { A = 255, R = 255, G = 128, B = 0 },
+            ["EspText"] = new PaintColor.Colors { A = 255, R = 255, G = 255, B = 255 } // ESP
         };
 
         [JsonIgnore]
@@ -80,6 +101,15 @@ namespace squad_dma
             UIScale = 100;
             ZoomSensitivity = 25;
             VSync = false;
+
+            // ESP
+
+            ESPFontSize = 10;
+            EspShowDistance = true;
+            EspShowHealth = false;
+            EspMaxDistance = 1000f; // 1000M is max
+            EspTextColor = DefaultPaintColors["EspText"];
+            SelectedTeam = Team.Unknown;
         }
 
         /// <summary>
@@ -123,7 +153,9 @@ namespace squad_dma
                 if (!Directory.Exists(SettingsDirectory))
                     Directory.CreateDirectory(SettingsDirectory);
 
+                //Program.Log($"Saving config with SelectedTeam: {config.SelectedTeam}");
                 var json = JsonSerializer.Serialize<Config>(config, _jsonOptions);
+                //Program.Log($"JSON to save: {json}");
                 File.WriteAllText($"{SettingsDirectory}Settings.json", json);
             }
         }

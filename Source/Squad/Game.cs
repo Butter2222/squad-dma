@@ -46,7 +46,14 @@ namespace squad_dma
 
         public ReadOnlyDictionary<ulong, UActor> Actors
         {
-            get => _actors?.Actors;
+            get
+            {
+                lock (actorsLock)
+                {
+                    var actors = _actors?.Actors ?? new ReadOnlyDictionary<ulong, UActor>(new Dictionary<ulong, UActor>());
+                    return actors;
+                }
+            }
         }
 
         public Vector3 AbsoluteLocation
@@ -63,6 +70,8 @@ namespace squad_dma
             _squadBase = squadBase;
         }
 
+        public readonly object actorsLock = new object();
+
         #region GameLoop
         /// <summary>
         /// Main Game Loop executed by Memory Worker Thread.
@@ -71,16 +80,54 @@ namespace squad_dma
         {
             try
             {
-                if (!this._inGame)
+                if (!Memory.GetModuleBase())
                 {
-                    this._vehiclesLogged = false;
-                    throw new GameEnded("Game has ended!");
+                    lock (actorsLock)
+                    {
+                        this._inGame = false;
+                        Program.Log("Game process not found, _inGame set to false.");
+                    }
+                    throw new GameEnded("Game process not found!");
                 }
 
-                UpdateLocalPlayerInfo();
-                this._actors.UpdateList();
-                this._actors.UpdateAllPlayers();
+                lock (actorsLock)
+                {
+                    if (!this._inGame)
+                    {
+                        Program.Log("Checking game state...");
+                        bool hasWorld = GetGameWorld();
+                        Program.Log($"GetGameWorld: {hasWorld}");
+                        if (!hasWorld) throw new Exception("GetGameWorld failed");
+                        bool hasInstance = GetGameInstance();
+                        Program.Log($"GetGameInstance: {hasInstance}");
+                        if (!hasInstance) throw new Exception("GetGameInstance failed");
+                        bool hasLevel = GetCurrentLevel();
+                        Program.Log($"GetCurrentLevel: {hasLevel}");
+                        if (!hasLevel) throw new Exception("GetCurrentLevel failed");
+                        bool hasActors = InitActors();
+                        Program.Log($"InitActors: {hasActors}");
+                        if (!hasActors) throw new Exception("InitActors failed");
+                        bool hasLocalPlayer = GetLocalPlayer();
+                        Program.Log($"GetLocalPlayer: {hasLocalPlayer}");
+                        if (!hasLocalPlayer) throw new Exception("GetLocalPlayer failed");
 
+                        if (hasWorld && hasInstance && hasLevel && hasActors && hasLocalPlayer)
+                        {
+                            this._inGame = true;
+                            Memory.GameStatus = Game.GameStatus.InGame;
+                            Program.Log("Game detected, _inGame set to true!");
+                        }
+                        else
+                        {
+                            this._vehiclesLogged = false;
+                            throw new GameEnded("Game has not yet started!");
+                        }
+                    }
+
+                    UpdateLocalPlayerInfo();
+                    this._actors.UpdateList();
+                    this._actors.UpdateAllPlayers();
+                }
             }
             catch (DMAShutdown)
             {
@@ -92,6 +139,7 @@ namespace squad_dma
             }
             catch (Exception ex)
             {
+                Program.Log($"GameLoop failed: {ex.Message}");
                 HandleUnexpectedException(ex);
             }
         }
@@ -115,8 +163,14 @@ namespace squad_dma
         private void HandleGameEnded(GameEnded e)
         {
             Program.Log("Game has ended!");
-
-            this._inGame = false;
+            lock (actorsLock)
+            {
+                this._inGame = false;
+                if (_actors != null)
+                {
+                    _actors._actors.Clear();
+                }
+            }
             Memory.GameStatus = Game.GameStatus.Menu;
             Memory.Restart();
         }
@@ -232,7 +286,10 @@ namespace squad_dma
             {
                 var persistentLevel = Memory.ReadPtr(_gameWorld + Offsets.World.PersistentLevel);
                 // Program.Log($"Found PersistentLevel at 0x{persistentLevel:X}");
-                _actors = new RegistredActors(persistentLevel);
+                lock (actorsLock)
+                {
+                    _actors = new RegistredActors(persistentLevel);
+                }
                 return true;
             }
             catch { return false; }

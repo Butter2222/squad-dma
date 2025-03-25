@@ -59,6 +59,11 @@ namespace squad_dma
             txtMapSetupX = new TextBox();
             lblMapCoords = new Label();
             tabControl = new TabControl();
+
+            grpEsp = new GroupBox();
+            lblTeam = new Label();
+            teamComboBox = new ComboBox();
+
             ((System.ComponentModel.ISupportInitialize)trkUIScale).BeginInit();
             ((System.ComponentModel.ISupportInitialize)trkAimLength).BeginInit();
             ((System.ComponentModel.ISupportInitialize)trkZoomSensivity).BeginInit();
@@ -193,6 +198,7 @@ namespace squad_dma
             // 
             grpConfig.Controls.Add(grpUserInterface);
             grpConfig.Controls.Add(grpRadar);
+            grpConfig.Controls.Add(grpEsp); // ESP
             grpConfig.Dock = DockStyle.Fill;
             grpConfig.Location = new Point(3, 3);
             grpConfig.Margin = new Padding(4, 3, 4, 3);
@@ -219,6 +225,35 @@ namespace squad_dma
             grpUserInterface.TabIndex = 26;
             grpUserInterface.TabStop = false;
             grpUserInterface.Text = "UI";
+
+            //  ESP
+            grpEsp.Location = new Point(5, 306); // grpUserInterface (93 + 203 + 10)
+            grpEsp.Name = "grpEsp";
+            grpEsp.Size = new Size(463, 80);
+            grpEsp.TabIndex = 27;
+            grpEsp.TabStop = false;
+            grpEsp.Text = "ESP"; lblTeam.AutoSize = true;
+            lblTeam.Location = new Point(10, 25);
+            lblTeam.Name = "lblTeam";
+            lblTeam.Size = new Size(60, 15);
+            lblTeam.TabIndex = 0;
+            lblTeam.Text = "Your Team:";
+
+            teamComboBox.Location = new Point(80, 22);
+            teamComboBox.Name = "teamComboBox";
+            teamComboBox.Size = new Size(150, 23);
+            teamComboBox.TabIndex = 1;
+            teamComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            teamComboBox.Items.AddRange(Enum.GetNames(typeof(Team)));
+            teamComboBox.SelectedIndex = Array.IndexOf(Enum.GetNames(typeof(Team)), "Unknown"); // Par défaut Unknown
+            teamComboBox.SelectedIndexChanged += (s, e) => // Ajouter l'événement ici
+            {
+                //Program.Log($"ComboBox selection changed to Index: {teamComboBox.SelectedIndex}, Item: {teamComboBox.SelectedItem}");
+                UpdateSelectedTeam(teamComboBox);
+            };
+            grpEsp.Controls.Add(lblTeam);
+            grpEsp.Controls.Add(teamComboBox);
+
             // 
             // lblZoomSensivity
             // 
@@ -430,5 +465,9 @@ namespace squad_dma
         private TabControl tabControl;
         private TrackBar trkZoomSensivity;
         private Label lblZoomSensivity;
+
+        private GroupBox grpEsp;         // Cadre ESP
+        private Label lblTeam;           // Étiquette "Your Team"
+        private ComboBox teamComboBox;
     }
 }
