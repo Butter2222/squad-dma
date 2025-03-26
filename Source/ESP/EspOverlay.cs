@@ -7,6 +7,8 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 using System.Numerics;
+using Offsets;
+using System.Collections.ObjectModel;
 
 namespace squad_dma
 {
@@ -14,7 +16,10 @@ namespace squad_dma
     {
         private WindowRenderTarget renderTarget;
         private SolidColorBrush brush;
-        private readonly Game game;
+        private ReadOnlyDictionary<ulong, UActor> AllActors
+        {
+            get => Memory.Actors;
+        }
         private bool running = true;
         private Game Game => Memory._game;
 
@@ -126,89 +131,85 @@ namespace squad_dma
             renderTarget.BeginDraw();
             renderTarget.Clear(new RawColor4(0, 0, 0, 0));
 
-            lock (((Game)Game).actorsLock)
+            Dictionary<ulong, UActor> actorsCopy;
+            lock (((Game)Game).actorsLock) // Verrouillage pour synchronisation
             {
-                if (!IsReadyToRender()) 
+                if (!IsReadyToRender())
                 {
-                    //Program.Log("Not ready to render.");
                     renderTarget.EndDraw();
                     this.Invalidate();
                     return;
                 }
-
-                //Program.Log($"Render with {Game.Actors.Count} actors.");
-                DrawEsp();
+                actorsCopy = new Dictionary<ulong, UActor>(Game.Actors); // Copie pour éviter les conflits
             }
+
+            DrawEsp(actorsCopy); // Passer la copie à DrawEsp
 
             renderTarget.EndDraw();
         }
 
-        private void DrawEsp()
+        private void DrawEsp(Dictionary<ulong, UActor> actors)
         {
-            lock (((Game)Game).actorsLock)
+            if (Game.LocalPlayer == null || actors == null || actors.Count < 1)
             {
-                if (Game.LocalPlayer == null || Game.Actors == null || Game.Actors.Count < 1)
-                {
-                    Program.Log("LocalPlayer or actors not fully initialized.");
-                    return;
-                }
-                var actors = Game.Actors;
-                MinimalViewInfo viewInfo = new MinimalViewInfo
-                {
-                    Location = Game.LocalPlayer.Position,
-                    Rotation = Game.LocalPlayer.Rotation3D,
-                    FOV = 90f
-                };
+                Program.Log("LocalPlayer ou actors non initialisés.");
+                return;
+            }
 
-                Vector3 camPos = viewInfo.Location;
-                Team localPlayerTeam = Program.Config.SelectedTeam;
-                //Program.Log($"LocalPlayer Team (Config): {localPlayerTeam}");
-                foreach (var actor in Game.Actors.Values)
-                {
+            var viewInfo = new MinimalViewInfo
+            {
+                Location = Game.LocalPlayer.Position,
+                Rotation = Game.LocalPlayer.Rotation3D,
+                FOV = 90f
+            };
 
-                    bool isAlly = actor.Team == localPlayerTeam;
+            Vector3 camPos = viewInfo.Location;
+            Team localPlayerTeam = Program.Config.SelectedTeam;
 
-                    if (actor.Position == Vector3.Zero)
-                        continue;
+            foreach (var actor in actors.Values)
+            {
+                if (actor.Position == Vector3.Zero) 
+                    continue;
 
-                    if (!actor.Name.StartsWith("BP_Soldier"))
-                        continue;
+                if (!actor.IsAlive) 
+                    continue;
 
-                    Vector2 screenPos = Camera.WorldToScreen(viewInfo, actor.Position);
-                    if (screenPos == Vector2.Zero)
-                        continue;
-                    var distance = Vector3.Distance(camPos, actor.Position) / 100;
-                    if (distance < 0)
-                        continue;
+                if (actor.ActorType != ActorType.Player)
+                    continue;
 
-                    if (actor.Health <= 0)
-                        continue;
+                if (Vector3.Distance(Game.LocalPlayer.Position, actor.Position) < 1.0f)
+                    continue;
 
-                    if (isAlly)
-                        continue;
+                
+                Vector2 screenPos = Camera.WorldToScreen(viewInfo, actor.Position);
+                if (screenPos == Vector2.Zero) 
+                    continue;
 
-                    if (distance > Program.Config.EspMaxDistance)
-                        continue;
+                var distance = Vector3.Distance(camPos, actor.Position) / 100f;
+                if (distance > Program.Config.EspMaxDistance)
+                    continue;
 
-                    // Program.Log($"Actor: {actor.Name}, Team: {actor.Team}, IsAlly: {isAlly}");
-                    string wdistance = Program.Config.EspShowDistance ? $"[{(int)distance}m]" : "";
-                    string whealth = Program.Config.EspShowHealth ? $"[{(int)actor.Health}❤]" : "";
-                    string name = Program.Config.ShowNames ? actor.Name : "";
-                    string espText = $"{name}{(string.IsNullOrEmpty(name) ? "" : " ")}{wdistance}{(string.IsNullOrEmpty(wdistance) ? "" : " ")}{whealth}";
+                if (actor.Team == localPlayerTeam)
+                    continue;
 
-                    brush.Color = new RawColor4(
-                        Program.Config.EspTextColor.R / 255f,
-                        Program.Config.EspTextColor.G / 255f,
-                        Program.Config.EspTextColor.B / 255f,
-                        Program.Config.EspTextColor.A / 255f
-                    );
-                    renderTarget.DrawText(
-                        espText,
-                        new SharpDX.DirectWrite.TextFormat(new SharpDX.DirectWrite.Factory(), "Verdana", Program.Config.ESPFontSize),
-                        new RawRectangleF(screenPos.X, screenPos.Y, screenPos.X + 200, screenPos.Y + 20),
-                        brush
-                    );
-                }
+                string wdistance = Program.Config.EspShowDistance ? $"[{(int)distance}m]" : "";
+                string whealth = Program.Config.EspShowHealth ? $"[{(int)actor.Health}❤]" : "";
+                string name = Program.Config.ShowNames ? actor.Name : "";
+                string espText = $"{name}{(string.IsNullOrEmpty(name) ? "" : " ")}{wdistance}{(string.IsNullOrEmpty(wdistance) ? "" : " ")}{whealth}";
+
+                // Rendu du texte
+                brush.Color = new RawColor4(
+                    Program.Config.EspTextColor.R / 255f,
+                    Program.Config.EspTextColor.G / 255f,
+                    Program.Config.EspTextColor.B / 255f,
+                    Program.Config.EspTextColor.A / 255f
+                );
+                renderTarget.DrawText(
+                    espText,
+                    new SharpDX.DirectWrite.TextFormat(new SharpDX.DirectWrite.Factory(), "Verdana", Program.Config.ESPFontSize),
+                    new RawRectangleF(screenPos.X, screenPos.Y, screenPos.X + 200, screenPos.Y + 20),
+                    brush
+                );
             }
         }
         protected override void OnClosed(EventArgs e)
