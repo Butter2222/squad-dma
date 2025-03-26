@@ -101,6 +101,13 @@ namespace squad_dma
             _config = Program.Config;
 
             InitializeComponent();
+            // SetupEspControls(); // SetESPTeam
+            teamComboBox.SelectedIndexChanged += (s, e) =>
+            {
+                //Program.Log($"ComboBox selection changed to Index: {teamComboBox.SelectedIndex}, Item: {teamComboBox.SelectedItem}");
+                UpdateSelectedTeam(teamComboBox);
+            };
+            LoadConfig();
             SetDarkMode(ref _darkmode);
             this.Size = new Size(1280, 720);
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -115,7 +122,6 @@ namespace squad_dma
             tabRadar.Controls.Add(_mapCanvas);
             chkMapFree.Parent = _mapCanvas;
 
-            LoadConfig();
             LoadMaps();
 
             _mapChangeTimer.AutoReset = false;
@@ -152,14 +158,15 @@ namespace squad_dma
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            e.Cancel = true; // Cancel shutdown
-            this.Enabled = false; // Lock window
+            e.Cancel = true;
+            this.Enabled = false;
 
+            Program.Log($"Closing form, SelectedTeam: {_config.SelectedTeam}");
             CleanupLoadedBitmaps();
-            Config.SaveConfig(_config); // Save Config to Config.json
-            Memory.Shutdown(); // Wait for Memory Thread to gracefully exit
-            e.Cancel = false; // Ready to close
-            base.OnFormClosing(e); // Proceed with closing
+            Config.SaveConfig(_config); 
+            Memory.Shutdown(); 
+            e.Cancel = false; 
+            base.OnFormClosing(e);
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) => keyData switch
@@ -289,13 +296,17 @@ namespace squad_dma
             #region General
             // User Interface
             chkShowAimview.Checked = _config.AimviewEnabled;
-            //chkHideNames.Checked = _config.ShowNames;
             trkAimLength.Value = _config.PlayerAimLineLength;
             trkZoomSensivity.Value = _config.ZoomSensitivity;
-
             trkUIScale.Value = _config.UIScale;
-            #endregion
 
+            // ESP Team
+            //Program.Log($"LoadConfig - Before sync, SelectedTeam: {_config.SelectedTeam}");
+            int index = Array.IndexOf(Enum.GetNames(typeof(Team)), _config.SelectedTeam.ToString());
+            if (index < 0) index = 0;
+            teamComboBox.SelectedIndex = index;
+            //Program.Log($"LoadConfig - After sync, SelectedTeam: {_config.SelectedTeam}, ComboBox Index: {index}");
+            #endregion
             #endregion
             InitiateFont();
             InitiateUIScaling();
@@ -459,7 +470,7 @@ namespace squad_dma
                 }
                 else
                 {
-                    Console.WriteLine("No matching map found!"); // Debug logging
+                    Console.WriteLine($"No matching map found for: {currentMap}"); // Debug logging
                 }
             }
         }
@@ -907,13 +918,40 @@ namespace squad_dma
                 DrawPOIText(canvas, poiZoomedPos, distance, bearing, crossSize);
             }
         }
+        public double MetersToMilliradians(double meters)
+        {
+            // Define the data points
+            double[] distances = { 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050, 1100, 1150, 1200, 1250 };
+            double[] milliradians = { 1579, 1558, 1538, 1517, 1496, 1475, 1453, 1431, 1409, 1387, 1364, 1341, 1317, 1292, 1267, 1240, 1212, 1183, 1152, 1118, 1081, 1039, 988, 918, 800 };
 
+            // Clamp the input to the valid range
+            if (meters <= 50)
+                return 1579.0; // Minimum limit at 50m
+            if (meters >= 1250)
+                return 800.0;  // Maximum limit at 1250m
+
+            // Find the two points to interpolate between
+            for (int i = 0; i < distances.Length - 1; i++)
+            {
+                if (meters >= distances[i] && meters <= distances[i + 1])
+                {
+                    // Linear interpolation
+                    double rate = (milliradians[i + 1] - milliradians[i]) / (distances[i + 1] - distances[i]);
+                    double result = milliradians[i] + rate * (meters - distances[i]);
+                    return Math.Round(result, 1); // Round to 1 decimal place
+                }
+                
+            }
+            return 800;
+        }
         private void DrawPOIText(SKCanvas canvas, MapPosition position, float distance, float bearing, float crosshairSize)
         {
-            int distanceMeters = (int)Math.Round(distance / 100);
+            int distanceMeters = (int)Math.Round(distance / 100); // distance isn't good before 100m really of todo
+            double milliradians = MetersToMilliradians(distanceMeters);
             string[] lines =
             {
-                $"{(int)Math.Round(bearing)}°",
+                $"{milliradians:F1} mil",
+                $"{bearing:F1}°",
                 $"{distanceMeters}m"
             };
 
@@ -1188,6 +1226,7 @@ namespace squad_dma
 
         private void skMapCanvas_MouseMove(object sender, MouseEventArgs e)
         {
+
             // Handle player hover and dragging
             if (this.InGame && this.LocalPlayer is not null)
             {
@@ -1306,6 +1345,7 @@ namespace squad_dma
                         DrawMap(canvas);
                         DrawActors(canvas);
                         DrawPOIs(canvas);
+                        DrawToolTips(canvas);
 #if DEBUG
                         DrawToolTips(canvas);
 #endif
@@ -1386,5 +1426,84 @@ namespace squad_dma
         {
 
         }
+       /* private void SetupEspControls()
+        {
+            GroupBox grpEsp = new GroupBox
+            {
+                Text = "ESP",
+                Location = new Point(5, 306),
+                Size = new Size(463, 80),
+                TabIndex = 27,
+                TabStop = false
+            };
+
+            Label lblTeam = new Label
+            {
+                Text = "Your Team:",
+                Location = new Point(10, 25),
+                AutoSize = true
+            };
+
+            ComboBox teamComboBox = new ComboBox
+            {
+                Name = "teamComboBox",
+                Location = new Point(80, 22),
+                Size = new Size(150, 23),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+
+            // Fill with Teams
+            teamComboBox.Items.AddRange(Enum.GetNames(typeof(Team)));
+            int initialIndex = Array.IndexOf(Enum.GetNames(typeof(Team)), _config.SelectedTeam.ToString());
+            if (initialIndex < 0) initialIndex = 0;
+            teamComboBox.SelectedIndex = initialIndex;
+            Program.Log($"ComboBox initialized with Index: {initialIndex}, SelectedTeam: {_config.SelectedTeam}");
+
+            teamComboBox.Enabled = true; 
+            Program.Log($"ComboBox Enabled: {teamComboBox.Enabled}");
+
+            // Attach event
+            teamComboBox.SelectedIndexChanged += (s, e) =>
+            {
+                Program.Log($"ComboBox selection changed to Index: {teamComboBox.SelectedIndex}, Item: {teamComboBox.SelectedItem}");
+                UpdateSelectedTeam(teamComboBox);
+            };
+
+            grpEsp.Controls.Add(lblTeam);
+            grpEsp.Controls.Add(teamComboBox);
+            grpConfig.Controls.Add(grpEsp);
+
+            Button btnTestTeam = new Button
+            {
+                Text = "Test Team Update",
+                Location = new Point(240, 22),
+                Size = new Size(100, 23)
+            };
+            btnTestTeam.Click += (s, e) =>
+            {
+                var teamComboBox = grpConfig.Controls.Find("teamComboBox", true).FirstOrDefault() as ComboBox;
+                if (teamComboBox != null)
+                {
+                    Program.Log($"Test button clicked, forcing update with Index: {teamComboBox.SelectedIndex}, Item: {teamComboBox.SelectedItem}");
+                    UpdateSelectedTeam(teamComboBox);
+                }
+            };
+            grpEsp.Controls.Add(btnTestTeam);
+            grpConfig.Controls.Add(grpEsp);
+
+        }
+       */
+        private void UpdateSelectedTeam(ComboBox teamComboBox)
+        {
+            if (teamComboBox.SelectedItem != null)
+            {
+                Team newTeam = (Team)Enum.Parse(typeof(Team), teamComboBox.SelectedItem.ToString());
+                _config.SelectedTeam = newTeam;
+                //Program.Log($"Selected Team updated to: {_config.SelectedTeam}, ComboBox Index: {teamComboBox.SelectedIndex}");
+                Config.SaveConfig(_config);
+            }
+        }
     }
+
+
 }

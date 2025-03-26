@@ -43,6 +43,7 @@
 	<ItemGroup>
 		<PackageReference Include="DarkModeForms.imerzan" Version="1.0.1" />
 		<PackageReference Include="MaterialSkin.2" Version="2.3.1" />
+		<PackageReference Include="SharpDX.Direct2D1" Version="4.2.0" />
 		<PackageReference Include="SkiaSharp" Version="2.88.8" />
 		<PackageReference Include="SkiaSharp.Views.WindowsForms" Version="2.88.8" />
 	</ItemGroup>
