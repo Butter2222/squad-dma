@@ -1,5 +1,4 @@
-﻿using Offsets;
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Numerics;
 
 namespace squad_dma
@@ -21,6 +20,13 @@ namespace squad_dma
         private string _currentLevel = string.Empty;
         private bool _vehiclesLogged = false;
 
+        // FOV
+        private ulong _localPlayersPtr;
+        private bool _isAimingDownSights;
+        private bool _hasPipScope;
+        private float _currentFOV;
+        private int _magnificationIndex;
+        private int _updateCounter = 0; // trying to optimize
         public enum GameStatus
         {
             NotFound,
@@ -29,37 +35,24 @@ namespace squad_dma
         }
 
         #region Getters
-        public bool InGame
-        {
-            get => _inGame;
-        }
-
-        public string MapName
-        {
-            get => _currentLevel;
-        }
-
-        public UActor LocalPlayer
-        {
-            get => _localUPlayer;
-        }
-
+        public bool InGame => _inGame;
+        public string MapName => _currentLevel;
+        public UActor LocalPlayer => _localUPlayer;
         public ReadOnlyDictionary<ulong, UActor> Actors
         {
             get
             {
                 lock (actorsLock)
                 {
-                    var actors = _actors?.Actors ?? new ReadOnlyDictionary<ulong, UActor>(new Dictionary<ulong, UActor>());
-                    return actors;
+                    return _actors?.Actors ?? new ReadOnlyDictionary<ulong, UActor>(new Dictionary<ulong, UActor>());
                 }
             }
         }
+        public Vector3 AbsoluteLocation => _absoluteLocation;
+        public bool IsAimingDownSights => _isAimingDownSights;
+        public bool HasPipScope => _hasPipScope;
+        public float CurrentFOV => _currentFOV;
 
-        public Vector3 AbsoluteLocation
-        {
-            get => _absoluteLocation;
-        }
         #endregion
 
         /// <summary>
@@ -85,7 +78,7 @@ namespace squad_dma
                     lock (actorsLock)
                     {
                         this._inGame = false;
-                        Program.Log("Game process not found, _inGame set to false.");
+                        //Program.Log("Game process not found, _inGame set to false.");
                     }
                     throw new GameEnded("Game process not found!");
                 }
@@ -115,7 +108,7 @@ namespace squad_dma
                         {
                             this._inGame = true;
                             Memory.GameStatus = Game.GameStatus.InGame;
-                            Program.Log("Game detected, _inGame set to true!");
+                            //Program.Log("Game detected, _inGame set to true!");
                         }
                         else
                         {
@@ -301,8 +294,8 @@ namespace squad_dma
         {
             try
             {
-                var localPlayers = Memory.ReadPtr(_gameInstance + Offsets.GameInstance.LocalPlayers);
-                _localPlayer = Memory.ReadPtr(localPlayers);
+                _localPlayersPtr = Memory.ReadPtr(_gameInstance + Offsets.GameInstance.LocalPlayers);
+                _localPlayer = Memory.ReadPtr(_localPlayersPtr);
                 // Program.Log($"Found LocalPlayer at 0x{_localPlayer:X}");
                 _localUPlayer = new UActor(_localPlayer);
                 _localUPlayer.Team = Team.Unknown;
@@ -317,10 +310,112 @@ namespace squad_dma
             try
             {
                 GetCameraCache();
+
+                _updateCounter++;
+                if (_updateCounter % 10 != 0)
+                {
+                    return true;
+                }
+                _updateCounter = 0;
+
+                var scatterMap = new ScatterReadMap(1);
+                var round1 = scatterMap.AddRound();
+                var round2 = scatterMap.AddRound();
+                var round3 = scatterMap.AddRound();
+
+                var pawnPtr = Memory.ReadPtr(_playerController + Offsets.PlayerController.AcknowledgedPawn);
+                if (pawnPtr == 0)
+                {
+                    _isAimingDownSights = false;
+                    _hasPipScope = false;
+                    _currentFOV = 90f;
+                    return true;
+                }
+
+                string pawnClassName = Memory.GetActorClassName(pawnPtr);
+                //Program.Log($"PawnClassName : {pawnClassName}");
+
+                bool isInVehicle = !pawnClassName.Contains("BP_Soldier");
+
+                var cameraManagerPtr = Memory.ReadPtr(_playerController + Offsets.PlayerController.PlayerCameraManager);
+                float cameraFOV = Memory.ReadValue<float>(cameraManagerPtr + Offsets.Camera.CameraFov);
+
+                // Todo
+                if (isInVehicle)
+                {
+                    _currentFOV = cameraFOV; 
+                    _isAimingDownSights = false;
+                    _hasPipScope = false;
+                    return true;
+                }
+
+                // On Foot
+                ulong inventoryPtr = Memory.ReadPtr(pawnPtr + Offsets.ASQSoldier.InventoryComponent);
+                if (inventoryPtr == 0)
+                {
+                    _isAimingDownSights = false;
+                    _hasPipScope = false;
+                    _currentFOV = cameraFOV;
+                    return true;
+                }
+
+                var weaponPtrEntry = round1.AddEntry<ulong>(0, 0, inventoryPtr + Offsets.USQPawnInventoryComponent.CurrentWeapon);
+                scatterMap.Execute();
+
+                if (!scatterMap.Results[0][0].TryGetResult<ulong>(out ulong weaponPtr) || weaponPtr == 0)
+                {
+                    _isAimingDownSights = false;
+                    _hasPipScope = false;
+                    _currentFOV = cameraFOV;
+                    return true;
+                }
+
+                round2.AddEntry<byte>(0, 1, weaponPtr + Offsets.ASQWeapon.bAimingDownSights);
+                round2.AddEntry<ulong>(0, 2, weaponPtr + Offsets.ASQWeapon.CachedPipScope);
+                round2.AddEntry<float>(0, 3, weaponPtr + Offsets.ASQWeapon.CurrentFOV);
+                scatterMap.Execute();
+
+                _isAimingDownSights = scatterMap.Results[0][1].TryGetResult<byte>(out byte ads) && ads == 1;
+                _hasPipScope = scatterMap.Results[0][2].TryGetResult<ulong>(out ulong pipScopePtr) && pipScopePtr != 0;
+                float weaponFOV = scatterMap.Results[0][3].TryGetResult<float>(out float currFOV) && currFOV > 10f && currFOV < 180f ? currFOV : cameraFOV;
+
+                // FOV Handle
+                _currentFOV = _isAimingDownSights ? weaponFOV : cameraFOV; 
+
+                if (_isAimingDownSights && _hasPipScope && pipScopePtr != 0)
+                {
+                    round3.AddEntry<int>(0, 6, pipScopePtr + Offsets.USQPipScopeCaptureComponent.CurrentMagnificationLevel);
+                    scatterMap.Execute();
+
+                    _magnificationIndex = scatterMap.Results[0][6].TryGetResult<int>(out int idx) && idx >= 0 && idx < 3 ? idx : 0;
+
+                    float magnification = _magnificationIndex switch
+                    {
+                        0 => 3f,  // x3
+                        1 => 6f,  // x6
+                        2 => 9f,  // x9
+                        _ => 1f  
+                    };
+
+                    if (magnification > 1f)
+                    {
+                        _currentFOV = weaponFOV / magnification; 
+                    }
+                }
+
+                // Program.Log($"ADS: {_isAimingDownSights}, HasPipScope: {_hasPipScope}, CurrentFOV: {_currentFOV}");
                 return true;
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                Program.Log($"Error in UpdateLocalPlayerInfo : {ex.Message}");
+                _isAimingDownSights = false;
+                _hasPipScope = false;
+                _currentFOV = 90f;
+                return false;
+            }
         }
+
         /// <summary>
         /// Gets PlayerController
         /// </summary>
@@ -329,11 +424,11 @@ namespace squad_dma
             try
             {
                 _playerController = Memory.ReadPtr(_localPlayer + Offsets.UPlayer.PlayerController);
-                // Program.Log($"Found PlayerController at 0x{_playerController:X}");
                 return true;
             }
             catch { return false; }
         }
+
         /// <summary>
         /// Gets CameraCache
         /// </summary>
