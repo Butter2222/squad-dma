@@ -35,20 +35,30 @@ namespace squad_dma
         }
 
         #region Getters
-        public bool InGame => _inGame;
-        public string MapName => _currentLevel;
-        public UActor LocalPlayer => _localUPlayer;
+        public bool InGame
+        {
+            get => _inGame;
+        }
+
+        public string MapName
+        {
+            get => _currentLevel;
+        }
+
+        public UActor LocalPlayer
+        {
+            get => _localUPlayer;
+        }
+
         public ReadOnlyDictionary<ulong, UActor> Actors
         {
-            get
-            {
-                lock (actorsLock)
-                {
-                    return _actors?.Actors ?? new ReadOnlyDictionary<ulong, UActor>(new Dictionary<ulong, UActor>());
-                }
-            }
+            get => _actors?.Actors;
         }
-        public Vector3 AbsoluteLocation => _absoluteLocation;
+
+        public Vector3 AbsoluteLocation
+        {
+            get => _absoluteLocation;
+        }
         public bool IsAimingDownSights => _isAimingDownSights;
         public bool HasPipScope => _hasPipScope;
         public float CurrentFOV => _currentFOV;
@@ -282,10 +292,9 @@ namespace squad_dma
             {
                 var persistentLevel = Memory.ReadPtr(_gameWorld + Offsets.World.PersistentLevel);
                 // Program.Log($"Found PersistentLevel at 0x{persistentLevel:X}");
-                lock (actorsLock)
-                {
+                
                     _actors = new RegistredActors(persistentLevel);
-                }
+                
                 return true;
             }
             catch { return false; }
@@ -308,114 +317,191 @@ namespace squad_dma
             catch { return false; }
 
         }
+        /// <summary>
+        /// Updates local player information such as aiming state, scope status, and field of view.
+        /// </summary>
+        /// <returns>True if update succeeds, false otherwise</returns>
         private bool UpdateLocalPlayerInfo()
         {
             try
             {
                 GetCameraCache();
 
-                _updateCounter++;
-                if (_updateCounter % 20 != 0)
-                {
-                    return true;
-                }
-                _updateCounter = 0;
-
-                var scatterMap = new ScatterReadMap(1);
-                var round1 = scatterMap.AddRound();
-                var round2 = scatterMap.AddRound();
-                var round3 = scatterMap.AddRound();
-
-                var pawnPtr = Memory.ReadPtr(_playerController + Offsets.PlayerController.AcknowledgedPawn);
-                if (pawnPtr == 0)
-                {
-                    _isAimingDownSights = false;
-                    _hasPipScope = false;
-                    _currentFOV = 90f;
-                    return true;
-                }
-
-                string pawnClassName = Memory.GetActorClassName(pawnPtr);
-                //Program.Log($"PawnClassName : {pawnClassName}");
-
-                bool isInVehicle = !pawnClassName.Contains("BP_Soldier");
-
-                var cameraManagerPtr = Memory.ReadPtr(_playerController + Offsets.PlayerController.PlayerCameraManager);
-                float cameraFOV = Memory.ReadValue<float>(cameraManagerPtr + Offsets.Camera.CameraFov);
-
-                // Todo
-                if (isInVehicle)
-                {
-                    _currentFOV = cameraFOV; 
-                    _isAimingDownSights = false;
-                    _hasPipScope = false;
-                    return true;
-                }
-
-                // On Foot
-                ulong inventoryPtr = Memory.ReadPtr(pawnPtr + Offsets.ASQSoldier.InventoryComponent);
-                if (inventoryPtr == 0)
-                {
-                    _isAimingDownSights = false;
-                    _hasPipScope = false;
-                    _currentFOV = cameraFOV;
-                    return true;
-                }
-
-                var weaponPtrEntry = round1.AddEntry<ulong>(0, 0, inventoryPtr + Offsets.USQPawnInventoryComponent.CurrentWeapon);
-                scatterMap.Execute();
-
-                if (!scatterMap.Results[0][0].TryGetResult<ulong>(out ulong weaponPtr) || weaponPtr == 0)
-                {
-                    _isAimingDownSights = false;
-                    _hasPipScope = false;
-                    _currentFOV = cameraFOV;
-                    return true;
-                }
-
-                round2.AddEntry<byte>(0, 1, weaponPtr + Offsets.ASQWeapon.bAimingDownSights);
-                round2.AddEntry<ulong>(0, 2, weaponPtr + Offsets.ASQWeapon.CachedPipScope);
-                round2.AddEntry<float>(0, 3, weaponPtr + Offsets.ASQWeapon.CurrentFOV);
-                scatterMap.Execute();
-
-                _isAimingDownSights = scatterMap.Results[0][1].TryGetResult<byte>(out byte ads) && ads == 1;
-                _hasPipScope = scatterMap.Results[0][2].TryGetResult<ulong>(out ulong pipScopePtr) && pipScopePtr != 0;
-                float weaponFOV = scatterMap.Results[0][3].TryGetResult<float>(out float currFOV) && currFOV > 10f && currFOV < 180f ? currFOV : cameraFOV;
-
-                // FOV Handle
-                _currentFOV = _isAimingDownSights ? weaponFOV : cameraFOV; 
-
-                if (_isAimingDownSights && _hasPipScope && pipScopePtr != 0)
-                {
-                    round3.AddEntry<int>(0, 6, pipScopePtr + Offsets.USQPipScopeCaptureComponent.CurrentMagnificationLevel);
-                    scatterMap.Execute();
-
-                    _magnificationIndex = scatterMap.Results[0][6].TryGetResult<int>(out int idx) && idx >= 0 && idx < 3 ? idx : 0;
-
-                    float magnification = _magnificationIndex switch
-                    {
-                        0 => 3f,  // x3
-                        1 => 6f,  // x6
-                        2 => 9f,  // x9
-                        _ => 1f  
-                    };
-
-                    if (magnification > 1f)
-                    {
-                        _currentFOV = weaponFOV / magnification; 
-                    }
-                }
-
-                // Program.Log($"ADS: {_isAimingDownSights}, HasPipScope: {_hasPipScope}, CurrentFOV: {_currentFOV}");
-                return true;
+                return ProcessPlayerInfo();
             }
             catch (Exception ex)
             {
-                Program.Log($"Error in UpdateLocalPlayerInfo : {ex.Message}");
+                Program.Log($"Error in UpdateLocalPlayerInfo: {ex.Message}");
+                ResetPlayerStateToDefault();
+                return false;
+            }
+        }
+
+        /*
+        /// <summary>
+        /// Determines if a full update should be performed based on the update counter.
+        /// </summary>
+        private bool ShouldPerformFullUpdate()
+        {
+            _updateCounter++;
+            return _updateCounter % 20 == 0;
+        }
+
+        /// <summary>
+        /// Resets the update counter to zero.
+        /// </summary>
+        private void ResetUpdateCounter()
+        {
+            _updateCounter = 0;
+        }
+
+        */
+        /// <summary>
+        /// Resets player state variables to their default values.
+        /// </summary>
+        private void ResetPlayerStateToDefault()
+        {
+            _isAimingDownSights = false;
+            _hasPipScope = false;
+            _currentFOV = 90f;
+        }
+
+        /// <summary>
+        /// Processes and updates player information from game memory.
+        /// </summary>
+        /// <returns>True if successful, false otherwise</returns>
+        private bool ProcessPlayerInfo()
+        {
+            var scatterMap = new ScatterReadMap(1);
+            ulong pawnPtr = ReadPawnPointer();
+            if (pawnPtr == 0)
+            {
+                ResetPlayerStateToDefault();
+                return true;
+            }
+
+            string pawnClassName = Memory.GetActorClassName(pawnPtr);
+            bool isInVehicle = !pawnClassName.Contains("BP_Soldier");
+            float cameraFOV = ReadCameraFOV();
+
+            if (isInVehicle)
+            {
+                _currentFOV = cameraFOV;
                 _isAimingDownSights = false;
                 _hasPipScope = false;
-                _currentFOV = 90f;
-                return false;
+                return true;
+            }
+
+            return UpdateOnFootPlayerInfo(scatterMap, pawnPtr, cameraFOV);
+        }
+
+        /// <summary>
+        /// Reads the pawn pointer from memory using offset.
+        /// </summary>
+        /// <returns>The pawn pointer value</returns>
+        private ulong ReadPawnPointer()
+        {
+            return Memory.ReadPtr(_playerController + Offsets.PlayerController.AcknowledgedPawn);
+        }
+
+        /// <summary>
+        /// Reads the camera FOV from memory using offset.
+        /// </summary>
+        /// <returns>The camera FOV value</returns>
+        private float ReadCameraFOV()
+        {
+            ulong cameraManagerPtr = Memory.ReadPtr(_playerController + Offsets.PlayerController.PlayerCameraManager);
+            return Memory.ReadValue<float>(cameraManagerPtr + Offsets.Camera.CameraFov);
+        }
+
+        /// <summary>
+        /// Updates player info for on-foot scenarios.
+        /// </summary>
+        /// <param name="scatterMap">The scatter read map for batch memory reading</param>
+        /// <param name="pawnPtr">Pointer to the pawn</param>
+        /// <param name="cameraFOV">Base camera FOV</param>
+        /// <returns>True if successful</returns>
+        private bool UpdateOnFootPlayerInfo(ScatterReadMap scatterMap, ulong pawnPtr, float cameraFOV)
+        {
+            ulong inventoryPtr = Memory.ReadPtr(pawnPtr + Offsets.ASQSoldier.InventoryComponent);
+            if (inventoryPtr == 0)
+            {
+                _isAimingDownSights = false;
+                _hasPipScope = false;
+                _currentFOV = cameraFOV;
+                return true;
+            }
+
+            var round1 = scatterMap.AddRound();
+            var weaponPtrEntry = round1.AddEntry<ulong>(0, 0, inventoryPtr + Offsets.USQPawnInventoryComponent.CurrentWeapon);
+            scatterMap.Execute();
+
+            if (!scatterMap.Results[0][0].TryGetResult<ulong>(out ulong weaponPtr) || weaponPtr == 0)
+            {
+                _isAimingDownSights = false;
+                _hasPipScope = false;
+                _currentFOV = cameraFOV;
+                return true;
+            }
+
+            return UpdateWeaponInfo(scatterMap, weaponPtr, cameraFOV);
+        }
+
+        /// <summary>
+        /// Updates weapon-specific information including ADS, scope, and FOV.
+        /// </summary>
+        /// <param name="scatterMap">The scatter read map</param>
+        /// <param name="weaponPtr">Pointer to the current weapon</param>
+        /// <param name="cameraFOV">Base camera FOV</param>
+        /// <returns>True if successful</returns>
+        private bool UpdateWeaponInfo(ScatterReadMap scatterMap, ulong weaponPtr, float cameraFOV)
+        {
+            var round2 = scatterMap.AddRound();
+            round2.AddEntry<byte>(0, 1, weaponPtr + Offsets.ASQWeapon.bAimingDownSights);
+            round2.AddEntry<ulong>(0, 2, weaponPtr + Offsets.ASQWeapon.CachedPipScope);
+            round2.AddEntry<float>(0, 3, weaponPtr + Offsets.ASQWeapon.CurrentFOV);
+            scatterMap.Execute();
+
+            _isAimingDownSights = scatterMap.Results[0][1].TryGetResult<byte>(out byte ads) && ads == 1;
+            _hasPipScope = scatterMap.Results[0][2].TryGetResult<ulong>(out ulong pipScopePtr) && pipScopePtr != 0;
+            float weaponFOV = scatterMap.Results[0][3].TryGetResult<float>(out float currFOV) && currFOV > 10f && currFOV < 180f ? currFOV : cameraFOV;
+
+            _currentFOV = _isAimingDownSights ? weaponFOV : cameraFOV;
+
+            if (_isAimingDownSights && _hasPipScope && pipScopePtr != 0)
+            {
+                UpdateScopeMagnification(scatterMap, pipScopePtr, weaponFOV);
+            }
+
+            // Program.Log($"ADS: {_isAimingDownSights}, HasPipScope: {_hasPipScope}, CurrentFOV: {_currentFOV}");
+            return true;
+        }
+
+        /// <summary>
+        /// Updates scope magnification and adjusts FOV accordingly.
+        /// </summary>
+        /// <param name="scatterMap">The scatter read map</param>
+        /// <param name="pipScopePtr">Pointer to the pip scope</param>
+        /// <param name="weaponFOV">Base weapon FOV</param>
+        private void UpdateScopeMagnification(ScatterReadMap scatterMap, ulong pipScopePtr, float weaponFOV)
+        {
+            var round3 = scatterMap.AddRound();
+            round3.AddEntry<int>(0, 6, pipScopePtr + Offsets.USQPipScopeCaptureComponent.CurrentMagnificationLevel);
+            scatterMap.Execute();
+
+            _magnificationIndex = scatterMap.Results[0][6].TryGetResult<int>(out int idx) && idx >= 0 && idx < 3 ? idx : 0;
+
+            float magnification = _magnificationIndex switch
+            {
+                0 => 3f,  // x3
+                1 => 6f,  // x6
+                2 => 9f,  // x9
+                _ => 1f
+            };
+
+            if (magnification > 1f)
+            {
+                _currentFOV = weaponFOV / magnification;
             }
         }
 
@@ -523,7 +609,6 @@ namespace squad_dma
 
     }
     #endregion
-
 
     #region Exceptions
     public class GameNotRunningException : Exception
