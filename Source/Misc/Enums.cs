@@ -1,6 +1,7 @@
 namespace squad_dma {
     public enum ActorType {
         Player,
+        Admin,
         FOBRadio,
         Hab,
         AntiAir,

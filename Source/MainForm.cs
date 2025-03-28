@@ -1,12 +1,9 @@
 ﻿using DarkModeForms;
 using MaterialSkin.Controls;
-using Offsets;
 using SkiaSharp;
 using SkiaSharp.Views.Desktop;
-using squad_dma.Properties;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Drawing;
 using System.Numerics;
 
 namespace squad_dma
@@ -34,14 +31,13 @@ namespace squad_dma
         private MapPosition _mapPanPosition = new();
         private readonly List<PointOfInterest> _pointsOfInterest = new();
         private PointOfInterest _hoveredPoi;
-        private const int ZOOM_INTERVAL = 10;
-        private int targetZoomValue = 0;
-        private System.Windows.Forms.Timer zoomTimer;
         private const float DRAG_SENSITIVITY = 3.5f;
         private const double PAN_SMOOTHNESS = 0.1;
         private const int PAN_INTERVAL = 10;
         private SKPoint targetPanPosition;
         private System.Windows.Forms.Timer panTimer;
+        public int ZoomStep { get; set; } = 5; 
+        public float ZoomSensitivity { get; set; } = 1.0f; 
 
         #region Getters
         private bool Ready
@@ -99,6 +95,12 @@ namespace squad_dma
         public MainForm(Game game)
         {
             _config = Program.Config;
+            _game = game;
+            InputManager.SetVmmInstance(Memory.vmmInstance);
+            if (!InputManager.InitInputManager())
+            {
+                Console.WriteLine("Failed to initialize input manager!");
+            }
 
             InitializeComponent();
             // SetupEspControls(); // SetESPTeam
@@ -131,7 +133,7 @@ namespace squad_dma
             this.Shown += frmMain_Shown;
 
             _mapCanvas.PaintSurface += skMapCanvas_PaintSurface;
-            _mapCanvas.MouseMove += skMapCanvas_MouseMove; ;
+            _mapCanvas.MouseMove += skMapCanvas_MouseMove;
             _mapCanvas.MouseDown += skMapCanvas_MouseDown;
             _mapCanvas.MouseDoubleClick += skMapCanvas_MouseDoubleClick;
             _mapCanvas.MouseUp += skMapCanvas_MouseUp;
@@ -139,15 +141,15 @@ namespace squad_dma
             tabControl.SelectedIndexChanged += TabControl_SelectedIndexChanged;
             _fpsWatch.Start();
 
-            zoomTimer = new System.Windows.Forms.Timer();
-            zoomTimer.Interval = ZOOM_INTERVAL;
-            zoomTimer.Tick += ZoomTimer_Tick;
-
             panTimer = new System.Windows.Forms.Timer();
             panTimer.Interval = PAN_INTERVAL;
             panTimer.Tick += PanTimer_Tick;
-            _game = game;
+
+            var inputTimer = new System.Windows.Forms.Timer { Interval = 10 };
+            inputTimer.Tick += InputUpdate_Tick;
+            inputTimer.Start();
         }
+
         #endregion
 
         #region Overrides
@@ -171,27 +173,47 @@ namespace squad_dma
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) => keyData switch
         {
-            Keys.F1 => ZoomIn(5),
-            Keys.F2 => ZoomOut(5),
             Keys.F5 => ToggleMap(),
+#if DEBUG
             Keys.F6 => DumpNames(),
+#endif         
             Keys.F11 => ToggleFullscreen(FormBorderStyle is FormBorderStyle.Sizable),
             _ => base.ProcessCmdKey(ref msg, keyData),
         };
 
+        private void InputUpdate_Tick(object sender, EventArgs e)
+        {
+            if (!InputManager.IsManagerLoaded && !InputManager.InitInputManager())
+                return;
+
+            InputManager.UpdateKeys();
+
+            // Handle Zoom
+            if (InputManager.IsKeyDown(_config.ZoomInKey))
+                ZoomIn(_config.ZoomStep);
+            else if (InputManager.IsKeyDown(_config.ZoomOutKey))
+                ZoomOut(_config.ZoomStep);
+
+            // Handle Functions
+            if (InputManager.IsKeyDown(Keys.F5))
+                ToggleMap();
+#if DEBUG
+            if (InputManager.IsKeyDown(Keys.F6))
+                DumpNames();
+#endif        
+        }
+
         protected override void OnMouseWheel(MouseEventArgs e)
         {
-            if (tabControl.SelectedIndex == 0) // Main Radar Tab should be open
+            if (tabControl.SelectedIndex == 0)
             {
-                var zoomSens = (double)_config.ZoomSensitivity / 100;
-                int zoomDelta = -(int)(e.Delta * zoomSens);
+                int zoomStep = 3;
+                if (e.Delta < 0)
+                    ZoomOut(zoomStep); 
+                else if (e.Delta > 0)
+                    ZoomIn(zoomStep); 
 
-                if (zoomDelta < 0)
-                    ZoomIn(-zoomDelta);
-                else if (zoomDelta > 0)
-                    ZoomOut(zoomDelta);
-
-                if (this._isFreeMapToggled && zoomDelta < 0) // Only move the zoom position when scrolling in
+                if (this._isFreeMapToggled && e.Delta < 0)
                 {
                     var mousePos = this._mapCanvas.PointToClient(Cursor.Position);
                     var mapParams = GetMapLocation();
@@ -201,14 +223,11 @@ namespace squad_dma
                     );
 
                     this.targetPanPosition = mapMousePos;
-
                     if (!this.panTimer.Enabled)
                         this.panTimer.Start();
                 }
-
                 return;
             }
-
             base.OnMouseWheel(e);
         }
         #endregion
@@ -295,9 +314,9 @@ namespace squad_dma
             #region Settings
             #region General
             // User Interface
-            chkShowAimview.Checked = _config.AimviewEnabled;
+            chkShowEnemyDistance.Checked = _config.ShowEnemyDistance;
+            chkShowEnemyDistance.CheckedChanged += ChkShowEnemyDistance_CheckedChanged;
             trkAimLength.Value = _config.PlayerAimLineLength;
-            trkZoomSensivity.Value = _config.ZoomSensitivity;
             trkUIScale.Value = _config.UIScale;
 
             // ESP Team
@@ -450,7 +469,6 @@ namespace squad_dma
                 }
             }
         }
-
 
         private void UpdateSelectedMap()
         {
@@ -629,7 +647,7 @@ namespace squad_dma
             );
         }
 
-        private void DrawActors(SKCanvas canvas)
+        private void DrawActors(SKCanvas canvas, List<SKPoint> deadMarkers, List<UActor> projectileAAs)
         {
             var localPlayer = this.LocalPlayer;
 
@@ -639,6 +657,19 @@ namespace squad_dma
 
                 if (allPlayers is not null)
                 {
+                    var activeProjectiles = allPlayers
+                        .Where(a => a.ActorType == ActorType.ProjectileAA)
+                        .ToList();
+
+                    var removedProjectiles = _aaProjectileOrigins.Keys
+                        .Except(activeProjectiles)
+                        .ToList();
+
+                    foreach (var projectile in removedProjectiles)
+                    {
+                        _aaProjectileOrigins.Remove(projectile);
+                    }
+
                     var localPlayerPos = localPlayer.Position + AbsoluteLocation;
                     var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
                     var mapParams = GetMapLocation();
@@ -662,49 +693,43 @@ namespace squad_dma
                             Y = actorZoomedPos.Y
                         };
 
-                        if (actor.ActorType == ActorType.Player && !actor.IsAlive && actor.DeathPosition != Vector3.Zero)
-                        {
-                            var timeSinceDeath = DateTime.Now - actor.TimeOfDeath;
-                            if (timeSinceDeath.TotalSeconds <= 8)
-                            {
-                                var deathPosAdjusted = actor.DeathPosition + AbsoluteLocation;
-                                var deathMapPos = deathPosAdjusted.ToMapPos(_selectedMap);
-                                var deathZoomedPos = deathMapPos.ToZoomedPos(mapParams);
-                                DrawDead(canvas, deathZoomedPos.GetPoint(), SKColors.Black, SKColors.White, 5 * _uiScale);
-                            }
-                            else
-                            {
-                                actor.DeathPosition = Vector3.Zero;
-                                actor.TimeOfDeath = DateTime.MinValue;
-                            }
-                        }
-
                         if (actor.ActorType == ActorType.Player && !actor.IsAlive)
+                        {
+                            if (actor.DeathPosition != Vector3.Zero)
+                            {
+                                var timeSinceDeath = DateTime.Now - actor.TimeOfDeath;
+                                if (timeSinceDeath.TotalSeconds <= 8)
+                                {
+                                    var deathPosAdjusted = actor.DeathPosition + AbsoluteLocation;
+                                    var deathPosMap = deathPosAdjusted.ToMapPos(_selectedMap);
+                                    var deathZoomedPos = deathPosMap.ToZoomedPos(mapParams);
+                                    deadMarkers.Add(deathZoomedPos.GetPoint());
+                                }
+                                else
+                                {
+                                    actor.DeathPosition = Vector3.Zero;
+                                    actor.TimeOfDeath = DateTime.MinValue;
+                                }
+                            }
                             continue;
-
-                        int aimlineLength = 15;
+                        }
 
                         if (actor.ActorType != ActorType.ProjectileAA)
                         {
+                            int aimlineLength = actor == localPlayer ? 0 : 15;
                             DrawActor(canvas, actor, actorZoomedPos, aimlineLength, localPlayerMapPos);
                         }
-                    }
-                    foreach (var actor in allPlayers)
-                    {
+
                         if (actor.ActorType == ActorType.ProjectileAA)
                         {
-                            var actorPos = actor.Position + AbsoluteLocation;
-                            var actorMapPos = actorPos.ToMapPos(_selectedMap);
-                            var actorZoomedPos = actorMapPos.ToZoomedPos(mapParams);
-
-                            DrawActor(canvas, actor, actorZoomedPos, 0, localPlayerMapPos); // aimlineLength is 0 for AA projectiles
+                            projectileAAs.Add(actor);
                         }
                     }
                 }
             }
         }
 
-        private Dictionary<UActor, Vector3> _projectileAAStartPositions = new Dictionary<UActor, Vector3>();
+        private Dictionary<UActor, Vector3> _aaProjectileOrigins = new Dictionary<UActor, Vector3>();
 
         private void DrawActor(SKCanvas canvas, UActor actor, MapPosition actorZoomedPos, int aimlineLength, MapPosition localPlayerMapPos)
         {
@@ -720,10 +745,38 @@ namespace squad_dma
                         actor,
                         aimlineLength
                     );
+
+                    if (!actor.IsFriendly() && _config.ShowEnemyDistance)
+                    {
+                        var dist = Vector3.Distance(LocalPlayer.Position, actor.Position);
+                        if (dist > 50 * 100)
+                        {
+                            lines = new string[1] { $"{(int)Math.Round(dist / 100)}m" };
+                            actorZoomedPos.DrawActorText(canvas, actor, lines);
+                        }
+                    }
                 }
                 else if (actor.ActorType == ActorType.Projectile)
                 {
                     actorZoomedPos.DrawProjectile(canvas, actor);
+                }
+                else if (actor.ActorType == ActorType.ProjectileAA)
+                {
+                    if (!_aaProjectileOrigins.ContainsKey(actor))
+                        _aaProjectileOrigins[actor] = actor.Position + AbsoluteLocation;
+
+                    actorZoomedPos.DrawProjectileAA(canvas, actor);
+
+                    if (_aaProjectileOrigins.TryGetValue(actor, out var startPos))
+                    {
+                        var startPosMap = startPos.ToMapPos(_selectedMap);
+                        var startZoomedPos = startPosMap.ToZoomedPos(GetMapLocation());
+                        DrawAAStartMarker(canvas, startZoomedPos);
+                    }
+                }
+                else if (actor.ActorType == ActorType.Admin)
+                {
+                    DrawAdmin(canvas, actor, actorZoomedPos);
                 }
                 else
                 {
@@ -761,37 +814,84 @@ namespace squad_dma
                     if (vehicleTypes.Contains(actor.ActorType))
                     {
                         var dist = Vector3.Distance(this.LocalPlayer.Position, actor.Position);
-
                         if (dist > 50 * 100)
                         {
                             lines = new string[1] { $"{(int)Math.Round(dist / 100)}m" };
 
-                            if (actor.ErrorCount > 10)
-                                lines[0] = "ERROR";
+                            using var textPaint = new SKPaint
+                            {
+                                Color = SKColors.White,
+                                TextSize = 12 * _uiScale,
+                                IsAntialias = true
+                            };
 
-                            actorZoomedPos.DrawActorText(
-                                canvas,
-                                actor,
-                                lines
-                            );
+                            actorZoomedPos.DrawActorText(canvas, actor, lines);
                         }
                     }
                     actorZoomedPos.DrawTechMarker(canvas, actor);
                 }
+            }
+        }
 
-                if (actor.ActorType == ActorType.ProjectileAA)
+        private void DrawAdmin(SKCanvas canvas, UActor admin, MapPosition position)
+        {
+            int adminAimlineLength = 20;
+
+            position.DrawPlayerMarker(canvas, admin, adminAimlineLength, SKPaints.DefaultTextColor);
+
+            string adminText = "ADMIN";
+            float textSize = 12 * _uiScale;
+            float textOffset = 15 * _uiScale;
+
+            using (var textFill = new SKPaint
+            {
+                Color = SKPaints.DefaultTextColor,
+                TextSize = textSize,
+                IsAntialias = true,
+                Typeface = SKTypeface.FromFamilyName("Arial")
+            })
+            using (var textOutline = new SKPaint
+            {
+                Color = SKColors.Black,
+                TextSize = textSize,
+                StrokeWidth = 2 * _uiScale,
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                Typeface = SKTypeface.FromFamilyName("Arial")
+            })
+            {
+                SKRect textBounds = new SKRect();
+                textFill.MeasureText(adminText, ref textBounds);
+
+                float textX = position.X - (textBounds.Width / 2);
+                float textY = position.Y + textOffset + (textBounds.Height / 2);
+
+                canvas.DrawText(adminText, textX, textY, textOutline);
+                canvas.DrawText(adminText, textX, textY, textFill);
+            }
+        }
+
+        private void DrawTopMost(SKCanvas canvas, List<SKPoint> deadMarkers, List<UActor> projectileAAs)
+        {
+            foreach (var pos in deadMarkers)
+            {
+                DrawDead(canvas, pos, SKColors.Black, SKColors.White, 5 * _uiScale);
+            }
+
+            foreach (var projectile in projectileAAs)
+            {
+                var actorPos = projectile.Position + AbsoluteLocation;
+                var actorMapPos = actorPos.ToMapPos(_selectedMap);
+                var mapParams = GetMapLocation();
+                var actorZoomedPos = actorMapPos.ToZoomedPos(mapParams);
+
+                actorZoomedPos.DrawProjectileAA(canvas, projectile);
+
+                if (_aaProjectileOrigins.TryGetValue(projectile, out var startPos))
                 {
-                    if (!_projectileAAStartPositions.ContainsKey(actor))
-                        _projectileAAStartPositions[actor] = actor.Position + AbsoluteLocation;
-
-                    actorZoomedPos.DrawProjectileAA(canvas, actor);
-
-                    if (_projectileAAStartPositions.TryGetValue(actor, out var startPos))
-                    {
-                        var startMapPos = startPos.ToMapPos(_selectedMap);
-                        var startZoomedPos = startMapPos.ToZoomedPos(GetMapLocation());
-                        DrawAAStartMarker(canvas, startZoomedPos);
-                    }
+                    var startMapPos = startPos.ToMapPos(_selectedMap);
+                    var startZoomedPos = startMapPos.ToZoomedPos(mapParams);
+                    DrawAAStartMarker(canvas, startZoomedPos);
                 }
             }
         }
@@ -800,31 +900,61 @@ namespace squad_dma
         {
             float size = 8 * _uiScale;
             float thickness = 2 * _uiScale;
-            SKPaint xPaint = new SKPaint
+
+            using (var outlinePaint = new SKPaint
+            {
+                Color = SKColors.Black,
+                StrokeWidth = thickness + 2 * _uiScale,
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeCap = SKStrokeCap.Round
+            })
+            using (var xPaint = new SKPaint
             {
                 Color = SKColors.Cyan,
                 StrokeWidth = thickness,
                 IsAntialias = true,
                 Style = SKPaintStyle.Stroke,
                 StrokeCap = SKStrokeCap.Round
-            };
+            })
+            {
+                canvas.DrawLine(
+                    startPos.X - size, startPos.Y - size,
+                    startPos.X + size, startPos.Y + size,
+                    outlinePaint
+                );
+                canvas.DrawLine(
+                    startPos.X + size, startPos.Y - size,
+                    startPos.X - size, startPos.Y + size,
+                    outlinePaint
+                );
 
-            canvas.DrawLine(
-                startPos.X - size, startPos.Y - size,
-                startPos.X + size, startPos.Y + size,
-                xPaint
-            );
-
-            canvas.DrawLine(
-                startPos.X + size, startPos.Y - size,
-                startPos.X - size, startPos.Y + size,
-                xPaint
-            );
+                canvas.DrawLine(
+                    startPos.X - size, startPos.Y - size,
+                    startPos.X + size, startPos.Y + size,
+                    xPaint
+                );
+                canvas.DrawLine(
+                    startPos.X + size, startPos.Y - size,
+                    startPos.X - size, startPos.Y + size,
+                    xPaint
+                );
+            }
 
             string text = "AA";
             float textSize = 12 * _uiScale;
             float textOffset = size + 4 * _uiScale;
 
+            using (var outlinePaint = new SKPaint
+            {
+                Color = SKColors.Black,
+                TextSize = textSize,
+                IsAntialias = true,
+                TextAlign = SKTextAlign.Left,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = 2 * _uiScale,
+                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
+            })
             using (var textPaint = new SKPaint
             {
                 Color = SKColors.Cyan,
@@ -840,13 +970,13 @@ namespace squad_dma
                 float textX = startPos.X + textOffset;
                 float textY = startPos.Y + (textBounds.Height / 2);
 
+                canvas.DrawText(text, textX, textY, outlinePaint);
                 canvas.DrawText(text, textX, textY, textPaint);
             }
         }
 
         private void DrawDead(SKCanvas canvas, SKPoint position, SKColor outlineColor, SKColor fillColor, float size)
         {
-            // Outline settings
             using var outlinePaint = new SKPaint
             {
                 Color = outlineColor,
@@ -856,7 +986,6 @@ namespace squad_dma
                 StrokeCap = SKStrokeCap.Round 
             };
 
-            // Fill settings
             using var fillPaint = new SKPaint
             {
                 Color = fillColor,
@@ -871,11 +1000,9 @@ namespace squad_dma
             float x2 = position.X + size;
             float y2 = position.Y + size;
 
-            // Draw the outline X mark
             canvas.DrawLine(x1, y1, x2, y2, outlinePaint); 
             canvas.DrawLine(x2, y1, x1, y2, outlinePaint); 
 
-            // Draw the fill X mark 
             canvas.DrawLine(x1, y1, x2, y2, fillPaint); 
             canvas.DrawLine(x2, y1, x1, y2, fillPaint); 
         }
@@ -900,6 +1027,10 @@ namespace squad_dma
                 var poiMapPos = poi.Position.ToMapPos(_selectedMap);
                 var poiZoomedPos = poiMapPos.ToZoomedPos(mapParams);
 
+                var distance = Vector3.Distance(localPlayerPos, poi.Position);
+                int distanceMeters = (int)Math.Round(distance / 100);
+                double milliradians = MetersToMilliradians(distanceMeters);
+
                 var center = poiZoomedPos.GetPoint();
                 float crossSize = 8 * _uiScale;
 
@@ -913,7 +1044,6 @@ namespace squad_dma
                     center.X - crossSize, center.Y + crossSize,
                     crosshairPaint);
 
-                var distance = Vector3.Distance(localPlayerPos, poi.Position);
                 float bearing = CalculateBearing(localPlayerPos, poi.Position);
                 DrawPOIText(canvas, poiZoomedPos, distance, bearing, crossSize);
             }
@@ -946,11 +1076,13 @@ namespace squad_dma
         }
         private void DrawPOIText(SKCanvas canvas, MapPosition position, float distance, float bearing, float crosshairSize)
         {
-            int distanceMeters = (int)Math.Round(distance / 100); // distance isn't good before 100m really of todo
+            int distanceMeters = (int)Math.Round(distance / 100);
             double milliradians = MetersToMilliradians(distanceMeters);
+            bool isOutOfRange = distanceMeters < 50 || distanceMeters > 1250;
+
             string[] lines =
             {
-                $"{milliradians:F1} mil",
+                isOutOfRange ? "—" : $"{milliradians:F1} mil",
                 $"{bearing:F1}°",
                 $"{distanceMeters}m"
             };
@@ -969,6 +1101,24 @@ namespace squad_dma
             }
         }
 
+        private double MetersToMilliradians(double meters)
+        {
+            double[] distances = { 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050, 1100, 1150, 1200, 1250 };
+            double[] milliradians = { 1579, 1558, 1538, 1517, 1496, 1475, 1453, 1431, 1409, 1387, 1364, 1341, 1317, 1292, 1267, 1240, 1212, 1183, 1152, 1118, 1081, 1039, 988, 918, 800 };
+
+            if (meters <= 50) return 1579.0;
+            if (meters >= 1250) return 800.0;
+
+            for (int i = 0; i < distances.Length - 1; i++)
+            {
+                if (meters >= distances[i] && meters <= distances[i + 1])
+                {
+                    double rate = (milliradians[i + 1] - milliradians[i]) / (distances[i + 1] - distances[i]);
+                    return Math.Round(milliradians[i] + rate * (meters - distances[i]), 1);
+                }
+            }
+            return 800;
+        }
 
         private float CalculateBearing(Vector3 playerPos, Vector3 poiPos)
         {
@@ -1105,35 +1255,18 @@ namespace squad_dma
             }
         }
 
-        private void ZoomTimer_Tick(object sender, EventArgs e)
+        private bool ZoomIn(int step = 1)
         {
-            int zoomDifference = this.targetZoomValue - _config.DefaultZoom;
-
-            if (zoomDifference != 0)
-            {
-                int zoomStep = Math.Sign(zoomDifference);
-                _config.DefaultZoom += zoomStep;
-            }
-            else
-            {
-                this.zoomTimer.Stop();
-            }
-        }
-
-        private bool ZoomIn(int amt)
-        {
-            this.targetZoomValue = Math.Max(10, _config.DefaultZoom - amt);
-            this.zoomTimer.Start();
-
+            _config.DefaultZoom = Math.Max(10, _config.DefaultZoom - step);
+            _mapCanvas.Invalidate();
             return true;
         }
 
-        private bool ZoomOut(int amt)
+        private bool ZoomOut(int step = 1)
         {
-            this.targetZoomValue = Math.Min(200, _config.DefaultZoom + amt);
-            this.zoomTimer.Start();
-
-            return false;
+            _config.DefaultZoom = Math.Min(200, _config.DefaultZoom + step);
+            _mapCanvas.Invalidate();
+            return true;
         }
         #endregion
 
@@ -1342,13 +1475,14 @@ namespace squad_dma
                 {
                     lock (_renderLock)
                     {
+                        List<SKPoint> deadMarkers = new();
+                        List<UActor> projectileAAs = new();
+
                         DrawMap(canvas);
-                        DrawActors(canvas);
+                        DrawActors(canvas, deadMarkers, projectileAAs); 
                         DrawPOIs(canvas);
                         DrawToolTips(canvas);
-#if DEBUG
-                        DrawToolTips(canvas);
-#endif
+                        DrawTopMost(canvas, deadMarkers, projectileAAs);
                     }
                 }
                 else
@@ -1400,9 +1534,10 @@ namespace squad_dma
             DumpNames();
         }
 
-        private void trkZoomSensivity_Scroll(object sender, EventArgs e)
+        private void ChkShowEnemyDistance_CheckedChanged(object sender, EventArgs e)
         {
-            _config.ZoomSensitivity = trkZoomSensivity.Value;
+            _config.ShowEnemyDistance = chkShowEnemyDistance.Checked;
+            _mapCanvas.Invalidate();
         }
 
         private void trkUIScale_Scroll(object sender, EventArgs e)

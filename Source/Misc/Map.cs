@@ -127,13 +127,23 @@ namespace squad_dma
             SKPoint center = this.GetPoint();
             string text = "AA";
 
+            using (var outlinePaint = new SKPaint
+            {
+                Color = SKColors.Black,
+                TextSize = size,
+                IsAntialias = true,
+                TextAlign = SKTextAlign.Center,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = 2 * UIScale,
+                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
+            })
             using (var textPaint = new SKPaint
             {
                 Color = SKColors.Cyan,
                 TextSize = size,
                 IsAntialias = true,
                 TextAlign = SKTextAlign.Center,
-                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright) // Normal weight, clean font
+                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
             })
             {
                 SKRect textBounds = new SKRect();
@@ -141,6 +151,7 @@ namespace squad_dma
 
                 float yOffset = textBounds.Height / 2 - textBounds.Bottom;
 
+                canvas.DrawText(text, center.X, center.Y - yOffset, outlinePaint);
                 canvas.DrawText(text, center.X, center.Y - yOffset, textPaint);
             }
         }
@@ -265,6 +276,7 @@ namespace squad_dma
 
             DrawToolTip(canvas, string.Join("\n", lines));
         }
+
         private void DrawToolTip(SKCanvas canvas, string tooltipText)
         {
             var lines = tooltipText.Split('\n');

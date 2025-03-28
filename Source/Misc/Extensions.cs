@@ -1,4 +1,5 @@
 ﻿using SkiaSharp;
+using System;
 
 namespace squad_dma
 {
@@ -11,32 +12,7 @@ namespace squad_dma
         private static SKPaint projectilePaint = null;
         private static Dictionary<Team, SKPaint> teamEntityPaints = [];
         private static Dictionary<Team, SKPaint> teamTextPaints = [];
-        private static readonly Dictionary<Team, SKColor> TeamColors = new()
-{
-            // Standard Teams
-            { Team.RU, new SKColor(34, 139, 34) },       // Forest Green (Russia)
-            { Team.US, new SKColor(255, 0, 0) },         // Bright Red (USA)
-            { Team.AU, new SKColor(255, 215, 0) },       // Bright Gold (Australia)
-            { Team.UK, new SKColor(204, 0, 51) },        // Deep Red (UK)
-            { Team.CA, new SKColor(255, 69, 0) },        // Orange Red (Canada)
-            { Team.CN, new SKColor(0, 0, 205) },         // Medium Blue (China)
-            { Team.ME, new SKColor(0, 191, 255) },       // Bright Sky Blue (Middle East)
-            { Team.TR, new SKColor(64, 224, 208) },      // Turquoise (Turkey)
-            { Team.INS, new SKColor(255, 116, 0) },      // Bright Orange (Insurgents)
-            { Team.IMF, new SKColor(0, 128, 0) },        // Green (IMF)
-            { Team.WPMC, new SKColor(153, 50, 204) },    // Dark Orchid (WPMC)
-            { Team.Unknown, new SKColor(233, 0, 255) },  // Hot Pink (Unknown)
 
-            // Global Escalation Teams
-            { Team.GE_Wagner, new SKColor(203, 203, 203) }, // Dim Gray (Wagner Group)
-            { Team.GE_UA, new SKColor(255, 223, 0) },       // Golden Yellow (Ukraine)
-            { Team.GE_FI, new SKColor(70, 130, 180) },      // Steel Blue (Finland)
-            { Team.GE_IS, new SKColor(75, 0, 130) },        // Indigo (Israel)
-
-            // Steel Division Teams
-            { Team.SD_Ukraine, new SKColor(255, 215, 0) },  // Golden Yellow (Ukraine)
-            { Team.SD_Taliban, new SKColor(244, 164, 96) }  // Sandy Brown (Taliban)
-        };
         #region Generic Extensions
         /// <summary>
         /// Restarts a timer from 0. (Timer will be started if not already running)
@@ -84,31 +60,44 @@ namespace squad_dma
             };
         }
 
-        /// <summary>
-        /// Gets drawing paintbrush based on Player Type
-        /// </summary>
-        public static SKPaint GetEntityPaint(this UActor actor) {
-            if (teamEntityPaints.TryGetValue(actor.Team, out SKPaint value)) {
-                return value;
+        public static SKPaint GetEntityPaint(this UActor actor)
+        {
+            SKColor color = actor.IsFriendly() ? SKPaints.Friendly : SKPaints.Enemy;
+
+            if (teamEntityPaints.TryGetValue(actor.Team, out SKPaint cachedPaint))
+            {
+                cachedPaint.Color = color;
+                return cachedPaint;
             }
-            SKPaint basePaint = SKPaints.PaintBase.Clone();
-            basePaint.Color = TeamColors[actor.Team];
-            teamEntityPaints[actor.Team] = basePaint;
-            return basePaint;
+
+            SKPaint newPaint = SKPaints.PaintBase.Clone();
+            newPaint.Color = color;
+            teamEntityPaints[actor.Team] = newPaint;
+            return newPaint;
         }
 
-        /// <summary>
-        /// Gets text paintbrush based on Player Type
-        /// </summary>
         public static SKPaint GetTextPaint(this UActor actor)
         {
-            if (teamTextPaints.TryGetValue(actor.Team, out SKPaint value)) {
-                return value;
+            SKColor textColor = actor.ActorType switch
+            {
+                ActorType.Player => actor.IsFriendly() ? SKColors.Blue : SKColors.Red,
+                ActorType.Projectile => SKColors.Magenta,
+                ActorType.ProjectileAA => SKColors.Cyan,
+                _ => SKPaints.DefaultTextColor // Default
+            };
+
+            if (!teamTextPaints.TryGetValue(actor.Team, out SKPaint paint))
+            {
+                paint = SKPaints.TextBase.Clone();
+                paint.Color = textColor;
+                teamTextPaints[actor.Team] = paint;
             }
-            SKPaint baseText = SKPaints.TextBase.Clone();
-            baseText.Color = TeamColors[actor.Team];
-            teamTextPaints[actor.Team] = baseText;
-            return baseText;
+            else if (paint.Color != textColor)
+            {
+                paint.Color = textColor; 
+            }
+
+            return paint;
         }
 
         /// <summary>

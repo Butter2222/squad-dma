@@ -121,6 +121,9 @@ namespace squad_dma
                     this._actors.UpdateList();
                     this._actors.UpdateAllPlayers();
                 }
+
+               // LogTeamInfo();
+
             }
             catch (DMAShutdown)
             {
@@ -424,6 +427,9 @@ namespace squad_dma
             try
             {
                 _playerController = Memory.ReadPtr(_localPlayer + Offsets.UPlayer.PlayerController);
+                var playerState = Memory.ReadPtr(_playerController + Offsets.Controller.PlayerState);
+                _localUPlayer.TeamID = Memory.ReadValue<int>(playerState + Offsets.ASQPlayerState.TeamID);
+                // Program.Log($"Found PlayerController at 0x{_playerController:X}");
                 return true;
             }
             catch { return false; }
@@ -495,6 +501,24 @@ namespace squad_dma
             {
                 Program.Log("No entries found.");
             }
+        }
+        public void LogTeamInfo()
+        {
+            if (!_inGame) return;
+
+            Program.Log($"=== TEAM INFO DUMP ===");
+            Program.Log($"Local Player TeamID: {_localUPlayer.TeamID}");
+
+            if (_actors?.Actors == null) return;
+
+            foreach (var actor in _actors.Actors.Values)
+            {
+                if (actor.ActorType == ActorType.Player)
+                {
+                    Program.Log($"Actor: {actor.Name} | TeamID: {actor.TeamID} | Health: {actor.Health} | Position: {actor.Position}");
+                }
+            }
+            Program.Log($"======================");
         }
 
     }

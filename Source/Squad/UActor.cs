@@ -16,7 +16,21 @@ namespace squad_dma
         public uint NameId { get; set; }
         public string Name { get; set; }
         public float Health { get; set; } = -1;
+        public int TeamID { get; set; } = -1;
         public Team Team { get; set; } = Team.Unknown;
+        public bool IsFriendly()
+        {
+            if (TeamID == -1) return false; 
+
+            var localPlayer = Memory.LocalPlayer;
+            if (localPlayer == null) return false;
+
+            if (localPlayer.TeamID != -1 && this.TeamID != -1)
+                return localPlayer.TeamID == this.TeamID;
+
+            return localPlayer.Team == this.Team;
+        }
+
         public ActorType ActorType { get; set; } = ActorType.Player;
         private Vector3 _pos = new Vector3(0, 0, 0);
         public Vector3 Position // 96 bits, cannot set atomically
