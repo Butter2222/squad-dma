@@ -37,7 +37,9 @@ namespace squad_dma
         private SKPoint targetPanPosition;
         private System.Windows.Forms.Timer panTimer;
         public int ZoomStep { get; set; } = 5; 
-        public float ZoomSensitivity { get; set; } = 1.0f; 
+        public float ZoomSensitivity { get; set; } = 1.0f;
+
+        private EspOverlay _espOverlay;
 
         #region Getters
         private bool Ready
@@ -97,12 +99,21 @@ namespace squad_dma
             _config = Program.Config;
             _game = game;
             InputManager.SetVmmInstance(Memory.vmmInstance);
+            InputManager.InitInputManager();
             if (!InputManager.InitInputManager())
             {
                 Console.WriteLine("Failed to initialize input manager!");
             }
 
             InitializeComponent();
+
+            if (_config.EnableEsp)
+            {
+                _espOverlay = new EspOverlay();
+                _espOverlay.Show();
+            }
+
+            LoadConfig();
             SetDarkMode(ref _darkmode);
             this.Size = new Size(1280, 720);
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -117,7 +128,6 @@ namespace squad_dma
             tabRadar.Controls.Add(_mapCanvas);
             chkMapFree.Parent = _mapCanvas;
 
-            LoadConfig();
             LoadMaps();
 
             _mapChangeTimer.AutoReset = false;
@@ -154,14 +164,21 @@ namespace squad_dma
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            e.Cancel = true; // Cancel shutdown
-            this.Enabled = false; // Lock window
+            e.Cancel = true;
+            this.Enabled = false;
+
+            Program.Log("Closing form");
+            if (_espOverlay != null && !_espOverlay.IsDisposed)
+            {
+                _espOverlay.Close();
+                _espOverlay = null;
+            }
 
             CleanupLoadedBitmaps();
-            Config.SaveConfig(_config); // Save Config to Config.json
-            Memory.Shutdown(); // Wait for Memory Thread to gracefully exit
-            e.Cancel = false; // Ready to close
-            base.OnFormClosing(e); // Proceed with closing
+            Config.SaveConfig(_config); 
+            Memory.Shutdown(); 
+            e.Cancel = false; 
+            base.OnFormClosing(e);
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) => keyData switch
@@ -176,7 +193,7 @@ namespace squad_dma
 
         private void InputUpdate_Tick(object sender, EventArgs e)
         {
-            if (!InputManager.IsManagerLoaded && !InputManager.InitInputManager())
+            if (!InputManager.IsManagerLoaded)
                 return;
 
             InputManager.UpdateKeys();
@@ -311,8 +328,21 @@ namespace squad_dma
             chkShowEnemyDistance.CheckedChanged += ChkShowEnemyDistance_CheckedChanged;
             trkAimLength.Value = _config.PlayerAimLineLength;
             trkUIScale.Value = _config.UIScale;
-            #endregion
 
+            // ESP
+            chkEnableEsp.Checked = _config.EnableEsp;
+            trkEspMaxDistance.Value = (int)_config.EspMaxDistance;
+            lblEspMaxDistance.Text = $"Max Distance: {_config.EspMaxDistance}m";
+            chkShowAllies.Checked = _config.EspShowAllies;
+            chkEspShowNames.Checked = _config.ShowNames;
+            chkEspShowDistance.Checked = _config.EspShowDistance;
+            chkEspShowHealth.Checked = _config.EspShowHealth;
+            txtEspFontSize.Text = _config.ESPFontSize.ToString();
+            txtEspColorA.Text = _config.EspTextColor.A.ToString();
+            txtEspColorR.Text = _config.EspTextColor.R.ToString();
+            txtEspColorG.Text = _config.EspTextColor.G.ToString();
+            txtEspColorB.Text = _config.EspTextColor.B.ToString();
+            #endregion
             #endregion
             InitiateFont();
             InitiateUIScaling();
@@ -1035,7 +1065,32 @@ namespace squad_dma
                 DrawPOIText(canvas, poiZoomedPos, distance, bearing, crossSize);
             }
         }
+        public double MetersToMilliradians(double meters)
+        {
+            // Define the data points
+            double[] distances = { 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050, 1100, 1150, 1200, 1250 };
+            double[] milliradians = { 1579, 1558, 1538, 1517, 1496, 1475, 1453, 1431, 1409, 1387, 1364, 1341, 1317, 1292, 1267, 1240, 1212, 1183, 1152, 1118, 1081, 1039, 988, 918, 800 };
 
+            // Clamp the input to the valid range
+            if (meters <= 50)
+                return 1579.0; // Minimum limit at 50m
+            if (meters >= 1250)
+                return 800.0;  // Maximum limit at 1250m
+
+            // Find the two points to interpolate between
+            for (int i = 0; i < distances.Length - 1; i++)
+            {
+                if (meters >= distances[i] && meters <= distances[i + 1])
+                {
+                    // Linear interpolation
+                    double rate = (milliradians[i + 1] - milliradians[i]) / (distances[i + 1] - distances[i]);
+                    double result = milliradians[i] + rate * (meters - distances[i]);
+                    return Math.Round(result, 1); // Round to 1 decimal place
+                }
+                
+            }
+            return 800;
+        }
         private void DrawPOIText(SKCanvas canvas, MapPosition position, float distance, float bearing, float crosshairSize)
         {
             int distanceMeters = (int)Math.Round(distance / 100);
@@ -1062,26 +1117,6 @@ namespace squad_dma
                 basePosition.Y += verticalSpacing;
             }
         }
-
-        private double MetersToMilliradians(double meters)
-        {
-            double[] distances = { 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050, 1100, 1150, 1200, 1250 };
-            double[] milliradians = { 1579, 1558, 1538, 1517, 1496, 1475, 1453, 1431, 1409, 1387, 1364, 1341, 1317, 1292, 1267, 1240, 1212, 1183, 1152, 1118, 1081, 1039, 988, 918, 800 };
-
-            if (meters <= 50) return 1579.0;
-            if (meters >= 1250) return 800.0;
-
-            for (int i = 0; i < distances.Length - 1; i++)
-            {
-                if (meters >= distances[i] && meters <= distances[i + 1])
-                {
-                    double rate = (milliradians[i + 1] - milliradians[i]) / (distances[i + 1] - distances[i]);
-                    return Math.Round(milliradians[i] + rate * (meters - distances[i]), 1);
-                }
-            }
-            return 800;
-        }
-
         private float CalculateBearing(Vector3 playerPos, Vector3 poiPos)
         {
             float deltaX = poiPos.X - playerPos.X;
@@ -1321,6 +1356,7 @@ namespace squad_dma
 
         private void skMapCanvas_MouseMove(object sender, MouseEventArgs e)
         {
+
             // Handle player hover and dragging
             if (this.InGame && this.LocalPlayer is not null)
             {
@@ -1522,5 +1558,134 @@ namespace squad_dma
         {
 
         }
+
+        #region ESP Event Handlers
+        private void ChkEnableEsp_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.EnableEsp = chkEnableEsp.Checked;
+            Config.SaveConfig(_config);
+
+            if (_config.EnableEsp)
+            {
+                if (_espOverlay == null || _espOverlay.IsDisposed)
+                {
+                    _espOverlay = new EspOverlay();
+                    _espOverlay.Show();
+                }
+            }
+            else
+            {
+                if (_espOverlay != null && !_espOverlay.IsDisposed)
+                {
+                    _espOverlay.Close();
+                    _espOverlay = null;
+                }
+            }
+        }
+
+        private void TrkEspMaxDistance_Scroll(object sender, EventArgs e)
+        {
+            _config.EspMaxDistance = trkEspMaxDistance.Value;
+            lblEspMaxDistance.Text = $"Max Distance: {trkEspMaxDistance.Value}m";
+            Config.SaveConfig(_config);
+        }
+
+        private void ChkShowAllies_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.EspShowAllies = chkShowAllies.Checked;
+            Config.SaveConfig(_config);
+        }
+
+        private void ChkEspShowNames_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.ShowNames = chkEspShowNames.Checked;
+            Config.SaveConfig(_config);
+        }
+
+        private void ChkEspShowDistance_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.EspShowDistance = chkEspShowDistance.Checked;
+            Config.SaveConfig(_config);
+        }
+
+        private void ChkEspShowHealth_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.EspShowHealth = chkEspShowHealth.Checked;
+            Config.SaveConfig(_config);
+        }
+
+        private void TxtEspFontSize_TextChanged(object sender, EventArgs e)
+        {
+            if (float.TryParse(txtEspFontSize.Text, out float fontSize) && fontSize > 0)
+            {
+                _config.ESPFontSize = fontSize;
+                Config.SaveConfig(_config);
+            }
+            else
+            {
+                txtEspFontSize.Text = _config.ESPFontSize.ToString();
+            }
+        }
+        private void TxtEspColorA_TextChanged(object sender, EventArgs e)
+        {
+            if (byte.TryParse(txtEspColorA.Text, out byte a) && a >= 0 && a <= 255)
+            {
+                
+                var color = _config.EspTextColor;
+                color.A = a;
+                _config.EspTextColor = color;
+                Config.SaveConfig(_config);
+            }
+            else
+            {
+                txtEspColorA.Text = _config.EspTextColor.A.ToString();
+            }
+        }
+
+        private void TxtEspColorR_TextChanged(object sender, EventArgs e)
+        {
+            if (byte.TryParse(txtEspColorR.Text, out byte r) && r >= 0 && r <= 255)
+            {
+                var color = _config.EspTextColor;
+                color.R = r;
+                _config.EspTextColor = color;
+                Config.SaveConfig(_config);
+            }
+            else
+            {
+                txtEspColorR.Text = _config.EspTextColor.R.ToString();
+            }
+        }
+
+        private void TxtEspColorG_TextChanged(object sender, EventArgs e)
+        {
+            if (byte.TryParse(txtEspColorG.Text, out byte g) && g >= 0 && g <= 255)
+            {
+                var color = _config.EspTextColor;
+                color.G = g;
+                _config.EspTextColor = color;
+                Config.SaveConfig(_config);
+            }
+            else
+            {
+                txtEspColorG.Text = _config.EspTextColor.G.ToString();
+            }
+        }
+
+        private void TxtEspColorB_TextChanged(object sender, EventArgs e)
+        {
+            if (byte.TryParse(txtEspColorB.Text, out byte b) && b >= 0 && b <= 255)
+            {
+                var color = _config.EspTextColor;
+                color.B = b;
+                _config.EspTextColor = color;
+                Config.SaveConfig(_config);
+            }
+            else
+            {
+                txtEspColorB.Text = _config.EspTextColor.B.ToString();
+            }
+        }
+        #endregion
     }
 }

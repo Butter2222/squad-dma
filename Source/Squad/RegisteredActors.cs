@@ -12,7 +12,7 @@ namespace squad_dma
         private readonly ulong _persistentLevel;
         private ulong _actorsArray;
         private readonly Stopwatch _regSw = new();
-        private readonly ConcurrentDictionary<ulong, UActor> _actors = new();
+        public readonly ConcurrentDictionary<ulong, UActor> _actors = new();
         public IEnumerable<uint> GetActorNameIds()
         {
             return _actors.Values.Select(actor => actor.NameId).Where(id => id != 0);
@@ -61,7 +61,7 @@ namespace squad_dma
         public RegistredActors(ulong persistentLevelAddr)
         {
             this._persistentLevel = persistentLevelAddr;
-            this.Actors = new(this._actors);
+            this.Actors = new ReadOnlyDictionary<ulong, UActor>(_actors);
             this._actorsArray = Memory.ReadPtr(_persistentLevel + Offsets.Level.Actors);
             this._regSw.Start();
         }
@@ -110,7 +110,7 @@ namespace squad_dma
                 var count = this.ActorCount;
 
                 if (count < 1) // todo
-                   throw new GameEnded();
+                    throw new GameEnded();
 
                 var initialActorScatterMap = new ScatterReadMap(count);
 
@@ -224,7 +224,9 @@ namespace squad_dma
             try
             {
                 var count = _actors.Count;
-                if (count < 15)
+
+                if (count < 10) // todo | this causes seeding servers not to render
+
                     throw new GameEnded();
                 var actorBases = _actors.Values.Select(actor => actor.Base).Order().ToArray();
 

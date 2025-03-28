@@ -7,6 +7,7 @@ namespace squad_dma
     public class InputManager
     {
         private static bool keyboardInitialized = false;
+        private static bool hasLoggedFailure = false;
 
         private static long lastUpdateTicks = 0;
         private static ulong gafAsyncKeyStateExport;
@@ -42,13 +43,21 @@ namespace squad_dma
             while (InputManager.initAttempts < InputManager.MAX_ATTEMPTS)
             {
                 if (InputManager.InitKeyboard())
+                {
+                    Program.Log("Keyboard manager successfully initialized.");
                     return true;
+                }
 
                 Thread.Sleep(DELAY);
                 Program.Log($"Failed to load keyboard manager. Retrying in {DELAY}ms.");
             }
 
-            Program.Log($"Failed to initialize keyboard manager after {InputManager.MAX_ATTEMPTS} attempts");
+            if (!hasLoggedFailure) // Logger l'échec une seule fois
+            {
+                Program.Log($"Failed to initialize keyboard manager after {InputManager.MAX_ATTEMPTS} attempts. Zoom/dezoom functionality will be disabled.");
+                hasLoggedFailure = true; // Marquer que l'échec a été loggé
+            }
+            InputManager.keyboardInitialized = false;
             return false;
         }
 

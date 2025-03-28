@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace squad_dma {
     static class Program {
@@ -42,6 +43,8 @@ namespace squad_dma {
                         Thread.Sleep(100);
                     }
                     Game game = Memory._game;
+
+                    // Run radar
                     Application.Run(new MainForm(game));
                 }
             }

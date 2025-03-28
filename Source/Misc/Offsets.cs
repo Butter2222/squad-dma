@@ -101,6 +101,7 @@
         public const uint CameraCache = 0x1AF0; // 0x10 = FMinimalViewInfo
         public const uint CameraLocation = 0x1B00;
         public const uint CameraRotation = 0x1B0C;
+        public const uint CameraFov = 0x1B18;
     }
 
     public struct ASQPlayerState
@@ -111,6 +112,24 @@
     public struct ASQSoldier
     {
         public const uint Health = 0x1DF8;
+        public const uint InventoryComponent = 0x2108; // USQPawnInventoryComponent*
+    }
+
+    public struct USQPawnInventoryComponent
+    {
+        public const uint CurrentWeapon = 0x150; // ASQEquipableItem*
+    }
+    public struct ASQWeapon
+    {
+        public const uint bAimingDownSights = 0x6fc; // bool
+        public const uint CachedPipScope = 0x6f0; // USQPipScopeCaptureComponent*
+        public const uint CurrentFOV = 0x7e8; // float
+    }
+
+    public struct USQPipScopeCaptureComponent
+    {
+        public const uint CurrentMagnificationLevel = 0x960; // int32
+
     }
 
     public struct SQVehicle
