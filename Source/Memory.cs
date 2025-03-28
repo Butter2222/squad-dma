@@ -3,7 +3,8 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
-using vmmsharp;
+using Vmmsharp;
+using static Vmmsharp.Vmm;
 
 namespace squad_dma
 {
@@ -12,8 +13,8 @@ namespace squad_dma
         /// <summary>
         /// Adjust this to achieve desired mem/sec performance. Higher = slower, Lower = faster.
         /// </summary>
-        private static Vmm vmmInstance;
-
+        public static Vmm vmmInstance;
+        private static VmmProcess _process;
         private static volatile bool _running = false;
         private static volatile bool _restart = false;
         private static volatile bool _ready = false;
@@ -74,17 +75,20 @@ namespace squad_dma
         {
             try
             {
-                Program.Log("Loading memory module...");
+                Program.Log($"Startup sequence initializing");
+                Program.Log($"Checking memory map...");
 
                 if (!File.Exists("mmap.txt"))
                 {
-                    Program.Log("No MemMap, attempting to generate...");
+                    Program.Log($"Memory map not found - generating new map");
                     GenerateMMap();
+                    Program.Log($"Memory map generation completed");
                 }
                 else
                 {
-                    Program.Log("MemMap found, loading...");
-                    vmmInstance = new Vmm("-printf", "-v", "-device", "fpga", "-memmap", "mmap.txt");
+                    Program.Log($"Existing memory map found - loading");
+                    vmmInstance = new Vmm("-device", "fpga", "-memmap", "mmap.txt");
+                    Program.Log($"Memory map loaded successfully");
                 }
 
                 InitiateMemoryWorker();
@@ -119,7 +123,7 @@ namespace squad_dma
 
         private static void GenerateMMap()
         {
-            vmmInstance = new Vmm("-printf", "-v", "-device", "fpga", "-waitinitialize");
+            vmmInstance = new Vmm("-device", "fpga", "-waitinitialize");
             GetMemMap();
         }
 
@@ -130,7 +134,7 @@ namespace squad_dma
         {
             try
             {
-                var map = vmmInstance.Map_GetPhysMem();
+                var map = vmmInstance.MapMemory();
                 if (map.Length == 0) throw new Exception("Map_GetPhysMem() returned no entries!");
                 var sb = new StringBuilder();
                 for (int i = 0; i < map.Length; i++)
@@ -153,14 +157,15 @@ namespace squad_dma
             try
             {
                 ThrowIfDMAShutdown();
-                if (!vmmInstance.PidGetFromName("SquadGame.exe", out _pid))
+                _process = vmmInstance.Process("SquadGame.exe");
+
+                if (_process is null)
                     throw new DMAException("Unable to obtain PID. Game is not running.");
-                //  else
-                // {
-                //     Program.Log($"SquadGame.exe is running at PID {_pid}");
-                //     return true;
-                // }
-                return true;
+                else
+                {
+                    //Program.Log($"SquadGame.exe is running at PID {_process.PID}");
+                    return true;
+                }
             }
             catch (DMAShutdown) { throw; }
             catch (Exception ex)
@@ -177,7 +182,7 @@ namespace squad_dma
             try
             {
                 ThrowIfDMAShutdown();
-                _squadBase = vmmInstance.ProcessGetModuleBase(_pid, "SquadGame.exe");
+                _squadBase = _process.GetModuleBase("SquadGame.exe");
                 if (_squadBase == 0) throw new DMAException("Unable to obtain Base Module Address. Game may not be running");
                 // else
                 // {
@@ -380,78 +385,57 @@ namespace squad_dma
         /// <param name="useCache">Use caching for this read (recommended).</param>
         internal static void ReadScatter(ReadOnlySpan<IScatterEntry> entries)
         {
-            var pagesToRead = new HashSet<ulong>(); // Will contain each unique page only once to prevent reading the same page multiple times
-            foreach (var entry in entries) // First loop through all entries - GET INFO
+            var scatter = _process.Scatter_Initialize(Vmm.FLAG_NOCACHE);
+            if (scatter == null)
             {
-                if (entry is null)
-                    continue;
-                // Parse Address and Size properties
-                ulong addr = entry.ParseAddr();
-                uint size = (uint)entry.ParseSize();
-
-                // INTEGRITY CHECK - Make sure the read is valid
-                if (addr == 0x0 || size == 0)
-                {
-                    entry.IsFailed = true;
-                    continue;
-                }
-                // location of object
-                ulong readAddress = addr + entry.Offset;
-                // get the number of pages
-                uint numPages = ADDRESS_AND_SIZE_TO_SPAN_PAGES(readAddress, size);
-                ulong basePage = PAGE_ALIGN(readAddress);
-
-                //loop all the pages we would need
-                for (int p = 0; p < numPages; p++)
-                {
-                    ulong page = basePage + PAGE_SIZE * (uint)p;
-                    pagesToRead.Add(page);
-                }
+                throw new DMAException("Failed to initialize scatter handle");
             }
-            var scatters = vmmInstance.MemReadScatter(_pid, Vmm.FLAG_NOCACHE, pagesToRead.ToArray()); // execute scatter read
 
-            foreach (var entry in entries) // Second loop through all entries - PARSE RESULTS
+            try
             {
-                if (entry is null || entry.IsFailed) // Skip this entry, leaves result as null
-                    continue;
-
-                ulong readAddress = (ulong)entry.Addr + entry.Offset; // location of object
-                uint pageOffset = BYTE_OFFSET(readAddress); // Get object offset from the page start address
-
-                uint size = (uint)(int)entry.Size;
-                var buffer = new byte[size]; // Alloc result buffer on heap
-                int bytesCopied = 0; // track number of bytes copied to ensure nothing is missed
-                uint cb = Math.Min(size, (uint)PAGE_SIZE - pageOffset); // bytes to read this page
-
-                uint numPages = ADDRESS_AND_SIZE_TO_SPAN_PAGES(readAddress, size); // number of pages to read from (in case result spans multiple pages)
-                ulong basePage = PAGE_ALIGN(readAddress);
-
-                for (int p = 0; p < numPages; p++)
+                foreach (var entry in entries)
                 {
-                    ulong page = basePage + PAGE_SIZE * (uint)p; // get current page addr
-                    var scatter = scatters.FirstOrDefault(x => x.qwA == page); // retrieve page of mem needed
-                    if (scatter.f) // read succeeded -> copy to buffer
-                    {
-                        scatter.pb
-                            .AsSpan((int)pageOffset, (int)cb)
-                            .CopyTo(buffer.AsSpan(bytesCopied, (int)cb)); // Copy bytes to buffer
-                        bytesCopied += (int)cb;
-                    }
-                    else // read failed -> set failed flag
+                    if (entry is null)
+                        continue;
+
+                    ulong addr = entry.ParseAddr();
+                    uint size = (uint)entry.ParseSize();
+
+                    if (addr == 0x0 || size == 0)
                     {
                         entry.IsFailed = true;
-                        break;
+                        continue;
                     }
 
-                    cb = (uint)PAGE_SIZE; // set bytes to read next page
-                    if (bytesCopied + cb > size) // partial chunk last page
-                        cb = size - (uint)bytesCopied;
-
-                    pageOffset = 0x0; // Next page (if any) should start at 0x0
+                    ulong readAddress = addr + entry.Offset;
+                    scatter.Prepare(readAddress, size);
                 }
-                if (bytesCopied != size)
-                    entry.IsFailed = true;
-                entry.SetResult(buffer);
+
+                scatter.Execute();
+
+                foreach (var entry in entries)
+                {
+                    if (entry is null || entry.IsFailed)
+                        continue;
+
+                    ulong readAddress = (ulong)entry.Addr + entry.Offset;
+                    uint size = (uint)(int)entry.Size;
+
+                    byte[] buffer = scatter.Read(readAddress, size);
+
+                    if (buffer == null || buffer.Length != size)
+                    {
+                        entry.IsFailed = true;
+                    }
+                    else
+                    {
+                        entry.SetResult(buffer);
+                    }
+                }
+            }
+            finally
+            {
+                scatter.Close();
             }
         }
         #endregion
@@ -464,10 +448,11 @@ namespace squad_dma
         {
             if ((uint)size > PAGE_SIZE * 1500) throw new DMAException("Buffer length outside expected bounds!");
             ThrowIfDMAShutdown();
-            var buf = vmmInstance.MemRead(_pid, addr, (uint)size, Vmm.FLAG_NOCACHE);
+            var buf = _process.MemRead(addr, (uint)size, Vmm.FLAG_NOCACHE);
             if (buf.Length != size) throw new DMAException("Incomplete memory read!");
-            return buf;
+            return new Span<byte>(buf);
         }
+
 
         /// <summary>
         /// Read a chain of pointers and get the final result.
@@ -508,19 +493,18 @@ namespace squad_dma
         /// </summary>
         /// <typeparam name="T">Specified Value Type.</typeparam>
         /// <param name="addr">Address to read from.</param>
-        public static T ReadValue<T>(ulong addr)
-            where T : struct
+        public static T ReadValue<T>(ulong addr) where T : struct
         {
             try
             {
                 int size = Marshal.SizeOf(typeof(T));
                 ThrowIfDMAShutdown();
-                var buf = vmmInstance.MemRead(_pid, addr, (uint)size, Vmm.FLAG_NOCACHE);
+                var buf = _process.MemRead(addr, (uint)size, Vmm.FLAG_NOCACHE);
                 return MemoryMarshal.Read<T>(buf);
             }
             catch (Exception ex)
             {
-                throw new DMAException($"ERROR reading {typeof(T)} value at 0x{addr.ToString("X")}", ex);
+                throw new DMAException($"ERROR reading {typeof(T)} value at 0x{addr:X}", ex);
             }
         }
 
@@ -529,37 +513,24 @@ namespace squad_dma
         /// </summary>
         /// <param name="length">Number of bytes to read.</param>
         /// <exception cref="DMAException"></exception>
-        public static string ReadString(ulong addr, uint length) // read n bytes (string)
+        public static string ReadString(ulong addr, uint length = 256)
         {
             try
             {
-                if (length > PAGE_SIZE) throw new DMAException("String length outside expected bounds!");
-                ThrowIfDMAShutdown();
-                var buf = vmmInstance.MemRead(_pid, addr, length, Vmm.FLAG_NOCACHE);
-                return Encoding.Default.GetString(buf).Split('\0')[0];
-            }
-            catch (Exception ex)
-            {
-                throw new DMAException($"ERROR reading string at 0x{addr.ToString("X")}", ex);
-            }
-        }
+                if (length > PAGE_SIZE)
+                    throw new DMAException("String length outside expected bounds!");
 
-        /// <summary>
-        /// Read FString structure
-        /// </summary>
-        public static string ReadFString(ulong addr)
-        {
-            try
-            {
-                var length = (uint)ReadValue<int>(addr + Offsets.FString.Length);
-                if (length > PAGE_SIZE) throw new DMAException("String length outside expected bounds!");
                 ThrowIfDMAShutdown();
-                var buf = vmmInstance.MemRead(_pid, addr, length * 2, Vmm.FLAG_NOCACHE);
-                return Encoding.Unicode.GetString(buf).TrimEnd('\0'); ;
+                var buf = _process.MemRead(addr, length, Vmm.FLAG_NOCACHE);
+                int nullTerminator = Array.IndexOf<byte>(buf, 0);
+
+                return nullTerminator != -1
+                    ? Encoding.Default.GetString(buf, 0, nullTerminator)
+                    : Encoding.Default.GetString(buf);
             }
             catch (Exception ex)
             {
-                throw new DMAException($"ERROR reading FString at 0x{addr.ToString("X")}", ex);
+                throw new DMAException($"ERROR reading string at 0x{addr:X}", ex);
             }
         }
 
@@ -718,6 +689,21 @@ namespace squad_dma
                 Program.Log("Closing down Memory Thread...");
                 _running = false;
                 Memory.StopMemoryWorker();
+            }
+        }
+
+        public static string GetActorClassName(ulong actorPtr)
+        {
+            try
+            {
+                var id = ReadValue<uint>(actorPtr + Offsets.Actor.ID);
+                var names = GetNamesById(new uint[] { id }.ToList());
+                return names.ContainsKey(id) ? names[id] : "Unknown";
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"Error retrieving Actor name : {ex.Message}");
+                return "Unknown";
             }
         }
 

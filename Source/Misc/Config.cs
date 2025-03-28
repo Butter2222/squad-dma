@@ -6,8 +6,6 @@ namespace squad_dma
     public class Config
     {
         #region Json Properties
-        [JsonPropertyName("aimviewEnabled")]
-        public bool AimviewEnabled { get; set; }
 
         [JsonPropertyName("defaultZoom")]
         public int DefaultZoom { get; set; }
@@ -30,21 +28,24 @@ namespace squad_dma
         [JsonPropertyName("showNames")]
         public bool ShowNames { get; set; }
 
-        [JsonPropertyName("showRadarStats")]
-        public bool ShowRadarStats { get; set; }
-
         [JsonPropertyName("uiScale")]
         public int UIScale { get; set; }
 
-        [JsonPropertyName("zoomSensitivity")]
-        public int ZoomSensitivity { get; set; }
+        [JsonPropertyName("zoomInKey")]
+        public Keys ZoomInKey { get; set; } = Keys.Up; // Default: Arrow Up
+
+        [JsonPropertyName("zoomOutKey")]
+        public Keys ZoomOutKey { get; set; } = Keys.Down; // Default: Arrow Down
+
+        [JsonPropertyName("zoomStep")]
+        public int ZoomStep { get; set; } = 1; 
 
         [JsonPropertyName("vsync")]
         public bool VSync { get; set; }
 
         // ESP
         [JsonPropertyName("espFontSize")]
-        public int ESPFontSize { get; set; }
+        public float ESPFontSize { get; set; }
 
         [JsonPropertyName("espShowDistance")]
         public bool EspShowDistance { get; set; }
@@ -57,10 +58,16 @@ namespace squad_dma
 
         [JsonPropertyName("espTextColor")]
         public PaintColor.Colors EspTextColor { get; set; }
+      
+        [JsonPropertyName("showEnemyDistance")]
+        public bool ShowEnemyDistance { get; set; } = true;
 
-        [JsonPropertyName("selectedTeam")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-        public Team SelectedTeam { get; set; }
+        [JsonPropertyName("enableEsp")]
+        public bool EnableEsp { get; set; }
+
+        [JsonPropertyName("espShowAllies")]
+        public bool EspShowAllies { get; set; }
+
         #endregion
 
         #region Json Ignore
@@ -89,7 +96,7 @@ namespace squad_dma
 
         public Config()
         {
-            AimviewEnabled = false;
+            ShowEnemyDistance = true;
             DefaultZoom = 100;
             EnemyCount = false;
             Font = 0;
@@ -97,19 +104,18 @@ namespace squad_dma
             PaintColors = DefaultPaintColors;
             PlayerAimLineLength = 1000;
             ShowNames = false;
-            ShowRadarStats = false;
             UIScale = 100;
-            ZoomSensitivity = 25;
             VSync = false;
 
             // ESP
 
-            ESPFontSize = 10;
+            ESPFontSize = 10f;
             EspShowDistance = true;
             EspShowHealth = false;
             EspMaxDistance = 1000f; // 1000M is max
             EspTextColor = DefaultPaintColors["EspText"];
-            SelectedTeam = Team.Unknown;
+            EnableEsp = true; 
+            EspShowAllies = false;
         }
 
         /// <summary>

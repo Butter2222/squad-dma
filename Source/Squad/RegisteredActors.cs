@@ -1,4 +1,6 @@
-﻿using System.Collections.Concurrent;
+﻿using Offsets;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Numerics;
@@ -222,13 +224,16 @@ namespace squad_dma
             try
             {
                 var count = _actors.Count;
+
                 if (count < 10) // todo | this causes seeding servers not to render
+
                     throw new GameEnded();
                 var actorBases = _actors.Values.Select(actor => actor.Base).Order().ToArray();
 
                 var playerInfoScatterMap = new ScatterReadMap(count);
                 var playerInstanceInfoRound = playerInfoScatterMap.AddRound();
                 var instigatorAndRootRound = playerInfoScatterMap.AddRound();
+                var teamInfoRound = playerInfoScatterMap.AddRound();
 
                 for (int i = 0; i < count; i++)
                 {
@@ -236,23 +241,31 @@ namespace squad_dma
                     var actorType = _actors[actorAddr].ActorType;
 
                     var rootComponent = playerInstanceInfoRound.AddEntry<ulong>(i, 1, actorAddr + Offsets.Actor.RootComponent);
+
                     if (actorType == ActorType.Player)
                     {
-                        var health = playerInstanceInfoRound.AddEntry<float>(i, 2, actorAddr + Offsets.ASQSoldier.Health);
+                        playerInstanceInfoRound.AddEntry<float>(i, 2, actorAddr + Offsets.ASQSoldier.Health);
+
+                        var pawnPlayerState = playerInstanceInfoRound.AddEntry<ulong>(i, 6, actorAddr + Offsets.Pawn.PlayerState);
+                        var controller = playerInstanceInfoRound.AddEntry<ulong>(i, 7, actorAddr + Offsets.Pawn.Controller);
+                        var controllerPlayerState = teamInfoRound.AddEntry<ulong>(i, 8, controller, null, Offsets.Controller.PlayerState);
+
+                        teamInfoRound.AddEntry<int>(i, 9, pawnPlayerState, null, Offsets.ASQPlayerState.TeamID);
+                        teamInfoRound.AddEntry<int>(i, 10, controllerPlayerState, null, Offsets.ASQPlayerState.TeamID);
                     }
                     else if (Names.Deployables.Contains(actorType))
                     {
-                        var health = playerInstanceInfoRound.AddEntry<float>(i, 2, actorAddr + Offsets.SQDeployable.Health);
-                        var maxHealth = playerInstanceInfoRound.AddEntry<float>(i, 3, actorAddr + Offsets.SQDeployable.MaxHealth);
+                        playerInstanceInfoRound.AddEntry<float>(i, 2, actorAddr + Offsets.SQDeployable.Health);
+                        playerInstanceInfoRound.AddEntry<float>(i, 3, actorAddr + Offsets.SQDeployable.MaxHealth);
                     }
                     else
                     {
-                        var health = playerInstanceInfoRound.AddEntry<float>(i, 2, actorAddr + Offsets.SQVehicle.Health);
-                        var maxHealth = playerInstanceInfoRound.AddEntry<float>(i, 3, actorAddr + Offsets.SQVehicle.MaxHealth);
+                        playerInstanceInfoRound.AddEntry<float>(i, 2, actorAddr + Offsets.SQVehicle.Health);
+                        playerInstanceInfoRound.AddEntry<float>(i, 3, actorAddr + Offsets.SQVehicle.MaxHealth);
                     }
 
-                    var origin = instigatorAndRootRound.AddEntry<Vector3>(i, 4, rootComponent, null, Offsets.USceneComponent.RelativeLocation);
-                    var rotation = instigatorAndRootRound.AddEntry<Vector3>(i, 5, rootComponent, null, Offsets.USceneComponent.RelativeRotation);
+                    instigatorAndRootRound.AddEntry<Vector3>(i, 4, rootComponent, null, Offsets.USceneComponent.RelativeLocation);
+                    instigatorAndRootRound.AddEntry<Vector3>(i, 5, rootComponent, null, Offsets.USceneComponent.RelativeRotation);
                 }
 
                 playerInfoScatterMap.Execute();
@@ -260,28 +273,69 @@ namespace squad_dma
                 for (int i = 0; i < count; i++)
                 {
                     var actor = _actors[actorBases[i]];
+                    var results = playerInfoScatterMap.Results[i];
+                    float hp = 0;
 
-                    if (playerInfoScatterMap.Results[i][2].TryGetResult<float>(out var hp))
+                    if (results.TryGetValue(2, out var healthResult) && healthResult.TryGetResult<float>(out hp))
                     {
-                        if (actor.Health > 0 && hp <= 0)
+                        if (actor.ActorType == ActorType.Player && actor.Health > 0 && hp <= 0)
                         {
                             actor.DeathPosition = actor.Position;
                             actor.TimeOfDeath = DateTime.Now;
                         }
                         actor.Health = hp;
                     }
-                    if (playerInfoScatterMap.Results[i].ContainsKey(3) && playerInfoScatterMap.Results[i][3].TryGetResult<float>(out var maxHp))
+
+                    if (results.TryGetValue(3, out var maxHpResult) &&
+                       maxHpResult.TryGetResult<float>(out var maxHp) &&
+                       maxHp > 0)
                     {
-                        actor.Health /= maxHp;
-                        actor.Health *= 100;
+                        actor.Health = (hp / maxHp) * 100;
                     }
 
-                    if (playerInfoScatterMap.Results[i][4].TryGetResult<Vector3>(out var location))
+                    if (actor.ActorType == ActorType.Player)
+                    {
+                        bool teamIdFound = false;
+
+                        if (results.TryGetValue(9, out var pawnTeamResult) &&
+                            pawnTeamResult.TryGetResult<int>(out var pawnTeamId))
+                        {
+                            actor.TeamID = pawnTeamId;
+                            teamIdFound = true;
+                        }
+
+                        if (!teamIdFound && results.TryGetValue(10, out var controllerTeamResult) &&
+                            controllerTeamResult.TryGetResult<int>(out var controllerTeamId))
+                        {
+                            actor.TeamID = controllerTeamId;
+                            teamIdFound = true;
+                        }
+
+                        if (!teamIdFound && results.TryGetValue(7, out var controllerResult) &&
+                            controllerResult.TryGetResult<ulong>(out var controllerAddr) &&
+                            controllerAddr != 0)
+                        {
+                            try
+                            {
+                                var playerStateAddr = Memory.ReadPtr(controllerAddr + Offsets.Controller.PlayerState);
+                                if (playerStateAddr != 0)
+                                {
+                                    actor.TeamID = Memory.ReadValue<int>(playerStateAddr + Offsets.ASQPlayerState.TeamID);
+                                    teamIdFound = true;
+                                }
+                            }
+                            catch { /* Silently fail */ }
+                        }
+                    }
+
+                    if (results.TryGetValue(4, out var locResult) &&
+                       locResult.TryGetResult<Vector3>(out var location))
                     {
                         actor.Position = location;
                     }
 
-                    if (playerInfoScatterMap.Results[i][5].TryGetResult<Vector3>(out var rotation))
+                    if (results.TryGetValue(5, out var rotResult) &&
+                       rotResult.TryGetResult<Vector3>(out var rotation))
                     {
                         actor.Rotation = new Vector2(rotation.Y, rotation.X);
                         actor.Rotation3D = rotation;

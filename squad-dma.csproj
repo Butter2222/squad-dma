@@ -46,6 +46,7 @@
 		<PackageReference Include="SharpDX.Direct2D1" Version="4.2.0" />
 		<PackageReference Include="SkiaSharp" Version="2.88.8" />
 		<PackageReference Include="SkiaSharp.Views.WindowsForms" Version="2.88.8" />
+		<PackageReference Include="Vmmsharp" Version="5.14.3" />
 	</ItemGroup>
 
 	<ItemGroup>

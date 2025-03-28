@@ -37,19 +37,17 @@ namespace squad_dma
             chkShowMapSetup = new CheckBox();
             btnRestartRadar = new Button();
             btnDumpNames = new Button();
-            chkShowAimview = new CheckBox();
+            chkShowEnemyDistance = new CheckBox();
             trkUIScale = new TrackBar();
             trkAimLength = new TrackBar();
-            trkZoomSensivity = new TrackBar();
             tabSettings = new TabPage();
             grpConfig = new GroupBox();
             grpUserInterface = new GroupBox();
-            lblZoomSensivity = new Label();
             lblAimline = new Label();
             lblUIScale = new Label();
             grpRadar = new GroupBox();
-            tabRadar = new TabPage();            
-             grpMapSetup = new GroupBox();
+            tabRadar = new TabPage();
+            grpMapSetup = new GroupBox();
             btnApplyMapScale = new Button();
             chkMapFree = new CheckBox();
             txtMapSetupScale = new TextBox();
@@ -60,13 +58,29 @@ namespace squad_dma
             lblMapCoords = new Label();
             tabControl = new TabControl();
 
+            //ESP 
             grpEsp = new GroupBox();
-            lblTeam = new Label();
-            teamComboBox = new ComboBox();
+            chkEnableEsp = new CheckBox();
+            trkEspMaxDistance = new TrackBar();
+            lblEspMaxDistance = new Label();
+            chkShowAllies = new CheckBox();
+            chkEspShowNames = new CheckBox();
+            chkEspShowDistance = new CheckBox();
+            chkEspShowHealth = new CheckBox();
+            txtEspFontSize = new TextBox();
+            lblEspFontSize = new Label();
+            txtEspColorA = new TextBox();
+            txtEspColorR = new TextBox();
+            txtEspColorG = new TextBox();
+            txtEspColorB = new TextBox();
+            lblEspColorA = new Label();
+            lblEspColorR = new Label();
+            lblEspColorG = new Label();
+            lblEspColorB = new Label();
 
             ((System.ComponentModel.ISupportInitialize)trkUIScale).BeginInit();
             ((System.ComponentModel.ISupportInitialize)trkAimLength).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)trkZoomSensivity).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)trkEspMaxDistance).BeginInit();
             tabSettings.SuspendLayout();
             grpConfig.SuspendLayout();
             grpUserInterface.SuspendLayout();
@@ -74,6 +88,7 @@ namespace squad_dma
             tabRadar.SuspendLayout();
             grpMapSetup.SuspendLayout();
             tabControl.SuspendLayout();
+            grpEsp.SuspendLayout();
             SuspendLayout();
             // 
             // colDialog
@@ -128,16 +143,16 @@ namespace squad_dma
             btnDumpNames.UseVisualStyleBackColor = true;
             btnDumpNames.Click += btnDumpNames_Click;
             // 
-            // chkShowAimview
+            // chkShowEnemyDistance
             // 
-            chkShowAimview.AutoSize = true;
-            chkShowAimview.Location = new Point(162, 26);
-            chkShowAimview.Name = "chkShowAimview";
-            chkShowAimview.Size = new Size(127, 19);
-            chkShowAimview.TabIndex = 19;
-            chkShowAimview.Text = "Show Aimview (F4)";
-            toolTip.SetToolTip(chkShowAimview, "Displays the 3D aimview");
-            chkShowAimview.UseVisualStyleBackColor = true;
+            chkShowEnemyDistance.AutoSize = true;
+            chkShowEnemyDistance.Location = new Point(162, 26);
+            chkShowEnemyDistance.Name = "chkShowEnemyDistance";
+            chkShowEnemyDistance.Size = new Size(126, 19);
+            chkShowEnemyDistance.TabIndex = 19;
+            chkShowEnemyDistance.Text = "Show Distance (F4)";
+            toolTip.SetToolTip(chkShowEnemyDistance, "Displays the distance for the enemy players");
+            chkShowEnemyDistance.UseVisualStyleBackColor = true;
             // 
             // trkUIScale
             // 
@@ -169,20 +184,6 @@ namespace squad_dma
             trkAimLength.Value = 500;
             trkAimLength.Scroll += trkAimLength_Scroll;
             // 
-            // trkZoomSensivity
-            // 
-            trkZoomSensivity.LargeChange = 1;
-            trkZoomSensivity.Location = new Point(320, 142);
-            trkZoomSensivity.Maximum = 30;
-            trkZoomSensivity.Minimum = 1;
-            trkZoomSensivity.Name = "trkZoomSensivity";
-            trkZoomSensivity.Size = new Size(118, 45);
-            trkZoomSensivity.TabIndex = 29;
-            trkZoomSensivity.TickStyle = TickStyle.None;
-            toolTip.SetToolTip(trkZoomSensivity, "The map zoom sensivity");
-            trkZoomSensivity.Value = 30;
-            trkZoomSensivity.Scroll += trkZoomSensivity_Scroll;
-            // 
             // tabSettings
             // 
             tabSettings.Controls.Add(grpConfig);
@@ -211,13 +212,11 @@ namespace squad_dma
             // 
             // grpUserInterface
             // 
-            grpUserInterface.Controls.Add(trkZoomSensivity);
-            grpUserInterface.Controls.Add(lblZoomSensivity);
             grpUserInterface.Controls.Add(trkAimLength);
             grpUserInterface.Controls.Add(lblAimline);
             grpUserInterface.Controls.Add(lblUIScale);
             grpUserInterface.Controls.Add(trkUIScale);
-            grpUserInterface.Controls.Add(chkShowAimview);
+            grpUserInterface.Controls.Add(chkShowEnemyDistance);
             grpUserInterface.Controls.Add(btnDumpNames);
             grpUserInterface.Location = new Point(5, 93);
             grpUserInterface.Name = "grpUserInterface";
@@ -226,45 +225,6 @@ namespace squad_dma
             grpUserInterface.TabStop = false;
             grpUserInterface.Text = "UI";
 
-            //  ESP
-            grpEsp.Location = new Point(5, 306); // grpUserInterface (93 + 203 + 10)
-            grpEsp.Name = "grpEsp";
-            grpEsp.Size = new Size(463, 80);
-            grpEsp.TabIndex = 27;
-            grpEsp.TabStop = false;
-            grpEsp.Text = "ESP"; lblTeam.AutoSize = true;
-            lblTeam.Location = new Point(10, 25);
-            lblTeam.Name = "lblTeam";
-            lblTeam.Size = new Size(60, 15);
-            lblTeam.TabIndex = 0;
-            lblTeam.Text = "Your Team:";
-
-            teamComboBox.Location = new Point(80, 22);
-            teamComboBox.Name = "teamComboBox";
-            teamComboBox.Size = new Size(150, 23);
-            teamComboBox.TabIndex = 1;
-            teamComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            teamComboBox.Items.AddRange(Enum.GetNames(typeof(Team)));
-            teamComboBox.SelectedIndex = Array.IndexOf(Enum.GetNames(typeof(Team)), "Unknown"); // Par dÈfaut Unknown
-            teamComboBox.SelectedIndexChanged += (s, e) => // Ajouter l'ÈvÈnement ici
-            {
-                //Program.Log($"ComboBox selection changed to Index: {teamComboBox.SelectedIndex}, Item: {teamComboBox.SelectedItem}");
-                UpdateSelectedTeam(teamComboBox);
-            };
-            grpEsp.Controls.Add(lblTeam);
-            grpEsp.Controls.Add(teamComboBox);
-
-            // 
-            // lblZoomSensivity
-            // 
-            lblZoomSensivity.AutoSize = true;
-            lblZoomSensivity.Location = new Point(336, 124);
-            lblZoomSensivity.Margin = new Padding(4, 0, 4, 0);
-            lblZoomSensivity.Name = "lblZoomSensivity";
-            lblZoomSensivity.Size = new Size(88, 15);
-            lblZoomSensivity.TabIndex = 30;
-            lblZoomSensivity.Text = "Zoom Sensivity";
-            lblZoomSensivity.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // lblAimline
             // 
@@ -400,6 +360,200 @@ namespace squad_dma
             lblMapCoords.TabIndex = 10;
             lblMapCoords.Text = "coords";
             // 
+            // grpEsp
+            // 
+            grpEsp.Location = new Point(5, 306); 
+            grpEsp.Name = "grpEsp";
+            grpEsp.Size = new Size(463, 220); 
+            grpEsp.TabIndex = 27;
+            grpEsp.TabStop = false;
+            grpEsp.Text = "ESP";
+            // 
+            // chkEnableEsp
+            // 
+            chkEnableEsp.AutoSize = true;
+            chkEnableEsp.Location = new Point(10, 25);
+            chkEnableEsp.Name = "chkEnableEsp";
+            chkEnableEsp.Size = new Size(100, 19);
+            chkEnableEsp.TabIndex = 0;
+            chkEnableEsp.Text = "Enable ESP";
+            chkEnableEsp.UseVisualStyleBackColor = true;
+            chkEnableEsp.CheckedChanged += ChkEnableEsp_CheckedChanged;
+            // 
+            // trkEspMaxDistance
+            // 
+            trkEspMaxDistance.LargeChange = 100;
+            trkEspMaxDistance.Location = new Point(10, 50);
+            trkEspMaxDistance.Maximum = 1000;
+            trkEspMaxDistance.Minimum = 10;
+            trkEspMaxDistance.Name = "trkEspMaxDistance";
+            trkEspMaxDistance.Size = new Size(200, 45);
+            trkEspMaxDistance.TabIndex = 1;
+            trkEspMaxDistance.TickStyle = TickStyle.None;
+            trkEspMaxDistance.Value = 500; // Valeur par d√©faut
+            trkEspMaxDistance.Scroll += TrkEspMaxDistance_Scroll;
+            // 
+            // lblEspMaxDistance
+            // 
+            lblEspMaxDistance.AutoSize = true;
+            lblEspMaxDistance.Location = new Point(220, 60);
+            lblEspMaxDistance.Name = "lblEspMaxDistance";
+            lblEspMaxDistance.Size = new Size(100, 15);
+            lblEspMaxDistance.TabIndex = 2;
+            lblEspMaxDistance.Text = "Max Distance: 500m";
+            // 
+            // chkShowAllies
+            // 
+            chkShowAllies.AutoSize = true;
+            chkShowAllies.Location = new Point(10, 90);
+            chkShowAllies.Name = "chkShowAllies";
+            chkShowAllies.Size = new Size(100, 19);
+            chkShowAllies.TabIndex = 3;
+            chkShowAllies.Text = "Show Allies";
+            chkShowAllies.UseVisualStyleBackColor = true;
+            chkShowAllies.CheckedChanged += ChkShowAllies_CheckedChanged;
+            // 
+            // chkEspShowNames
+            // 
+            chkEspShowNames.AutoSize = true;
+            chkEspShowNames.Location = new Point(10, 110);
+            chkEspShowNames.Name = "chkEspShowNames";
+            chkEspShowNames.Size = new Size(100, 19);
+            chkEspShowNames.TabIndex = 4;
+            chkEspShowNames.Text = "Show Names";
+            chkEspShowNames.UseVisualStyleBackColor = true;
+            chkEspShowNames.CheckedChanged += ChkEspShowNames_CheckedChanged;
+            // 
+            // chkEspShowDistance
+            // 
+            chkEspShowDistance.AutoSize = true;
+            chkEspShowDistance.Location = new Point(10, 130);
+            chkEspShowDistance.Name = "chkEspShowDistance";
+            chkEspShowDistance.Size = new Size(100, 19);
+            chkEspShowDistance.TabIndex = 5;
+            chkEspShowDistance.Text = "Show Distance";
+            chkEspShowDistance.UseVisualStyleBackColor = true;
+            chkEspShowDistance.CheckedChanged += ChkEspShowDistance_CheckedChanged;
+            // 
+            // chkEspShowHealth
+            // 
+            chkEspShowHealth.AutoSize = true;
+            chkEspShowHealth.Location = new Point(10, 150);
+            chkEspShowHealth.Name = "chkEspShowHealth";
+            chkEspShowHealth.Size = new Size(100, 19);
+            chkEspShowHealth.TabIndex = 6;
+            chkEspShowHealth.Text = "Show Health";
+            chkEspShowHealth.UseVisualStyleBackColor = true;
+            chkEspShowHealth.CheckedChanged += ChkEspShowHealth_CheckedChanged;
+            // 
+            // txtEspFontSize
+            // 
+            txtEspFontSize.Location = new Point(110, 170);
+            txtEspFontSize.Name = "txtEspFontSize";
+            txtEspFontSize.Size = new Size(50, 23);
+            txtEspFontSize.TabIndex = 7;
+            txtEspFontSize.Text = "12"; // Valeur par d√©faut
+            txtEspFontSize.TextChanged += TxtEspFontSize_TextChanged;
+            // 
+            // lblEspFontSize
+            // 
+            lblEspFontSize.AutoSize = true;
+            lblEspFontSize.Location = new Point(10, 173);
+            lblEspFontSize.Name = "lblEspFontSize";
+            lblEspFontSize.Size = new Size(90, 15);
+            lblEspFontSize.TabIndex = 8;
+            lblEspFontSize.Text = "Font Size:";
+            // 
+            // txtEspColorA
+            // 
+            txtEspColorA.Location = new Point(50, 195);
+            txtEspColorA.Name = "txtEspColorA";
+            txtEspColorA.Size = new Size(40, 23);
+            txtEspColorA.TabIndex = 9;
+            txtEspColorA.Text = "255"; // Valeur par d√©faut (opaque)
+            txtEspColorA.TextChanged += TxtEspColorA_TextChanged;
+            // 
+            // lblEspColorA
+            // 
+            lblEspColorA.AutoSize = true;
+            lblEspColorA.Location = new Point(10, 198);
+            lblEspColorA.Name = "lblEspColorA";
+            lblEspColorA.Size = new Size(30, 15);
+            lblEspColorA.TabIndex = 10;
+            lblEspColorA.Text = "A:";
+            // 
+            // txtEspColorR
+            // 
+            txtEspColorR.Location = new Point(130, 195);
+            txtEspColorR.Name = "txtEspColorR";
+            txtEspColorR.Size = new Size(40, 23);
+            txtEspColorR.TabIndex = 11;
+            txtEspColorR.Text = "255"; // Valeur par d√©faut (rouge)
+            txtEspColorR.TextChanged += TxtEspColorR_TextChanged;
+            // 
+            // lblEspColorR
+            // 
+            lblEspColorR.AutoSize = true;
+            lblEspColorR.Location = new Point(100, 198);
+            lblEspColorR.Name = "lblEspColorR";
+            lblEspColorR.Size = new Size(30, 15);
+            lblEspColorR.TabIndex = 12;
+            lblEspColorR.Text = "R:";
+            // 
+            // txtEspColorG
+            // 
+            txtEspColorG.Location = new Point(210, 195);
+            txtEspColorG.Name = "txtEspColorG";
+            txtEspColorG.Size = new Size(40, 23);
+            txtEspColorG.TabIndex = 13;
+            txtEspColorG.Text = "255"; // Valeur par d√©faut (vert)
+            txtEspColorG.TextChanged += TxtEspColorG_TextChanged;
+            // 
+            // lblEspColorG
+            // 
+            lblEspColorG.AutoSize = true;
+            lblEspColorG.Location = new Point(180, 198);
+            lblEspColorG.Name = "lblEspColorG";
+            lblEspColorG.Size = new Size(30, 15);
+            lblEspColorG.TabIndex = 14;
+            lblEspColorG.Text = "G:";
+            // 
+            // txtEspColorB
+            // 
+            txtEspColorB.Location = new Point(290, 195);
+            txtEspColorB.Name = "txtEspColorB";
+            txtEspColorB.Size = new Size(40, 23);
+            txtEspColorB.TabIndex = 15;
+            txtEspColorB.Text = "255"; // Valeur par d√©faut (bleu)
+            txtEspColorB.TextChanged += TxtEspColorB_TextChanged;
+            // 
+            // lblEspColorB
+            // 
+            lblEspColorB.AutoSize = true;
+            lblEspColorB.Location = new Point(260, 198);
+            lblEspColorB.Name = "lblEspColorB";
+            lblEspColorB.Size = new Size(30, 15);
+            lblEspColorB.TabIndex = 16;
+            lblEspColorB.Text = "B:";
+            //ESP
+            grpEsp.Controls.Add(chkEnableEsp);
+            grpEsp.Controls.Add(trkEspMaxDistance);
+            grpEsp.Controls.Add(lblEspMaxDistance);
+            grpEsp.Controls.Add(chkShowAllies);
+            grpEsp.Controls.Add(chkEspShowNames);
+            grpEsp.Controls.Add(chkEspShowDistance);
+            grpEsp.Controls.Add(chkEspShowHealth);
+            grpEsp.Controls.Add(txtEspFontSize);
+            grpEsp.Controls.Add(lblEspFontSize);
+            grpEsp.Controls.Add(txtEspColorA);
+            grpEsp.Controls.Add(lblEspColorA);
+            grpEsp.Controls.Add(txtEspColorR);
+            grpEsp.Controls.Add(lblEspColorR);
+            grpEsp.Controls.Add(txtEspColorG);
+            grpEsp.Controls.Add(lblEspColorG);
+            grpEsp.Controls.Add(txtEspColorB);
+            grpEsp.Controls.Add(lblEspColorB);
+            // 
             // tabControl
             // 
             tabControl.Controls.Add(tabRadar);
@@ -422,7 +576,6 @@ namespace squad_dma
             Text = "I Love Squad";
             ((System.ComponentModel.ISupportInitialize)trkUIScale).EndInit();
             ((System.ComponentModel.ISupportInitialize)trkAimLength).EndInit();
-            ((System.ComponentModel.ISupportInitialize)trkZoomSensivity).EndInit();
             tabSettings.ResumeLayout(false);
             grpConfig.ResumeLayout(false);
             grpUserInterface.ResumeLayout(false);
@@ -433,6 +586,8 @@ namespace squad_dma
             grpMapSetup.ResumeLayout(false);
             grpMapSetup.PerformLayout();
             tabControl.ResumeLayout(false);
+            grpEsp.ResumeLayout(false);
+            grpEsp.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -446,7 +601,7 @@ namespace squad_dma
         private Label lblAimline;
         private Label lblUIScale;
         private TrackBar trkUIScale;
-        private CheckBox chkShowAimview;
+        private CheckBox chkShowEnemyDistance;
         private Button btnDumpNames;
         private GroupBox grpRadar;
         private Button btnRestartRadar;
@@ -463,11 +618,26 @@ namespace squad_dma
         private TextBox txtMapSetupX;
         private Label lblMapCoords;
         private TabControl tabControl;
-        private TrackBar trkZoomSensivity;
-        private Label lblZoomSensivity;
 
-        private GroupBox grpEsp;         // Cadre ESP
-        private Label lblTeam;           // …tiquette "Your Team"
-        private ComboBox teamComboBox;
+        // ESP
+        private GroupBox grpEsp;
+        private CheckBox chkEnableEsp;
+        private TrackBar trkEspMaxDistance;
+        private Label lblEspMaxDistance;
+        private CheckBox chkShowAllies;
+        private CheckBox chkEspShowNames;
+        private CheckBox chkEspShowDistance;
+        private CheckBox chkEspShowHealth;
+        private TextBox txtEspFontSize;
+        private Label lblEspFontSize;
+        private TextBox txtEspColorA;
+        private TextBox txtEspColorR;
+        private TextBox txtEspColorG;
+        private TextBox txtEspColorB;
+        private Label lblEspColorA;
+        private Label lblEspColorR;
+        private Label lblEspColorG;
+        private Label lblEspColorB;
+
     }
 }

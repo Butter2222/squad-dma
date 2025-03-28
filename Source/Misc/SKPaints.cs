@@ -4,6 +4,15 @@ namespace squad_dma
 {
     internal static class SKPaints
     {
+        #region Team Colors
+        public static readonly SKColor Friendly = SKColors.Green;
+        public static readonly SKColor Enemy = SKColors.Red;
+        public static readonly SKColor Unknown = SKColors.Purple;
+
+        public static readonly SKColor DefaultTextColor = new SKColor(233, 0, 255, 255);
+
+        #endregion
+
         #region Radar Paints
         public static readonly SKPaint PaintBase = new SKPaint() {
             Color = SKColors.WhiteSmoke,

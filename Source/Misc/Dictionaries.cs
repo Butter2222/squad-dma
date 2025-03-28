@@ -615,8 +615,11 @@ namespace squad_dma {
             {"BP_BM21_Rocket_Proj2_C", ActorType.Projectile},
             {"BP_40MM_MK19_Proj_C", ActorType.Projectile},
             {"BP_Mortarround_120mm_C", ActorType.Projectile},
+            {"BP_SPG9_pg9v_Heat_Proj2_C", ActorType.Projectile},
             
             {"BP_SquadRallyPoint_C", ActorType.RallyPoint},
+
+            {"BP_CommandActor_Drone_C", ActorType.Drone},
 
             //Global Escalation
 
@@ -765,6 +768,7 @@ namespace squad_dma {
             {"SD_BP_M1151_Logi_C", ActorType.JeepLogistics},
             {"SD_BP_BRDM-2_Desert_C", ActorType.JeepRWSTurret},
             {"SD_BP_Tigr_RWS_GAU_Desert_C", ActorType.JeepRWSTurret},
+            {"BP_BMC_Kirpi_Desert_C", ActorType.JeepRWSTurret},
 
             {"SD_BP_minsk_Child_C", ActorType.Motorcycle},
 
@@ -795,6 +799,7 @@ namespace squad_dma {
             {"SD_BP_BFV_Desert_C", ActorType.TrackedIFV},
             {"SD_BP_M113_30mm_Desert_C", ActorType.TrackedIFV},
             {"SD_BP_M113_25mm_Desert_C", ActorType.TrackedIFV},
+            {"SD_BP_PARS3_MK19_Desert_C", ActorType.IFV},
 
             {"BP_M163_C", ActorType.AntiAir},
             {"BP_2k22m1_C", ActorType.AntiAir},
@@ -802,6 +807,7 @@ namespace squad_dma {
 
             {"BP_MI28_C", ActorType.AttackHelicopter},
             {"BP_MH6_C", ActorType.LoachCAS},
+            {"BP_MH6_Logi_C", ActorType.LoachScout},
             {"SD_BP_UH60_CAS_C", ActorType.AttackHelicopter},
             {"BP_AH64_C", ActorType.AttackHelicopter},
             {"SD_BP_UH60_M240_C", ActorType.TransportHelicopter},
@@ -841,14 +847,19 @@ namespace squad_dma {
             {"BP_Strela_Base_Deployable_C", ActorType.DeployableAntitank },
 
             {"BP_HIMARS_Rocket_Proj2_C", ActorType.Projectile},
+            {"BP_Projectile_155_29th_C", ActorType.Projectile},
             {"BP_Projectile_GuidedAA_Stinger_C", ActorType.ProjectileAA},
             {"BP_Projectile_GuidedAA_Strela_C", ActorType.ProjectileAA},
             {"BP_Projectile_GuidedAA_Parent_C", ActorType.ProjectileAA},
 
-            {"BP_Drone_C", ActorType.Drone},// these are nothing i think 
             {"BP_FlyingDrone_THWK_C", ActorType.Drone}, // Russia
-            {"BP_Drone_SOF_C", ActorType.Drone}, // these are nothing i think
-            {"BP_FlyingDrone_SOF_C", ActorType.Drone} // Ukraine
+            {"BP_FlyingDrone_SOF_C", ActorType.Drone}, // Ukraine
+
+            // IDK if this works but typically admins use the admin cam to spectate
+            // Should track the admins exact location
+            // If it works like i think it should i will add a aimview to hopefully track who the admins are watching
+            // :)
+            {"BP_DeveloperAdminCam_C", ActorType.Admin}
         };
 
         public static readonly Dictionary<ActorType, SKBitmap> BitMaps = new(){
@@ -897,6 +908,7 @@ namespace squad_dma {
         };
         public static readonly Dictionary<string, Team> Teams = new()
         {
+            //Obsolete
             // Vanilla
             {"BP_Soldier_RU_", Team.RU},
             {"BP_Soldier_VDV", Team.RU},

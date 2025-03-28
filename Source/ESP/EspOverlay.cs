@@ -1,14 +1,8 @@
 ﻿using SharpDX;
 using SharpDX.Direct2D1;
-using SharpDX.DXGI;
 using SharpDX.Mathematics.Interop;
-using System;
 using System.Runtime.InteropServices;
-using System.Threading;
-using System.Windows.Forms;
 using System.Numerics;
-using Offsets;
-using System.Collections.ObjectModel;
 
 namespace squad_dma
 {
@@ -16,10 +10,6 @@ namespace squad_dma
     {
         private WindowRenderTarget renderTarget;
         private SolidColorBrush brush;
-        private ReadOnlyDictionary<ulong, UActor> AllActors
-        {
-            get => Memory.Actors;
-        }
         private bool running = true;
         private Game Game => Memory._game;
 
@@ -104,7 +94,7 @@ namespace squad_dma
                     }
 
                     RenderFrame();
-                    Thread.Sleep(15); // ~60 FPS
+                    Thread.Sleep(16); // ~60 FPS
                     wasReadyLastFrame = true;
                 }
                 Program.Log("Render thread stopped.");
@@ -118,12 +108,7 @@ namespace squad_dma
             bool localPlayerExists = Game.LocalPlayer != null;
             bool actorsExist = Game.Actors != null && Game.Actors.Count > 0;
 
-            if (!inGame || !localPlayerExists || !actorsExist)
-            {
-                return false;
-            }
-            //Program.Log("Ready to render!");
-            return true;
+            return inGame && localPlayerExists && actorsExist;
         }
 
         private void RenderFrame()
@@ -132,7 +117,7 @@ namespace squad_dma
             renderTarget.Clear(new RawColor4(0, 0, 0, 0));
 
             Dictionary<ulong, UActor> actorsCopy;
-            lock (((Game)Game).actorsLock) // Verrouillage pour synchronisation
+            lock (((Game)Game).actorsLock)
             {
                 if (!IsReadyToRender())
                 {
@@ -140,11 +125,10 @@ namespace squad_dma
                     this.Invalidate();
                     return;
                 }
-                actorsCopy = new Dictionary<ulong, UActor>(Game.Actors); // Copie pour éviter les conflits
+                actorsCopy = new Dictionary<ulong, UActor>(Game.Actors);
             }
 
-            DrawEsp(actorsCopy); // Passer la copie à DrawEsp
-
+            DrawEsp(actorsCopy);
             renderTarget.EndDraw();
         }
 
@@ -152,7 +136,7 @@ namespace squad_dma
         {
             if (Game.LocalPlayer == null || actors == null || actors.Count < 1)
             {
-                Program.Log("LocalPlayer ou actors non initialisés.");
+                Program.Log("LocalPlayer or actors not initialised.");
                 return;
             }
 
@@ -160,44 +144,34 @@ namespace squad_dma
             {
                 Location = Game.LocalPlayer.Position,
                 Rotation = Game.LocalPlayer.Rotation3D,
-                FOV = 90f
+                FOV = Game.CurrentFOV
             };
 
             Vector3 camPos = viewInfo.Location;
-            Team localPlayerTeam = Program.Config.SelectedTeam;
 
             foreach (var actor in actors.Values)
             {
-                if (actor.Position == Vector3.Zero) 
-                    continue;
-
-                if (!actor.IsAlive) 
-                    continue;
-
-                if (actor.ActorType != ActorType.Player)
+                if (actor.Position == Vector3.Zero || !actor.IsAlive || actor.ActorType != ActorType.Player)
                     continue;
 
                 if (Vector3.Distance(Game.LocalPlayer.Position, actor.Position) < 1.0f)
                     continue;
 
-                
+                if (!Program.Config.EspShowAllies && actor.IsFriendly())
+                    continue;
+
                 Vector2 screenPos = Camera.WorldToScreen(viewInfo, actor.Position);
-                if (screenPos == Vector2.Zero) 
+                if (screenPos == Vector2.Zero)
                     continue;
 
                 var distance = Vector3.Distance(camPos, actor.Position) / 100f;
                 if (distance > Program.Config.EspMaxDistance)
                     continue;
 
-                if (actor.Team == localPlayerTeam)
-                    continue;
+                string espText = GetEspText(actor, distance);
+                RawRectangleF textRect = GetEspTextRect(screenPos, Game.IsAimingDownSights, Game.HasPipScope);
 
-                string wdistance = Program.Config.EspShowDistance ? $"[{(int)distance}m]" : "";
-                string whealth = Program.Config.EspShowHealth ? $"[{(int)actor.Health}❤]" : "";
-                string name = Program.Config.ShowNames ? actor.Name : "";
-                string espText = $"{name}{(string.IsNullOrEmpty(name) ? "" : " ")}{wdistance}{(string.IsNullOrEmpty(wdistance) ? "" : " ")}{whealth}";
-
-                // Rendu du texte
+                // Text Render
                 brush.Color = new RawColor4(
                     Program.Config.EspTextColor.R / 255f,
                     Program.Config.EspTextColor.G / 255f,
@@ -207,10 +181,28 @@ namespace squad_dma
                 renderTarget.DrawText(
                     espText,
                     new SharpDX.DirectWrite.TextFormat(new SharpDX.DirectWrite.Factory(), "Verdana", Program.Config.ESPFontSize),
-                    new RawRectangleF(screenPos.X, screenPos.Y, screenPos.X + 200, screenPos.Y + 20),
+                    textRect,
                     brush
                 );
             }
+        }
+
+        private string GetEspText(UActor actor, float distance)
+        {
+            string wdistance = Program.Config.EspShowDistance ? $"[{(int)distance}m]" : "";
+            string whealth = Program.Config.EspShowHealth ? $"[{(int)actor.Health}❤]" : "";
+            string name = Program.Config.ShowNames ? actor.Name : "";
+            return $"{name}{(string.IsNullOrEmpty(name) ? "" : " ")}{wdistance}{(string.IsNullOrEmpty(wdistance) ? "" : " ")}{whealth}";
+        }
+
+        private RawRectangleF GetEspTextRect(Vector2 screenPos, bool isAiming, bool hasPip)
+        {
+            float x = screenPos.X;
+            float y = screenPos.Y;
+            float width = 200f;
+            float height = 20f;
+
+            return new RawRectangleF(x, y, x + width, y + height);
         }
         protected override void OnClosed(EventArgs e)
         {
