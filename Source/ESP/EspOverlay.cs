@@ -94,7 +94,7 @@ namespace squad_dma
                     }
 
                     RenderFrame();
-                    Thread.Sleep(15); // ~60 FPS
+                    Thread.Sleep(16); // ~60 FPS
                     wasReadyLastFrame = true;
                 }
                 Program.Log("Render thread stopped.");
@@ -136,7 +136,7 @@ namespace squad_dma
         {
             if (Game.LocalPlayer == null || actors == null || actors.Count < 1)
             {
-                Program.Log("LocalPlayer ou actors non initialisés.");
+                Program.Log("LocalPlayer or actors not initialised.");
                 return;
             }
 
@@ -148,7 +148,6 @@ namespace squad_dma
             };
 
             Vector3 camPos = viewInfo.Location;
-            Team localPlayerTeam = Program.Config.SelectedTeam;
 
             foreach (var actor in actors.Values)
             {
@@ -156,6 +155,9 @@ namespace squad_dma
                     continue;
 
                 if (Vector3.Distance(Game.LocalPlayer.Position, actor.Position) < 1.0f)
+                    continue;
+
+                if (!Program.Config.EspShowAllies && actor.IsFriendly())
                     continue;
 
                 Vector2 screenPos = Camera.WorldToScreen(viewInfo, actor.Position);
@@ -166,13 +168,10 @@ namespace squad_dma
                 if (distance > Program.Config.EspMaxDistance)
                     continue;
 
-                if (actor.Team == localPlayerTeam)
-                    continue;
-
                 string espText = GetEspText(actor, distance);
                 RawRectangleF textRect = GetEspTextRect(screenPos, Game.IsAimingDownSights, Game.HasPipScope);
 
-                // Rendu du texte
+                // Text Render
                 brush.Color = new RawColor4(
                     Program.Config.EspTextColor.R / 255f,
                     Program.Config.EspTextColor.G / 255f,

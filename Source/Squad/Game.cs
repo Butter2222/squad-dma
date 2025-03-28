@@ -315,7 +315,7 @@ namespace squad_dma
                 GetCameraCache();
 
                 _updateCounter++;
-                if (_updateCounter % 10 != 0)
+                if (_updateCounter % 20 != 0)
                 {
                     return true;
                 }

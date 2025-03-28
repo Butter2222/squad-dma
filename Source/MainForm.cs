@@ -37,7 +37,9 @@ namespace squad_dma
         private SKPoint targetPanPosition;
         private System.Windows.Forms.Timer panTimer;
         public int ZoomStep { get; set; } = 5; 
-        public float ZoomSensitivity { get; set; } = 1.0f; 
+        public float ZoomSensitivity { get; set; } = 1.0f;
+
+        private EspOverlay _espOverlay;
 
         #region Getters
         private bool Ready
@@ -97,18 +99,20 @@ namespace squad_dma
             _config = Program.Config;
             _game = game;
             InputManager.SetVmmInstance(Memory.vmmInstance);
+            InputManager.InitInputManager();
             if (!InputManager.InitInputManager())
             {
                 Console.WriteLine("Failed to initialize input manager!");
             }
 
             InitializeComponent();
-            // SetupEspControls(); // SetESPTeam
-            teamComboBox.SelectedIndexChanged += (s, e) =>
+
+            if (_config.EnableEsp)
             {
-                //Program.Log($"ComboBox selection changed to Index: {teamComboBox.SelectedIndex}, Item: {teamComboBox.SelectedItem}");
-                UpdateSelectedTeam(teamComboBox);
-            };
+                _espOverlay = new EspOverlay();
+                _espOverlay.Show();
+            }
+
             LoadConfig();
             SetDarkMode(ref _darkmode);
             this.Size = new Size(1280, 720);
@@ -163,7 +167,13 @@ namespace squad_dma
             e.Cancel = true;
             this.Enabled = false;
 
-            Program.Log($"Closing form, SelectedTeam: {_config.SelectedTeam}");
+            Program.Log("Closing form");
+            if (_espOverlay != null && !_espOverlay.IsDisposed)
+            {
+                _espOverlay.Close();
+                _espOverlay = null;
+            }
+
             CleanupLoadedBitmaps();
             Config.SaveConfig(_config); 
             Memory.Shutdown(); 
@@ -183,7 +193,7 @@ namespace squad_dma
 
         private void InputUpdate_Tick(object sender, EventArgs e)
         {
-            if (!InputManager.IsManagerLoaded && !InputManager.InitInputManager())
+            if (!InputManager.IsManagerLoaded)
                 return;
 
             InputManager.UpdateKeys();
@@ -319,12 +329,19 @@ namespace squad_dma
             trkAimLength.Value = _config.PlayerAimLineLength;
             trkUIScale.Value = _config.UIScale;
 
-            // ESP Team
-            //Program.Log($"LoadConfig - Before sync, SelectedTeam: {_config.SelectedTeam}");
-            int index = Array.IndexOf(Enum.GetNames(typeof(Team)), _config.SelectedTeam.ToString());
-            if (index < 0) index = 0;
-            teamComboBox.SelectedIndex = index;
-            //Program.Log($"LoadConfig - After sync, SelectedTeam: {_config.SelectedTeam}, ComboBox Index: {index}");
+            // ESP
+            chkEnableEsp.Checked = _config.EnableEsp;
+            trkEspMaxDistance.Value = (int)_config.EspMaxDistance;
+            lblEspMaxDistance.Text = $"Max Distance: {_config.EspMaxDistance}m";
+            chkShowAllies.Checked = _config.EspShowAllies;
+            chkEspShowNames.Checked = _config.ShowNames;
+            chkEspShowDistance.Checked = _config.EspShowDistance;
+            chkEspShowHealth.Checked = _config.EspShowHealth;
+            txtEspFontSize.Text = _config.ESPFontSize.ToString();
+            txtEspColorA.Text = _config.EspTextColor.A.ToString();
+            txtEspColorR.Text = _config.EspTextColor.R.ToString();
+            txtEspColorG.Text = _config.EspTextColor.G.ToString();
+            txtEspColorB.Text = _config.EspTextColor.B.ToString();
             #endregion
             #endregion
             InitiateFont();
@@ -1100,26 +1117,6 @@ namespace squad_dma
                 basePosition.Y += verticalSpacing;
             }
         }
-
-        private double MetersToMilliradians(double meters)
-        {
-            double[] distances = { 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050, 1100, 1150, 1200, 1250 };
-            double[] milliradians = { 1579, 1558, 1538, 1517, 1496, 1475, 1453, 1431, 1409, 1387, 1364, 1341, 1317, 1292, 1267, 1240, 1212, 1183, 1152, 1118, 1081, 1039, 988, 918, 800 };
-
-            if (meters <= 50) return 1579.0;
-            if (meters >= 1250) return 800.0;
-
-            for (int i = 0; i < distances.Length - 1; i++)
-            {
-                if (meters >= distances[i] && meters <= distances[i + 1])
-                {
-                    double rate = (milliradians[i + 1] - milliradians[i]) / (distances[i + 1] - distances[i]);
-                    return Math.Round(milliradians[i] + rate * (meters - distances[i]), 1);
-                }
-            }
-            return 800;
-        }
-
         private float CalculateBearing(Vector3 playerPos, Vector3 poiPos)
         {
             float deltaX = poiPos.X - playerPos.X;
@@ -1561,84 +1558,134 @@ namespace squad_dma
         {
 
         }
-       /* private void SetupEspControls()
+
+        #region ESP Event Handlers
+        private void ChkEnableEsp_CheckedChanged(object sender, EventArgs e)
         {
-            GroupBox grpEsp = new GroupBox
+            _config.EnableEsp = chkEnableEsp.Checked;
+            Config.SaveConfig(_config);
+
+            if (_config.EnableEsp)
             {
-                Text = "ESP",
-                Location = new Point(5, 306),
-                Size = new Size(463, 80),
-                TabIndex = 27,
-                TabStop = false
-            };
-
-            Label lblTeam = new Label
-            {
-                Text = "Your Team:",
-                Location = new Point(10, 25),
-                AutoSize = true
-            };
-
-            ComboBox teamComboBox = new ComboBox
-            {
-                Name = "teamComboBox",
-                Location = new Point(80, 22),
-                Size = new Size(150, 23),
-                DropDownStyle = ComboBoxStyle.DropDownList
-            };
-
-            // Fill with Teams
-            teamComboBox.Items.AddRange(Enum.GetNames(typeof(Team)));
-            int initialIndex = Array.IndexOf(Enum.GetNames(typeof(Team)), _config.SelectedTeam.ToString());
-            if (initialIndex < 0) initialIndex = 0;
-            teamComboBox.SelectedIndex = initialIndex;
-            Program.Log($"ComboBox initialized with Index: {initialIndex}, SelectedTeam: {_config.SelectedTeam}");
-
-            teamComboBox.Enabled = true; 
-            Program.Log($"ComboBox Enabled: {teamComboBox.Enabled}");
-
-            // Attach event
-            teamComboBox.SelectedIndexChanged += (s, e) =>
-            {
-                Program.Log($"ComboBox selection changed to Index: {teamComboBox.SelectedIndex}, Item: {teamComboBox.SelectedItem}");
-                UpdateSelectedTeam(teamComboBox);
-            };
-
-            grpEsp.Controls.Add(lblTeam);
-            grpEsp.Controls.Add(teamComboBox);
-            grpConfig.Controls.Add(grpEsp);
-
-            Button btnTestTeam = new Button
-            {
-                Text = "Test Team Update",
-                Location = new Point(240, 22),
-                Size = new Size(100, 23)
-            };
-            btnTestTeam.Click += (s, e) =>
-            {
-                var teamComboBox = grpConfig.Controls.Find("teamComboBox", true).FirstOrDefault() as ComboBox;
-                if (teamComboBox != null)
+                if (_espOverlay == null || _espOverlay.IsDisposed)
                 {
-                    Program.Log($"Test button clicked, forcing update with Index: {teamComboBox.SelectedIndex}, Item: {teamComboBox.SelectedItem}");
-                    UpdateSelectedTeam(teamComboBox);
+                    _espOverlay = new EspOverlay();
+                    _espOverlay.Show();
                 }
-            };
-            grpEsp.Controls.Add(btnTestTeam);
-            grpConfig.Controls.Add(grpEsp);
-
-        }
-       */
-        private void UpdateSelectedTeam(ComboBox teamComboBox)
-        {
-            if (teamComboBox.SelectedItem != null)
+            }
+            else
             {
-                Team newTeam = (Team)Enum.Parse(typeof(Team), teamComboBox.SelectedItem.ToString());
-                _config.SelectedTeam = newTeam;
-                //Program.Log($"Selected Team updated to: {_config.SelectedTeam}, ComboBox Index: {teamComboBox.SelectedIndex}");
-                Config.SaveConfig(_config);
+                if (_espOverlay != null && !_espOverlay.IsDisposed)
+                {
+                    _espOverlay.Close();
+                    _espOverlay = null;
+                }
             }
         }
+
+        private void TrkEspMaxDistance_Scroll(object sender, EventArgs e)
+        {
+            _config.EspMaxDistance = trkEspMaxDistance.Value;
+            lblEspMaxDistance.Text = $"Max Distance: {trkEspMaxDistance.Value}m";
+            Config.SaveConfig(_config);
+        }
+
+        private void ChkShowAllies_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.EspShowAllies = chkShowAllies.Checked;
+            Config.SaveConfig(_config);
+        }
+
+        private void ChkEspShowNames_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.ShowNames = chkEspShowNames.Checked;
+            Config.SaveConfig(_config);
+        }
+
+        private void ChkEspShowDistance_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.EspShowDistance = chkEspShowDistance.Checked;
+            Config.SaveConfig(_config);
+        }
+
+        private void ChkEspShowHealth_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.EspShowHealth = chkEspShowHealth.Checked;
+            Config.SaveConfig(_config);
+        }
+
+        private void TxtEspFontSize_TextChanged(object sender, EventArgs e)
+        {
+            if (float.TryParse(txtEspFontSize.Text, out float fontSize) && fontSize > 0)
+            {
+                _config.ESPFontSize = fontSize;
+                Config.SaveConfig(_config);
+            }
+            else
+            {
+                txtEspFontSize.Text = _config.ESPFontSize.ToString();
+            }
+        }
+        private void TxtEspColorA_TextChanged(object sender, EventArgs e)
+        {
+            if (byte.TryParse(txtEspColorA.Text, out byte a) && a >= 0 && a <= 255)
+            {
+                
+                var color = _config.EspTextColor;
+                color.A = a;
+                _config.EspTextColor = color;
+                Config.SaveConfig(_config);
+            }
+            else
+            {
+                txtEspColorA.Text = _config.EspTextColor.A.ToString();
+            }
+        }
+
+        private void TxtEspColorR_TextChanged(object sender, EventArgs e)
+        {
+            if (byte.TryParse(txtEspColorR.Text, out byte r) && r >= 0 && r <= 255)
+            {
+                var color = _config.EspTextColor;
+                color.R = r;
+                _config.EspTextColor = color;
+                Config.SaveConfig(_config);
+            }
+            else
+            {
+                txtEspColorR.Text = _config.EspTextColor.R.ToString();
+            }
+        }
+
+        private void TxtEspColorG_TextChanged(object sender, EventArgs e)
+        {
+            if (byte.TryParse(txtEspColorG.Text, out byte g) && g >= 0 && g <= 255)
+            {
+                var color = _config.EspTextColor;
+                color.G = g;
+                _config.EspTextColor = color;
+                Config.SaveConfig(_config);
+            }
+            else
+            {
+                txtEspColorG.Text = _config.EspTextColor.G.ToString();
+            }
+        }
+
+        private void TxtEspColorB_TextChanged(object sender, EventArgs e)
+        {
+            if (byte.TryParse(txtEspColorB.Text, out byte b) && b >= 0 && b <= 255)
+            {
+                var color = _config.EspTextColor;
+                color.B = b;
+                _config.EspTextColor = color;
+                Config.SaveConfig(_config);
+            }
+            else
+            {
+                txtEspColorB.Text = _config.EspTextColor.B.ToString();
+            }
+        }
+        #endregion
     }
-
-
 }

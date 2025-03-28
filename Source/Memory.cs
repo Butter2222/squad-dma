@@ -702,7 +702,7 @@ namespace squad_dma
             }
             catch (Exception ex)
             {
-                Program.Log($"Erreur lors de la récupération du nom de la classe de l'acteur : {ex.Message}");
+                Program.Log($"Error retrieving Actor name : {ex.Message}");
                 return "Unknown";
             }
         }
