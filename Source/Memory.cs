@@ -691,6 +691,21 @@ namespace squad_dma
             }
         }
 
+        public static string GetActorClassName(ulong actorPtr)
+        {
+            try
+            {
+                var id = ReadValue<uint>(actorPtr + Offsets.Actor.ID);
+                var names = GetNamesById(new uint[] { id }.ToList());
+                return names.ContainsKey(id) ? names[id] : "Unknown";
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"Error retrieving Actor name : {ex.Message}");
+                return "Unknown";
+            }
+        }
+
         private static void ThrowIfDMAShutdown()
         {
             if (!_running) throw new DMAShutdown("Memory Thread/DMA is shutting down!");
