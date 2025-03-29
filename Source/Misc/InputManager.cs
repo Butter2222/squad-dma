@@ -11,7 +11,6 @@ namespace squad_dma
 
         private static long lastUpdateTicks = 0;
         private static ulong gafAsyncKeyStateExport;
-
         private static byte[] currentStateBitmap = new byte[64];
         private static byte[] previousStateBitmap = new byte[64];
         public static readonly ConcurrentDictionary<int, byte> pressedKeys = new ConcurrentDictionary<int, byte>();
@@ -28,10 +27,7 @@ namespace squad_dma
 
         public static bool IsManagerLoaded => InputManager.keyboardInitialized;
 
-        static InputManager()
-        {
-
-        }
+        static InputManager() { }
 
         public static void SetVmmInstance(Vmm vmmInstance)
         {
@@ -84,7 +80,14 @@ namespace squad_dma
                     return false;
                 }
 
-                return InputManager.currentBuild > 22000 ? InputManager.InitKeyboardForNewWindows() : InputManager.InitKeyboardForOldWindows();
+                if (InputManager.currentBuild >= 26000)
+                {
+                    return InitKeyboardForNewWindows();
+                }
+
+                return InputManager.currentBuild > 22000
+                    ? InputManager.InitKeyboardForNewWindows()
+                    : InputManager.InitKeyboardForOldWindows();
             }
             catch (Exception ex)
             {
@@ -96,46 +99,48 @@ namespace squad_dma
 
         private static bool InitKeyboardForNewWindows()
         {
-            //Program.Log("Windows version > 22000, attempting to read with offset");
-
-            var csrssProcesses = InputManager.vmmInstance.Processes.Where(p => p.Name.Equals("csrss.exe", StringComparison.OrdinalIgnoreCase)).ToList();
+            var csrssProcesses = InputManager.vmmInstance.Processes
+                .Where(p => p.Name.Equals("csrss.exe", StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
             foreach (var csrss in csrssProcesses)
             {
                 try
                 {
-                    var win32ksgdBase = csrss.GetModuleBase("win32ksgd.sys");
-
+                    ulong tmp = csrss.GetModuleBase("win32ksgd.sys");
                     ulong gSessionGlobalSlots = 0;
 
-                    if (win32ksgdBase == 0 || (InputManager.currentBuild >= 26100 && InputManager.updateBuildRevision >= 2605))
+                    if (tmp == 0 || (InputManager.currentBuild >= 26100 && InputManager.updateBuildRevision >= 2605))
                     {
-                        ulong win32kbase = csrss.GetModuleBase("win32k.sys");
+                        tmp = csrss.GetModuleBase("win32k.sys");
+                        if (tmp == 0) continue;
 
-                        if (win32kbase == 0)
-                            continue;
-
-                        gSessionGlobalSlots = win32kbase + 0x82538;
+                        if (InputManager.updateBuildRevision >= 3037)
+                        {
+                            gSessionGlobalSlots = tmp + (InputManager.updateBuildRevision >= 3323 ? (ulong)0x824F0 : (ulong)0x82530);
+                        }
+                        else
+                        {
+                            gSessionGlobalSlots = tmp + (ulong)0x82538;
+                        }
                     }
                     else
                     {
-                        gSessionGlobalSlots = win32ksgdBase + 0x3110;
+                        gSessionGlobalSlots = tmp + (ulong)0x3110;
                     }
 
-                    ulong userSessionState = 0;
+                    if (gSessionGlobalSlots == 0) continue;
 
+                    ulong userSessionState = 0;
                     for (int i = 0; i < 4; i++)
                     {
                         var t1 = csrss.MemReadAs<ulong>(gSessionGlobalSlots);
-                        if (t1.Value == 0)
-                            continue;
+                        if (t1.Value == 0) continue;
 
                         var t2 = csrss.MemReadAs<ulong>(t1.Value + (ulong)(8 * i));
-                        if (t2.Value == 0)
-                            continue;
+                        if (t2.Value == 0) continue;
 
                         var t3 = csrss.MemReadAs<ulong>(t2.Value);
-
                         userSessionState = t3.Value;
 
                         if (userSessionState > 0x7FFFFFFFFFFF)
@@ -145,23 +150,29 @@ namespace squad_dma
                     if (userSessionState == 0)
                         continue;
 
-                    var offset = 0x3690;
-                    var currentBuild = InputManager.currentBuild;
-                    var currentRevision = InputManager.updateBuildRevision;
-
-                    if (currentBuild >= 26100 && currentRevision >= 2605)
-                        offset = 0x3830;
-                    else if (currentBuild >= 26100)
-                        offset = currentRevision >= 2314 ? 0x3828 : 0x3820;
-                    else if (currentBuild >= 22631 && currentRevision >= 3810)
-                        offset = 0x36A8;
-
-                    InputManager.gafAsyncKeyStateExport = userSessionState + (ulong)offset;
+                    if (InputManager.currentBuild >= 26100 && InputManager.updateBuildRevision >= 2605)
+                    {
+                        InputManager.gafAsyncKeyStateExport = userSessionState +
+                            (InputManager.updateBuildRevision >= 3323 ? (ulong)0x3808 : (ulong)0x3830);
+                    }
+                    else if (InputManager.currentBuild >= 26100)
+                    {
+                        InputManager.gafAsyncKeyStateExport = userSessionState +
+                            (InputManager.updateBuildRevision >= 2314 ? (ulong)0x3828 : (ulong)0x3820);
+                    }
+                    else if (InputManager.currentBuild >= 22631 && InputManager.updateBuildRevision >= 3810)
+                    {
+                        InputManager.gafAsyncKeyStateExport = userSessionState + (ulong)0x36A8;
+                    }
+                    else
+                    {
+                        InputManager.gafAsyncKeyStateExport = userSessionState + (ulong)0x3690;
+                    }
 
                     if (InputManager.gafAsyncKeyStateExport > 0x7FFFFFFFFFFF)
                     {
                         InputManager.keyboardInitialized = true;
-                        Console.WriteLine("Keyboard handler initialized");
+                        Program.Log("Keyboard handler initialized");
                         return true;
                     }
                 }

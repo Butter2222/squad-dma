@@ -76,7 +76,6 @@ namespace squad_dma
             try
             {
                 Program.Log($"Startup sequence initializing");
-                Program.Log($"Checking memory map...");
 
                 if (!File.Exists("mmap.txt"))
                 {

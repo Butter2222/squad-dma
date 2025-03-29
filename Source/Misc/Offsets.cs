@@ -104,9 +104,20 @@
         public const uint CameraFov = 0x1B18;
     }
 
+    public struct ASQGameState
+    {
+        public const uint TeamStates = 0x308;
+    }
+
+    public struct ASQTeamState
+    {
+        public const uint Tickets = 0x228;
+        public const uint ID = 0x240; // global
+    }
+
     public struct ASQPlayerState
     {
-        public const uint TeamID = 0x400;
+        public const uint TeamID = 0x400; // per player
     }
 
     public struct ASQSoldier

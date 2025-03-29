@@ -36,6 +36,8 @@ namespace squad_dma
         private const int PAN_INTERVAL = 10;
         private SKPoint targetPanPosition;
         private System.Windows.Forms.Timer panTimer;
+        private int _lastFriendlyTickets = -1;
+        private int _lastEnemyTickets = -1;
         public int ZoomStep { get; set; } = 5; 
         public float ZoomSensitivity { get; set; } = 1.0f;
 
@@ -137,6 +139,7 @@ namespace squad_dma
             this.Shown += frmMain_Shown;
 
             _mapCanvas.PaintSurface += skMapCanvas_PaintSurface;
+            ticketsPanel.Paint += ticketsPanel_Paint;
             _mapCanvas.MouseMove += skMapCanvas_MouseMove;
             _mapCanvas.MouseDown += skMapCanvas_MouseDown;
             _mapCanvas.MouseDoubleClick += skMapCanvas_MouseDoubleClick;
@@ -152,6 +155,10 @@ namespace squad_dma
             var inputTimer = new System.Windows.Forms.Timer { Interval = 10 };
             inputTimer.Tick += InputUpdate_Tick;
             inputTimer.Start();
+
+            var _ticketUpdateTimer = new System.Windows.Forms.Timer { Interval = 500 };
+            _ticketUpdateTimer.Tick += (s, e) => UpdateTicketsDisplay();
+            _ticketUpdateTimer.Start();
         }
 
         #endregion
@@ -484,6 +491,27 @@ namespace squad_dma
                 {
                     _fps++; 
                 }
+            }
+        }
+
+        private void UpdateTicketsDisplay()
+        {
+            if (!InGame || _game == null)
+            {
+                ticketsPanel.Visible = false;
+                return;
+            }
+
+            var (friendly, enemy) = _game.GetTeamTickets();
+
+            if (friendly != _lastFriendlyTickets || enemy != _lastEnemyTickets)
+            {
+                this.Invoke((MethodInvoker)delegate {
+                    ticketsPanel.Visible = true;
+                    _lastFriendlyTickets = friendly;
+                    _lastEnemyTickets = enemy;
+                    ticketsPanel.Invalidate();
+                });
             }
         }
 
@@ -1099,7 +1127,7 @@ namespace squad_dma
 
             string[] lines =
             {
-                isOutOfRange ? "—" : $"{milliradians:F1} mil",
+                isOutOfRange ? "—" : $"{milliradians:F1}",
                 $"{bearing:F1}°",
                 $"{distanceMeters}m"
             };
@@ -1492,6 +1520,32 @@ namespace squad_dma
             catch { }
         }
 
+        private void ticketsPanel_Paint(object sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+            string ticketText = $"Friendly: {_lastFriendlyTickets}  |  Enemy: {_lastEnemyTickets}";
+
+            using (var font = new Font("Arial", 9f, FontStyle.Bold))
+            {
+                SizeF textSize = TextRenderer.MeasureText(g, ticketText, font);
+
+                int x = (ticketsPanel.Width - (int)textSize.Width) / 2;
+                int y = (ticketsPanel.Height - (int)textSize.Height) / 2;
+
+                x += 1; 
+
+                TextRenderer.DrawText(
+                    g,
+                    ticketText,
+                    font,
+                    new Point(x, y),
+                    Color.FromArgb(240, 240, 240)
+                );
+            }
+        }
         private void btnToggleMap_Click(object sender, EventArgs e)
         {
             ToggleMap();

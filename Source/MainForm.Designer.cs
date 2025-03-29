@@ -47,6 +47,7 @@ namespace squad_dma
             lblUIScale = new Label();
             grpRadar = new GroupBox();
             tabRadar = new TabPage();
+            ticketsPanel = new Panel();
             grpMapSetup = new GroupBox();
             btnApplyMapScale = new Button();
             chkMapFree = new CheckBox();
@@ -261,6 +262,7 @@ namespace squad_dma
             // 
             // tabRadar
             // 
+            tabRadar.Controls.Add(ticketsPanel);
             tabRadar.Controls.Add(grpMapSetup);
             tabRadar.Location = new Point(4, 24);
             tabRadar.Name = "tabRadar";
@@ -269,6 +271,16 @@ namespace squad_dma
             tabRadar.TabIndex = 0;
             tabRadar.Text = "Radar";
             tabRadar.UseVisualStyleBackColor = true;
+            // 
+            // ticketsPanel
+            // 
+            ticketsPanel.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            ticketsPanel.BackColor = SystemColors.ScrollBar;
+            ticketsPanel.BorderStyle = BorderStyle.FixedSingle;
+            ticketsPanel.Location = new Point(6, 836);
+            ticketsPanel.Name = "ticketsPanel";
+            ticketsPanel.Size = new Size(161, 30);
+            ticketsPanel.TabIndex = 12;
             // 
             // grpMapSetup
             // 
@@ -638,6 +650,9 @@ namespace squad_dma
         private Label lblEspColorR;
         private Label lblEspColorG;
         private Label lblEspColorB;
+      
+        // Tickets
+        private Panel ticketsPanel;
 
     }
 }
