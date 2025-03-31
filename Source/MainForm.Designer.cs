@@ -277,9 +277,11 @@ namespace squad_dma
             ticketsPanel.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             ticketsPanel.BackColor = SystemColors.ScrollBar;
             ticketsPanel.BorderStyle = BorderStyle.FixedSingle;
-            ticketsPanel.Location = new Point(7, 836);
+
+            ticketsPanel.Location = new Point(9, 836);
             ticketsPanel.Name = "ticketsPanel";
-            ticketsPanel.Size = new Size(171, 30);
+            ticketsPanel.Size = new Size(285, 30);
+
             ticketsPanel.TabIndex = 12;
             // 
             // grpMapSetup

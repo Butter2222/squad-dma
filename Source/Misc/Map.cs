@@ -139,7 +139,7 @@ namespace squad_dma
             })
             using (var textPaint = new SKPaint
             {
-                Color = SKColors.Cyan,
+                Color = SKColors.Yellow,
                 TextSize = size,
                 IsAntialias = true,
                 TextAlign = SKTextAlign.Center,

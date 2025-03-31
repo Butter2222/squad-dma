@@ -12,7 +12,10 @@ namespace squad_dma
         private readonly ulong _persistentLevel;
         private ulong _actorsArray;
         private readonly Stopwatch _regSw = new();
-        public readonly ConcurrentDictionary<ulong, UActor> _actors = new();
+        private readonly ConcurrentDictionary<ulong, UActor> _actors = new();
+        private Dictionary<ulong, int> _squadCache = new();
+        private DateTime _lastSquadUpdate = DateTime.MinValue;
+        private const int SquadUpdateInterval = 1000; // Update every 1 second
         public IEnumerable<uint> GetActorNameIds()
         {
             return _actors.Values.Select(actor => actor.NameId).Where(id => id != 0);
@@ -270,6 +273,8 @@ namespace squad_dma
 
                 playerInfoScatterMap.Execute();
 
+                bool updateSquads = (DateTime.Now - _lastSquadUpdate).TotalMilliseconds > SquadUpdateInterval;
+
                 for (int i = 0; i < count; i++)
                 {
                     var actor = _actors[actorBases[i]];
@@ -326,6 +331,44 @@ namespace squad_dma
                             }
                             catch { /* Silently fail */ }
                         }
+
+                        if (actor.IsFriendly())
+                        {
+                            if (_squadCache.TryGetValue(actor.Base, out var cachedSquadId))
+                            {
+                                actor.SquadID = cachedSquadId;
+                            }
+                            else
+                            {
+                                actor.SquadID = -1;
+                            }
+
+                            if (updateSquads)
+                            {
+                                try
+                                {
+                                    ulong playerState = 0;
+                                    if (results.TryGetValue(6, out var psResult))
+                                        psResult.TryGetResult<ulong>(out playerState);
+
+                                    if (playerState != 0)
+                                    {
+                                        var squadState = Memory.ReadPtr(playerState + Offsets.ASQPlayerState.SquadState);
+                                        if (squadState != 0)
+                                        {
+                                            var squadId = Memory.ReadValue<int>(squadState + Offsets.ASQSquadState.SquadId);
+
+                                            if (squadId > 0 && squadId < 1000)
+                                            {
+                                                actor.SquadID = squadId;
+                                                _squadCache[actor.Base] = squadId; 
+                                            }
+                                        }
+                                    }
+                                }
+                                catch { /* Silently fail */ }
+                            }
+                        }
                     }
 
                     if (results.TryGetValue(4, out var locResult) &&
@@ -340,6 +383,13 @@ namespace squad_dma
                         actor.Rotation = new Vector2(rotation.Y, rotation.X);
                         actor.Rotation3D = rotation;
                     }
+                }
+
+                if (updateSquads)
+                {
+                    _lastSquadUpdate = DateTime.Now;
+                    _squadCache = _squadCache.Where(kv => _actors.ContainsKey(kv.Key))
+                                           .ToDictionary(kv => kv.Key, kv => kv.Value);
                 }
             }
             catch (GameEnded)

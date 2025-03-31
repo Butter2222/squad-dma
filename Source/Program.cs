@@ -43,8 +43,6 @@ namespace squad_dma {
                         Thread.Sleep(100);
                     }
                     Game game = Memory._game;
-
-                    // Run radar
                     Application.Run(new MainForm());
                 }
             }

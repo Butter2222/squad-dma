@@ -118,7 +118,8 @@ namespace squad_dma
             Memory.StartMemoryWorker();
             Program.HideConsole();
             Memory._tickSw.Start();
-
+            // if you have issues with this initlizting and are on Windows 24h2 please just disable these lines below. 
+            // dont have time or knowledge to fix. :(
             InputManager.SetVmmInstance(Memory.vmmInstance);
             InputManager.InitInputManager();
         }
@@ -610,18 +611,16 @@ namespace squad_dma
         /// <exception cref="DMAException"></exception>
         public static void WriteValue<T>(ulong addr, T value)
             where T : unmanaged
-        {
-            // !!!COMMENTED TO FULL BLOCK WRITE FUNCTIONS OF DMA!!!
-            //
-            // try
-            // {
-            //     if (!vmmInstance.MemWriteStruct(_pid, addr, value))
-            //         throw new Exception("Memory Write Failed!");
-            // }
-            // catch (Exception ex)
-            // {
-            //     throw new DMAException($"[DMA] ERROR writing {typeof(T)} value at 0x{addr.ToString("X")}", ex);
-            // }
+        {            
+             try
+             {
+                 if (!vmmInstance.MemWriteStruct( addr, value))
+                     throw new Exception("Memory Write Failed!");
+             }
+             catch (Exception ex)
+             {
+                 throw new DMAException($"[DMA] ERROR writing {typeof(T)} value at 0x{addr.ToString("X")}", ex);
+             }
         }
 
         /// <summary>
@@ -629,38 +628,36 @@ namespace squad_dma
         /// </summary>
         /// <param name="entries">A collection of entries defining the memory writes.</param>
         public static void WriteScatter(IEnumerable<IScatterWriteEntry> entries)
-        {
-            // !!COMMENTED TO FULL BLOCK WRITE FUNCTIONS OF DMA!!!
-            //
-            // using (var scatter = vmmInstance.Scatter_Initialize(_pid, Vmm.FLAG_NOCACHE))
-            // {
-            //     if (scatter == null)
-            //         throw new InvalidOperationException("Failed to initialize scatter.");
+        {            
+             using (var scatter = vmmInstance.Scatter_Initialize(Vmm.FLAG_NOCACHE))
+             {
+                 if (scatter == null)
+                     throw new InvalidOperationException("Failed to initialize scatter.");
 
-            //     foreach (var entry in entries)
-            //     {
-            //         bool success = entry switch
-            //         {
-            //             IScatterWriteDataEntry<int> intEntry => scatter.PrepareWriteStruct(intEntry.Address, intEntry.Data),
-            //             IScatterWriteDataEntry<float> floatEntry => scatter.PrepareWriteStruct(floatEntry.Address, floatEntry.Data),
-            //             IScatterWriteDataEntry<ulong> ulongEntry => scatter.PrepareWriteStruct(ulongEntry.Address, ulongEntry.Data),
-            //             IScatterWriteDataEntry<bool> boolEntry => scatter.PrepareWriteStruct(boolEntry.Address, boolEntry.Data),
-            //             IScatterWriteDataEntry<byte> byteEntry => scatter.PrepareWriteStruct(byteEntry.Address, byteEntry.Data),
-            //             _ => throw new NotSupportedException($"Unsupported data type: {entry.GetType()}")
-            //         };
+                 foreach (var entry in entries)
+                 {
+                     bool success = entry switch
+                     {
+                         IScatterWriteDataEntry<int> intEntry => scatter.PrepareWriteStruct(intEntry.Address, intEntry.Data),
+                         IScatterWriteDataEntry<float> floatEntry => scatter.PrepareWriteStruct(floatEntry.Address, floatEntry.Data),
+                         IScatterWriteDataEntry<ulong> ulongEntry => scatter.PrepareWriteStruct(ulongEntry.Address, ulongEntry.Data),
+                         IScatterWriteDataEntry<bool> boolEntry => scatter.PrepareWriteStruct(boolEntry.Address, boolEntry.Data),
+                         IScatterWriteDataEntry<byte> byteEntry => scatter.PrepareWriteStruct(byteEntry.Address, byteEntry.Data),
+                         _ => throw new NotSupportedException($"Unsupported data type: {entry.GetType()}")
+                     };
 
-            //         if (!success)
-            //         {
-            //             Program.Log($"Failed to prepare scatter write for address: {entry.Address}");
-            //             continue;
-            //         }
-            //     }
+                     if (!success)
+                     {
+                         Program.Log($"Failed to prepare scatter write for address: {entry.Address}");
+                         continue;
+                     }
+                 }
 
-            //     if (!scatter.Execute())
-            //         throw new Exception("Scatter write execution failed.");
+                 if (!scatter.Execute())
+                     throw new Exception("Scatter write execution failed.");
 
-            //     scatter.Close();
-            // }
+                 scatter.Close();
+             }
         }
         #endregion
 

@@ -17,7 +17,10 @@ namespace squad_dma
         public string Name { get; set; }
         public float Health { get; set; } = -1;
         public int TeamID { get; set; } = -1;
+        public int SquadID { get; set; } = -1;
+        public List<UActor> MySquadMembers { get; } = new List<UActor>();
         public Team Team { get; set; } = Team.Unknown;
+
         public bool IsFriendly()
         {
             if (TeamID == -1) return false; 
@@ -29,6 +32,13 @@ namespace squad_dma
                 return localPlayer.TeamID == this.TeamID;
 
             return localPlayer.Team == this.Team;
+        }
+
+        public bool IsInMySquad()
+        {
+            return IsFriendly() &&
+                   SquadID != -1 &&
+                   SquadID == Memory.LocalPlayer?.SquadID;
         }
 
         public ActorType ActorType { get; set; } = ActorType.Player;

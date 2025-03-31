@@ -62,7 +62,9 @@ namespace squad_dma
 
         public static SKPaint GetEntityPaint(this UActor actor)
         {
-            SKColor color = actor.IsFriendly() ? SKPaints.Friendly : SKPaints.Enemy;
+            SKColor color = actor.IsInMySquad() ? SKPaints.Squad
+                          : actor.IsFriendly() ? SKPaints.Friendly
+                          : SKPaints.Enemy;
 
             if (teamEntityPaints.TryGetValue(actor.Team, out SKPaint cachedPaint))
             {

@@ -131,7 +131,7 @@ namespace squad_dma
                     }
                     else
                     {
-                        gSessionGlobalSlots = win32ksgdBase + (ulong)0x3110;
+                        gSessionGlobalSlots = win32ksgdBase + 0x3110;
                     }
 
                     if (gSessionGlobalSlots == 0) continue;

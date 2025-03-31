@@ -59,20 +59,10 @@
         public const uint ViewportClient = 0x70;
     }
 
-    public struct PlayerState
-    {
-        public const uint PlayerName = 0x308;
-    }
-
     public struct Pawn
     {
         public const uint PlayerState = 0x248;
         public const uint Controller = 0x260;
-    }
-
-    public struct Character
-    {
-        public const uint Mesh = 0x288;
     }
 
     public struct MeshComponent
@@ -93,6 +83,8 @@
         public const uint AcknowledgedPawn = 0x2A8;
         public const uint PlayerCameraManager = 0x2C0;
         public const uint SceneComponentTransform = 0x270;
+        public const uint SquadState = 0x5A8; // ASQSquadState*
+        public const uint TeamState = 0x590; // ASQTeamState*
     }
 
     public struct Camera
@@ -109,15 +101,32 @@
         public const uint TeamStates = 0x308;
     }
 
-    public struct ASQTeamState
-    {
-        public const uint Tickets = 0x228;
-        public const uint ID = 0x240; // global
-    }
-
     public struct ASQPlayerState
     {
         public const uint TeamID = 0x400; // per player
+        public const uint SquadState = 0x760; // ASQSquadState*
+        public const uint PlayerStateData = 0x6D0;
+    }
+
+    public struct ASQTeamState
+    {
+        public const uint Tickets = 0x228;
+        public const uint ID = 0x240; // global | Team ID (0, 1, 2)
+    }
+
+    public struct ASQSquadState
+    {
+        public const uint SquadId = 0x2A8; // int32
+        public const uint TeamId = 0x2AC; // int32
+        public const uint PlayerStates = 0x2B0; // TArray<ASQPlayerState*>
+        public const uint LeaderState = 0x2C0; // ASQPlayerState*
+        public const uint AuthoritySquad = 0x228;
+    }
+
+    public struct FPlayerStateDataObject
+    {
+        public const uint NumKills = 0x4; // int32
+        public const uint NumWoundeds = 0x10; // int32
     }
 
     public struct ASQSoldier

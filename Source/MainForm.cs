@@ -35,8 +35,10 @@ namespace squad_dma
         private const int PAN_INTERVAL = 10;
         private SKPoint targetPanPosition;
         private System.Windows.Forms.Timer panTimer;
-        private int _lastFriendlyTickets = -1;
-        private int _lastEnemyTickets = -1;
+        private int _lastFriendlyTickets = 0;
+        private int _lastEnemyTickets = 0;
+        private int _lastKills = 0;
+        private int _lastWoundeds = 0;
         public int ZoomStep { get; set; } = 5; 
         public float ZoomSensitivity { get; set; } = 1.0f;
 
@@ -185,6 +187,7 @@ namespace squad_dma
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) => keyData switch
         {
+            Keys.F4 => ToggleEnemyDistance(),
             Keys.F5 => ToggleMap(),
 #if DEBUG
             Keys.F6 => DumpNames(),
@@ -206,13 +209,16 @@ namespace squad_dma
             else if (InputManager.IsKeyDown(_config.ZoomOutKey))
                 ZoomOut(_config.ZoomStep);
 
-            // Handle Functions
-            if (InputManager.IsKeyDown(Keys.F5))
+            // Handle Functions - using IsKeyPressed for single press detection
+            if (InputManager.IsKeyPressed(Keys.F4))
+                ToggleEnemyDistance();
+
+            if (InputManager.IsKeyPressed(Keys.F5))
                 ToggleMap();
 #if DEBUG
-            if (InputManager.IsKeyDown(Keys.F6))
+            if (InputManager.IsKeyPressed(Keys.F6))
                 DumpNames();
-#endif        
+#endif
         }
 
         protected override void OnMouseWheel(MouseEventArgs e)
@@ -495,15 +501,34 @@ namespace squad_dma
                 return;
 
             var (friendly, enemy) = Memory._game.GetTeamTickets();
+            var (kills, woundeds) = Memory._game.GetStats();
 
-            if (friendly == _lastFriendlyTickets &&
-                enemy == _lastEnemyTickets)
-                return;
+            if (friendly != _lastFriendlyTickets ||
+                enemy != _lastEnemyTickets ||
+                kills != _lastKills ||
+                woundeds != _lastWoundeds)
+            {
+                _lastFriendlyTickets = friendly;
+                _lastEnemyTickets = enemy;
+                _lastKills = kills;
+                _lastWoundeds = woundeds;
+                ticketsPanel.Invalidate();
+            }
+        }
 
-            _lastFriendlyTickets = friendly;
-            _lastEnemyTickets = enemy;
-            ticketsPanel.Invalidate();
-
+        private void HandleGameStateChange()
+        {
+            if (Memory.GameStatus != Game.GameStatus.InGame || Memory._game == null)
+            {
+                _lastFriendlyTickets = 0;
+                _lastEnemyTickets = 0;
+                ticketsPanel.Invalidate();
+            }
+            else if (Memory.GameStatus == Game.GameStatus.InGame &&
+                    (_lastFriendlyTickets == 0 && _lastEnemyTickets == 0))
+            {
+                UpdateTicketsDisplay();
+            }
         }
 
         private void UpdateSelectedMap()
@@ -526,22 +551,6 @@ namespace squad_dma
                 {
                     Console.WriteLine($"No matching map found for: {currentMap}"); // Debug logging
                 }
-            }
-        }
-
-        private void HandleGameStateChange()
-        {
-            if (Memory.GameStatus != Game.GameStatus.InGame || Memory._game == null)
-            {
-                _lastFriendlyTickets = 0;
-                _lastEnemyTickets = 0;
-                ticketsPanel.Invalidate();
-            }
-
-            else if (Memory.GameStatus == Game.GameStatus.InGame &&
-                    (_lastFriendlyTickets == 0 && _lastEnemyTickets == 0))
-            {
-                UpdateTicketsDisplay();
             }
         }
 
@@ -792,11 +801,8 @@ namespace squad_dma
 
                 if (actor.ActorType == ActorType.Player)
                 {
-                    actorZoomedPos.DrawPlayerMarker(
-                        canvas,
-                        actor,
-                        aimlineLength
-                    );
+                    var color = actor.IsInMySquad() ? SKPaints.Squad : actor.GetEntityPaint().Color;
+                    actorZoomedPos.DrawPlayerMarker(canvas, actor, aimlineLength, color);
 
                     if (!actor.IsFriendly() && _config.ShowEnemyDistance)
                     {
@@ -948,7 +954,8 @@ namespace squad_dma
                 }
             }
         }
-
+        // Dont work 
+        // Fix later
         private void DrawAAStartMarker(SKCanvas canvas, MapPosition startPos)
         {
             float size = 8 * _uiScale;
@@ -964,7 +971,7 @@ namespace squad_dma
             })
             using (var xPaint = new SKPaint
             {
-                Color = SKColors.Cyan,
+                Color = SKColors.Yellow,
                 StrokeWidth = thickness,
                 IsAntialias = true,
                 Style = SKPaintStyle.Stroke,
@@ -1010,7 +1017,7 @@ namespace squad_dma
             })
             using (var textPaint = new SKPaint
             {
-                Color = SKColors.Cyan,
+                Color = SKColors.Yellow,
                 TextSize = textSize,
                 IsAntialias = true,
                 TextAlign = SKTextAlign.Left,
@@ -1528,15 +1535,24 @@ namespace squad_dma
             catch { }
         }
 
+
         private void ticketsPanel_Paint(object sender, PaintEventArgs e)
         {
-            if (_lastFriendlyTickets < 0 || _lastEnemyTickets < 0)
+            if (Memory.GameStatus != Game.GameStatus.InGame || Memory._game == null)
+            {
+                // Reset when not in game
+                _lastFriendlyTickets = 0;
+                _lastEnemyTickets = 0;
+                _lastKills = 0;
+                _lastWoundeds = 0;
                 return;
+            }
+
             var g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            string ticketText = $"Friendly: {_lastFriendlyTickets}  |  Enemy: {_lastEnemyTickets}";
+            string displayText = $"Friendly: {_lastFriendlyTickets}  |  Enemy: {_lastEnemyTickets}  |  K: {_lastKills}  |  W: {_lastWoundeds}";
 
             using (var font = new Font("Arial", 9f, FontStyle.Bold))
             using (var format = new StringFormat())
@@ -1552,14 +1568,17 @@ namespace squad_dma
                 );
 
                 g.DrawString(
-                    ticketText,
+
+                    displayText,
+
                     font,
                     Brushes.WhiteSmoke,
                     rect,
                     format
-                    );
+                );
             }
         }
+
         private void btnToggleMap_Click(object sender, EventArgs e)
         {
             ToggleMap();
@@ -1597,6 +1616,14 @@ namespace squad_dma
         private void btnDumpNames_Click(object sender, EventArgs e)
         {
             DumpNames();
+        }
+
+        private bool ToggleEnemyDistance()
+        {
+            _config.ShowEnemyDistance = !_config.ShowEnemyDistance;
+            chkShowEnemyDistance.Checked = _config.ShowEnemyDistance;
+            _mapCanvas.Invalidate();
+            return true;
         }
 
         private void ChkShowEnemyDistance_CheckedChanged(object sender, EventArgs e)
