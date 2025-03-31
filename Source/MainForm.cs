@@ -10,7 +10,6 @@ namespace squad_dma
 {
     public partial class MainForm : Form
     {
-        private Game _game;
         private readonly Config _config;
         private readonly SKGLControl _mapCanvas;
         private readonly Stopwatch _fpsWatch = new();
@@ -96,17 +95,9 @@ namespace squad_dma
         #endregion
 
         #region Constructor
-        public MainForm(Game game)
+        public MainForm()
         {
             _config = Program.Config;
-            _game = game;
-            InputManager.SetVmmInstance(Memory.vmmInstance);
-            InputManager.InitInputManager();
-            if (!InputManager.InitInputManager())
-            {
-                Console.WriteLine("Failed to initialize input manager!");
-            }
-
             InitializeComponent();
 
             if (_config.EnableEsp)
@@ -156,9 +147,13 @@ namespace squad_dma
             inputTimer.Tick += InputUpdate_Tick;
             inputTimer.Start();
 
-            var _ticketUpdateTimer = new System.Windows.Forms.Timer { Interval = 500 };
-            _ticketUpdateTimer.Tick += (s, e) => UpdateTicketsDisplay();
+            var _ticketUpdateTimer = new System.Windows.Forms.Timer { Interval = 1000 }; // 1 second interval
+            _ticketUpdateTimer.Tick += (sender, e) => UpdateTicketsDisplay();
             _ticketUpdateTimer.Start();
+
+            var stateMonitor = new System.Windows.Forms.Timer { Interval = 500 };
+            stateMonitor.Tick += (s, e) => HandleGameStateChange();
+            stateMonitor.Start();
         }
 
         #endregion
@@ -496,23 +491,19 @@ namespace squad_dma
 
         private void UpdateTicketsDisplay()
         {
-            if (!InGame || _game == null)
-            {
-                ticketsPanel.Visible = false;
+            if (Memory.GameStatus != Game.GameStatus.InGame || Memory._game == null)
                 return;
-            }
 
-            var (friendly, enemy) = _game.GetTeamTickets();
+            var (friendly, enemy) = Memory._game.GetTeamTickets();
 
-            if (friendly != _lastFriendlyTickets || enemy != _lastEnemyTickets)
-            {
-                this.Invoke((MethodInvoker)delegate {
-                    ticketsPanel.Visible = true;
-                    _lastFriendlyTickets = friendly;
-                    _lastEnemyTickets = enemy;
-                    ticketsPanel.Invalidate();
-                });
-            }
+            if (friendly == _lastFriendlyTickets &&
+                enemy == _lastEnemyTickets)
+                return;
+
+            _lastFriendlyTickets = friendly;
+            _lastEnemyTickets = enemy;
+            ticketsPanel.Invalidate();
+
         }
 
         private void UpdateSelectedMap()
@@ -535,6 +526,22 @@ namespace squad_dma
                 {
                     Console.WriteLine($"No matching map found for: {currentMap}"); // Debug logging
                 }
+            }
+        }
+
+        private void HandleGameStateChange()
+        {
+            if (Memory.GameStatus != Game.GameStatus.InGame || Memory._game == null)
+            {
+                _lastFriendlyTickets = 0;
+                _lastEnemyTickets = 0;
+                ticketsPanel.Invalidate();
+            }
+
+            else if (Memory.GameStatus == Game.GameStatus.InGame &&
+                    (_lastFriendlyTickets == 0 && _lastEnemyTickets == 0))
+            {
+                UpdateTicketsDisplay();
             }
         }
 
@@ -853,7 +860,8 @@ namespace squad_dma
                         ActorType.AntiAir,
                         ActorType.TrackedLogistics,
                         ActorType.LoachCAS,
-                        ActorType.LoachScout
+                        ActorType.LoachScout,
+                        ActorType.TrackedAPCArtillery
                     };
 
                     if (vehicleTypes.Contains(actor.ActorType))
@@ -1522,6 +1530,8 @@ namespace squad_dma
 
         private void ticketsPanel_Paint(object sender, PaintEventArgs e)
         {
+            if (_lastFriendlyTickets < 0 || _lastEnemyTickets < 0)
+                return;
             var g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
@@ -1529,21 +1539,25 @@ namespace squad_dma
             string ticketText = $"Friendly: {_lastFriendlyTickets}  |  Enemy: {_lastEnemyTickets}";
 
             using (var font = new Font("Arial", 9f, FontStyle.Bold))
+            using (var format = new StringFormat())
             {
-                SizeF textSize = TextRenderer.MeasureText(g, ticketText, font);
+                format.Alignment = StringAlignment.Center;
+                format.LineAlignment = StringAlignment.Center;
 
-                int x = (ticketsPanel.Width - (int)textSize.Width) / 2;
-                int y = (ticketsPanel.Height - (int)textSize.Height) / 2;
+                RectangleF rect = new RectangleF(
+                    0,
+                    0,
+                    ticketsPanel.Width,
+                    ticketsPanel.Height
+                );
 
-                x += 1; 
-
-                TextRenderer.DrawText(
-                    g,
+                g.DrawString(
                     ticketText,
                     font,
-                    new Point(x, y),
-                    Color.FromArgb(240, 240, 240)
-                );
+                    Brushes.WhiteSmoke,
+                    rect,
+                    format
+                    );
             }
         }
         private void btnToggleMap_Click(object sender, EventArgs e)
@@ -1576,7 +1590,7 @@ namespace squad_dma
 
         private bool DumpNames()
         {
-            _game.LogVehicles(force: true);
+            Memory._game.LogVehicles(force: true);
             return true;
         }
 

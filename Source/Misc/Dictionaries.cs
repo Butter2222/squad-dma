@@ -619,7 +619,7 @@ namespace squad_dma {
             
             {"BP_SquadRallyPoint_C", ActorType.RallyPoint},
 
-            {"BP_CommandActor_Drone_C", ActorType.Drone},
+            {"BP_DeveloperAdminCam_C", ActorType.Admin},
 
             //Global Escalation
 
@@ -855,11 +855,6 @@ namespace squad_dma {
             {"BP_FlyingDrone_THWK_C", ActorType.Drone}, // Russia
             {"BP_FlyingDrone_SOF_C", ActorType.Drone}, // Ukraine
 
-            // IDK if this works but typically admins use the admin cam to spectate
-            // Should track the admins exact location
-            // If it works like i think it should i will add a aimview to hopefully track who the admins are watching
-            // :)
-            {"BP_DeveloperAdminCam_C", ActorType.Admin}
         };
 
         public static readonly Dictionary<ActorType, SKBitmap> BitMaps = new(){

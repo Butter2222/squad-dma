@@ -118,6 +118,9 @@ namespace squad_dma
             Memory.StartMemoryWorker();
             Program.HideConsole();
             Memory._tickSw.Start();
+
+            InputManager.SetVmmInstance(Memory.vmmInstance);
+            InputManager.InitInputManager();
         }
 
         private static void GenerateMMap()

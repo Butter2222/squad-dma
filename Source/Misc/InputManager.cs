@@ -107,26 +107,31 @@ namespace squad_dma
             {
                 try
                 {
-                    ulong tmp = csrss.GetModuleBase("win32ksgd.sys");
+                    ulong win32ksgdBase = csrss.GetModuleBase("win32ksgd.sys");
                     ulong gSessionGlobalSlots = 0;
 
-                    if (tmp == 0 || (InputManager.currentBuild >= 26100 && InputManager.updateBuildRevision >= 2605))
+                    if (win32ksgdBase == 0 || (InputManager.currentBuild >= 26100 && InputManager.updateBuildRevision >= 2605))
                     {
-                        tmp = csrss.GetModuleBase("win32k.sys");
-                        if (tmp == 0) continue;
+                        ulong win32kbase = csrss.GetModuleBase("win32k.sys");
+                        if (win32kbase == 0)
+                            continue;
 
-                        if (InputManager.updateBuildRevision >= 3037)
+                        if (InputManager.updateBuildRevision >= 3323)
                         {
-                            gSessionGlobalSlots = tmp + (InputManager.updateBuildRevision >= 3323 ? (ulong)0x824F0 : (ulong)0x82530);
+                            gSessionGlobalSlots = win32kbase + 0x824F0;
+                        }
+                        else if (InputManager.updateBuildRevision >= 3037)
+                        {
+                            gSessionGlobalSlots = win32kbase + 0x82530;
                         }
                         else
                         {
-                            gSessionGlobalSlots = tmp + (ulong)0x82538;
+                            gSessionGlobalSlots = win32kbase + 0x82538;
                         }
                     }
                     else
                     {
-                        gSessionGlobalSlots = tmp + (ulong)0x3110;
+                        gSessionGlobalSlots = win32ksgdBase + (ulong)0x3110;
                     }
 
                     if (gSessionGlobalSlots == 0) continue;

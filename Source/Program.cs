@@ -45,7 +45,7 @@ namespace squad_dma {
                     Game game = Memory._game;
 
                     // Run radar
-                    Application.Run(new MainForm(game));
+                    Application.Run(new MainForm());
                 }
             }
             catch (Exception ex)
