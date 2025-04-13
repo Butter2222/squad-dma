@@ -262,27 +262,29 @@ namespace squad_dma
                 var cameraManagerRound = cameraInfoScatterMap.AddRound();
                 var cameraInfoRound = cameraInfoScatterMap.AddRound();
 
-                cameraManagerRound.AddEntry<double>(0, 11, _gameWorld + Offsets.World.WorldOrigin);
-                cameraManagerRound.AddEntry<double>(0, 12, _gameWorld + Offsets.World.WorldOrigin + 0x8);
-                cameraManagerRound.AddEntry<double>(0, 13, _gameWorld + Offsets.World.WorldOrigin + 0x10);
-
-                var pawn = Memory.ReadPtr(_playerController + Offsets.Controller.Pawn);
-                
-                if (pawn == 0)
+                var cameraManagerPtr = Memory.ReadPtr(_playerController + Offsets.PlayerController.PlayerCameraManager);
+                if (cameraManagerPtr == 0)
                     return false;
 
-                var rootComponent = Memory.ReadPtr(pawn + Offsets.Actor.RootComponent);
-                
-                if (rootComponent == 0)
-                    return false;
+                var viewTargetPtr = cameraManagerPtr + Offsets.PlayerCameraManager.ViewTarget;
+                var povPtr = viewTargetPtr + Offsets.FTViewTarget.POV;
+                var worldOriginPtr = _gameWorld + Offsets.World.WorldOrigin;
 
-                cameraInfoRound.AddEntry<double>(0, 14, rootComponent, null, Offsets.USceneComponent.RelativeLocation);
-                cameraInfoRound.AddEntry<double>(0, 15, rootComponent, null, Offsets.USceneComponent.RelativeLocation + 0x8);
-                cameraInfoRound.AddEntry<double>(0, 16, rootComponent, null, Offsets.USceneComponent.RelativeLocation + 0x10);
+                // World Origin (FVector)
+                cameraManagerRound.AddEntry<double>(0, 11, worldOriginPtr);      // World Origin X
+                cameraManagerRound.AddEntry<double>(0, 12, worldOriginPtr + 0x8);  // World Origin Y
+                cameraManagerRound.AddEntry<double>(0, 13, worldOriginPtr + 0x10); // World Origin Z
+
+                // FMinimalViewInfo structure
+                // Location (0x0)
+                cameraInfoRound.AddEntry<double>(0, 14, povPtr + 0x0);  // X
+                cameraInfoRound.AddEntry<double>(0, 15, povPtr + 0x8);  // Y
+                cameraInfoRound.AddEntry<double>(0, 16, povPtr + 0x10); // Z
                 
-                cameraInfoRound.AddEntry<double>(0, 17, rootComponent, null, Offsets.USceneComponent.RelativeRotation);
-                cameraInfoRound.AddEntry<double>(0, 18, rootComponent, null, Offsets.USceneComponent.RelativeRotation + 0x8);
-                cameraInfoRound.AddEntry<double>(0, 19, rootComponent, null, Offsets.USceneComponent.RelativeRotation + 0x10);
+                // Rotation (0x18)
+                cameraInfoRound.AddEntry<double>(0, 17, povPtr + 0x18); // Pitch
+                cameraInfoRound.AddEntry<double>(0, 18, povPtr + 0x20); // Yaw
+                cameraInfoRound.AddEntry<double>(0, 19, povPtr + 0x28); // Roll
 
                 cameraInfoScatterMap.Execute();
 
@@ -301,13 +303,11 @@ namespace squad_dma
                     cameraInfoScatterMap.Results[0][15].TryGetResult<double>(out var y) &&
                     cameraInfoScatterMap.Results[0][16].TryGetResult<double>(out var z))
                 {
-                    
                     _localUPlayer.Position = new Vector3D(
                         x + _absoluteLocation.X,
                         y + _absoluteLocation.Y,
                         z + _absoluteLocation.Z
                     );
-                    
                 }
                 else
                 {
@@ -329,7 +329,7 @@ namespace squad_dma
 
                 return true;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return false;
             }

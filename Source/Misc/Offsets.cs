@@ -37,7 +37,7 @@
     {
         public const uint Instigator = 0x190;
         public const uint RootComponent = 0x1A8;
-        public const uint ID = 0x18; // ??
+        public const uint ID = 0x18; // Object ID
         public const uint CustomTimeDilation = 0x64; // float
         public const uint bReplicateMovement = 0x58; // uint8
         public const uint bHidden = 0x58; // uint8
@@ -101,9 +101,12 @@
     {
         public const uint PCOwner = 0x2A0;
         public const uint DefaultFOV = 0x2B8;
-        public const uint CameraCache = 0x1370; // 0x10 = FMinimalViewInfo
-        public const uint CameraLocation = CameraCache + 0x0; // FMinimalViewInfo
-        public const uint CameraRotation = CameraCache + 0x18; // FMinimalViewInfo
+        public const uint ViewTarget = 0x330;
+    }
+
+    public struct FTViewTarget
+    {
+        public const uint POV = 0x10; // FMinimalViewInfo
     }
 
     public struct ASQGameState
