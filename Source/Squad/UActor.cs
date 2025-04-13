@@ -4,13 +4,43 @@ using System.Numerics;
 
 namespace squad_dma
 {
+    public struct Vector3D
+    {
+        public double X;
+        public double Y;
+        public double Z;
+
+        public Vector3D(double x, double y, double z)
+        {
+            X = x;
+            Y = y;
+            Z = z;
+        }
+
+        public static Vector3D Zero => new Vector3D(0, 0, 0);
+    }
+
+    public struct Vector2D
+    {
+        public double X;
+        public double Y;
+
+        public Vector2D(double x, double y)
+        {
+            X = x;
+            Y = y;
+        }
+
+        public static Vector2D Zero => new Vector2D(0, 0);
+    }
+
     /// <summary>
     /// Class containing Game Player Data.
     /// </summary>
     public class UActor
     {
         private readonly object _posLock = new(); // sync access to this.Position (non-atomic)
-        private Vector3 _previousPosition = Vector3.Zero; // Track previous position for movement
+        private Vector3D _previousPosition = Vector3D.Zero; // Track previous position for movement
 
         #region PlayerProperties
         public uint NameId { get; set; }
@@ -18,7 +48,6 @@ namespace squad_dma
         public float Health { get; set; } = -1;
         public int TeamID { get; set; } = -1;
         public int SquadID { get; set; } = -1;
-        public List<UActor> MySquadMembers { get; } = new List<UActor>();
         public Team Team { get; set; } = Team.Unknown;
 
         public bool IsFriendly()
@@ -42,8 +71,8 @@ namespace squad_dma
         }
 
         public bool bInThirdPersonView { get; set; } = false;
-        public Vector3 CameraOffset { get; set; } = new Vector3(0, -300, 50); // Default third-person offset
-        public float CameraDistance { get; set; } = 300.0f;
+        public Vector3D CameraOffset { get; set; } = new Vector3D(0, -300, 50); // Default third-person offset
+        public double CameraDistance { get; set; } = 300.0;
 
         // Add this method to control third-person view
         public void UpdateThirdPersonView(ulong pawnPtr)
@@ -58,16 +87,16 @@ namespace squad_dma
                 // If in third-person, read camera settings
                 if (bInThirdPersonView)
                 {
-                    CameraOffset = Memory.ReadValue<Vector3>(pawnPtr + 0x21D0);
-                    CameraDistance = Memory.ReadValue<float>(pawnPtr + 0x21DC);
+                    CameraOffset = Memory.ReadValue<Vector3D>(pawnPtr + 0x21D0);
+                    CameraDistance = Memory.ReadValue<double>(pawnPtr + 0x21DC);
                 }
             }
             catch { /* Silently handle errors */ }
         }
 
         public ActorType ActorType { get; set; } = ActorType.Player;
-        private Vector3 _pos = new Vector3(0, 0, 0);
-        public Vector3 Position // 96 bits, cannot set atomically
+        private Vector3D _pos = new Vector3D(0, 0, 0);
+        public Vector3D Position // 192 bits, cannot set atomically
         {
             get
             {
@@ -85,12 +114,12 @@ namespace squad_dma
                 }
             }
         }
-        public Vector2 ZoomedPosition { get; set; } = new();
-        public Vector2 Rotation { get; set; } = new Vector2(0, 0); // 64 bits will be atomic
-        public Vector3 Rotation3D { get; set; } = new Vector3(0, 0, 0);
+        public Vector2D ZoomedPosition { get; set; } = new Vector2D(0, 0);
+        public Vector2D Rotation { get; set; } = new Vector2D(0, 0); // 128 bits will be atomic
+        public Vector3D Rotation3D { get; set; } = new Vector3D(0, 0, 0);
         public int ErrorCount { get; set; } = 0;
 
-        public Vector3 DeathPosition { get; set; } = Vector3.Zero; 
+        public Vector3D DeathPosition { get; set; } = Vector3D.Zero; 
         public DateTime TimeOfDeath { get; set; } = DateTime.MinValue;
 
         #endregion

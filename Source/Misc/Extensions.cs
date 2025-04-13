@@ -26,9 +26,9 @@ namespace squad_dma
         /// <summary>
         /// Converts 'Degrees' to 'Radians'.
         /// </summary>
-        public static double ToRadians(this float degrees)
+        public static double ToRadians(this double degrees)
         {
-            return (Math.PI / 180) * degrees;
+            return (Math.PI / 180.0) * degrees;
         }
         #endregion
 
@@ -36,13 +36,19 @@ namespace squad_dma
         /// <summary>
         /// Convert game position to 'Bitmap' Map Position coordinates.
         /// </summary>
-        public static MapPosition ToMapPos(this System.Numerics.Vector3 vector, Map map)
+        public static MapPosition ToMapPos(this Vector3D vector, Map map)
         {
+            if (map?.ConfigFile == null)
+                return new MapPosition();
+
+            double worldX = vector.X - Memory.AbsoluteLocation.X;
+            double worldY = vector.Y - Memory.AbsoluteLocation.Y;
+
             return new MapPosition()
             {
-                X = map.ConfigFile.X + (vector.X * map.ConfigFile.Scale),
-                Y = map.ConfigFile.Y + (vector.Y * map.ConfigFile.Scale), // Invert 'Y' unity 0,0 bottom left, C# top left
-                Height = vector.Z // Keep as float, calculation done later
+                X = map.ConfigFile.X + (worldX * map.ConfigFile.Scale),
+                Y = map.ConfigFile.Y + (worldY * map.ConfigFile.Scale),
+                Height = vector.Z
             };
         }
 
@@ -51,12 +57,15 @@ namespace squad_dma
         /// </summary>
         public static MapPosition ToZoomedPos(this MapPosition location, MapParameters mapParams)
         {
+            double finalX = (location.X - mapParams.Bounds.Left) * mapParams.XScale;
+            double finalY = (location.Y - mapParams.Bounds.Top) * mapParams.YScale;
+            
             return new MapPosition()
             {
                 UIScale = mapParams.UIScale,
                 TechScale = mapParams.TechScale,
-                X = (location.X - mapParams.Bounds.Left) * mapParams.XScale,
-                Y = (location.Y - mapParams.Bounds.Top) * mapParams.YScale,
+                X = finalX,
+                Y = finalY,
                 Height = location.Height
             };
         }

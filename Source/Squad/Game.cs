@@ -19,7 +19,7 @@ namespace squad_dma
         private ulong _gameInstance;
         private ulong _localPlayer;
         private ulong _playerController;
-        private Vector3 _absoluteLocation;
+        private Vector3D _absoluteLocation;
         private string _currentLevel = string.Empty;
         private DateTime _lastTeamCheck = DateTime.MinValue;
         private const int TeamCheckInterval = 1000;
@@ -38,7 +38,7 @@ namespace squad_dma
         public string MapName => _currentLevel;
         public UActor LocalPlayer => _localUPlayer;
         public ReadOnlyDictionary<ulong, UActor> Actors => _actors?.Actors;
-        public Vector3 AbsoluteLocation => _absoluteLocation;
+        public Vector3D AbsoluteLocation => _absoluteLocation;
         public Dictionary<int, int> TeamTickets => _gameTickets.GetTickets();
         public GameTickets GameTickets => _gameTickets;
         public PlayerStats GameStats => _gameStats;
@@ -71,6 +71,7 @@ namespace squad_dma
         public void SetQuickSwap(bool enable) => _soldierManager?.SetQuickSwap(enable);
         public void ReadCurrentWeapons(bool includeOtherPlayers = false) => _debugSoldier?.ReadCurrentWeapons(includeOtherPlayers);
         public void LogCurrentValues() => _debugSoldier?.LogCurrentValues();
+        //public void LogPostProcessingInfo(bool disableVisuals = false) => _debugSoldier?.LogPostProcessingInfo(disableVisuals);
         public void WaitForGame()
         {
             while (true)
@@ -225,7 +226,7 @@ namespace squad_dma
                     try
                     {
                         ulong playerState = Memory.ReadPtr(_playerController + Offsets.Controller.PlayerState);
-                        ulong squadState = Memory.ReadPtr(_playerController + Offsets.PlayerController.SquadState);
+                        ulong squadState = Memory.ReadPtr(_playerController + Offsets.SQPlayerController.SquadState);
 
                         if (playerState == 0 || squadState == 0)
                             return false;
@@ -254,39 +255,84 @@ namespace squad_dma
         {
             try
             {
+                if (_playerController == 0 || _gameWorld == 0)
+                    return false;
+                
                 var cameraInfoScatterMap = new ScatterReadMap(1);
                 var cameraManagerRound = cameraInfoScatterMap.AddRound();
                 var cameraInfoRound = cameraInfoScatterMap.AddRound();
 
-                var cameraManagerPtr = cameraManagerRound.AddEntry<ulong>(0, 0, _playerController + Offsets.PlayerController.PlayerCameraManager);
-                cameraManagerRound.AddEntry<int>(0, 11, _gameWorld + Offsets.World.WorldOrigin);
-                cameraManagerRound.AddEntry<int>(0, 12, _gameWorld + Offsets.World.WorldOrigin + 0x4);
-                cameraManagerRound.AddEntry<int>(0, 13, _gameWorld + Offsets.World.WorldOrigin + 0x8);
-                cameraInfoRound.AddEntry<Vector3>(0, 1, cameraManagerPtr, null, Offsets.Camera.CameraLocation);
-                cameraInfoRound.AddEntry<Vector3>(0, 2, cameraManagerPtr, null, Offsets.Camera.CameraRotation);
+                cameraManagerRound.AddEntry<double>(0, 11, _gameWorld + Offsets.World.WorldOrigin);
+                cameraManagerRound.AddEntry<double>(0, 12, _gameWorld + Offsets.World.WorldOrigin + 0x8);
+                cameraManagerRound.AddEntry<double>(0, 13, _gameWorld + Offsets.World.WorldOrigin + 0x10);
+
+                var pawn = Memory.ReadPtr(_playerController + Offsets.Controller.Pawn);
+                
+                if (pawn == 0)
+                    return false;
+
+                var rootComponent = Memory.ReadPtr(pawn + Offsets.Actor.RootComponent);
+                
+                if (rootComponent == 0)
+                    return false;
+
+                cameraInfoRound.AddEntry<double>(0, 14, rootComponent, null, Offsets.USceneComponent.RelativeLocation);
+                cameraInfoRound.AddEntry<double>(0, 15, rootComponent, null, Offsets.USceneComponent.RelativeLocation + 0x8);
+                cameraInfoRound.AddEntry<double>(0, 16, rootComponent, null, Offsets.USceneComponent.RelativeLocation + 0x10);
+                
+                cameraInfoRound.AddEntry<double>(0, 17, rootComponent, null, Offsets.USceneComponent.RelativeRotation);
+                cameraInfoRound.AddEntry<double>(0, 18, rootComponent, null, Offsets.USceneComponent.RelativeRotation + 0x8);
+                cameraInfoRound.AddEntry<double>(0, 19, rootComponent, null, Offsets.USceneComponent.RelativeRotation + 0x10);
 
                 cameraInfoScatterMap.Execute();
 
-                if (!cameraInfoScatterMap.Results[0][1].TryGetResult<Vector3>(out var location))
+                if (cameraInfoScatterMap.Results[0][11].TryGetResult<double>(out var absoluteX) &&
+                    cameraInfoScatterMap.Results[0][12].TryGetResult<double>(out var absoluteY) &&
+                    cameraInfoScatterMap.Results[0][13].TryGetResult<double>(out var absoluteZ))
+                {
+                    _absoluteLocation = new Vector3D(absoluteX, absoluteY, absoluteZ);
+                }
+                else
                 {
                     return false;
                 }
-                if (!cameraInfoScatterMap.Results[0][2].TryGetResult<Vector3>(out var rotation))
+
+                if (cameraInfoScatterMap.Results[0][14].TryGetResult<double>(out var x) &&
+                    cameraInfoScatterMap.Results[0][15].TryGetResult<double>(out var y) &&
+                    cameraInfoScatterMap.Results[0][16].TryGetResult<double>(out var z))
+                {
+                    
+                    _localUPlayer.Position = new Vector3D(
+                        x + _absoluteLocation.X,
+                        y + _absoluteLocation.Y,
+                        z + _absoluteLocation.Z
+                    );
+                    
+                }
+                else
                 {
                     return false;
                 }
-                if (cameraInfoScatterMap.Results[0][11].TryGetResult<int>(out var absoluteX)
-                && cameraInfoScatterMap.Results[0][12].TryGetResult<int>(out var absoluteY)
-                && cameraInfoScatterMap.Results[0][13].TryGetResult<int>(out var absoluteZ))
+
+                if (cameraInfoScatterMap.Results[0][17].TryGetResult<double>(out var rotX) &&
+                    cameraInfoScatterMap.Results[0][18].TryGetResult<double>(out var rotY) &&
+                    cameraInfoScatterMap.Results[0][19].TryGetResult<double>(out var rotZ))
                 {
-                    _absoluteLocation = new Vector3(absoluteX, absoluteY, absoluteZ);
+                    var rotation = new Vector3D(rotX, rotY, rotZ);
+                    _localUPlayer.Rotation = new Vector2D(rotation.Y, rotation.X);
+                    _localUPlayer.Rotation3D = rotation;
                 }
-                _localUPlayer.Position = location;
-                _localUPlayer.Rotation = new Vector2(rotation.Y, rotation.X);
-                _localUPlayer.Rotation3D = rotation;
+                else
+                {
+                    return false;
+                }
+
                 return true;
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                return false;
+            }
         }
         #endregion
     }

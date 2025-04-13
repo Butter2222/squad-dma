@@ -2,6 +2,10 @@ using Offsets;
 
 namespace squad_dma.Source.Squad.Features
 {
+    // Delete later
+    // Merge all my shit into AirStuck.
+    // This feature is useless
+
     public class HideActor : Manager
     {
         public bool _isHideActorEnabled = false;
@@ -30,11 +34,13 @@ namespace squad_dma.Source.Squad.Features
 
                 if (_isHideActorEnabled)
                 {
+                    Memory.WriteValue<byte>(soldierActor + 0x5b, 0);
                     Memory.WriteValue<byte>(soldierActor + Actor.bReplicateMovement, 0);
                     Memory.WriteValue<byte>(soldierActor + Actor.bHidden, 1);
                 }
                 else
                 {
+                    Memory.WriteValue<byte>(soldierActor + 0x5b, 1);
                     Memory.WriteValue<byte>(soldierActor + Actor.bReplicateMovement, 16);
                     Memory.WriteValue<byte>(soldierActor + Actor.bHidden, 16);
                 }

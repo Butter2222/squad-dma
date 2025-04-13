@@ -3,7 +3,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Numerics;
 
 namespace squad_dma
 {
@@ -247,12 +246,12 @@ namespace squad_dma
                     {
                         playerInstanceInfoRound.AddEntry<float>(i, 2, actorAddr + Offsets.ASQSoldier.Health);
 
-                        var pawnPlayerState = playerInstanceInfoRound.AddEntry<ulong>(i, 6, actorAddr + Offsets.Pawn.PlayerState);
-                        var controller = playerInstanceInfoRound.AddEntry<ulong>(i, 7, actorAddr + Offsets.Pawn.Controller);
-                        var controllerPlayerState = teamInfoRound.AddEntry<ulong>(i, 8, controller, null, Offsets.Controller.PlayerState);
+                        var pawnPlayerState = playerInstanceInfoRound.AddEntry<ulong>(i, 3, actorAddr + Offsets.Pawn.PlayerState);
+                        var controller = playerInstanceInfoRound.AddEntry<ulong>(i, 4, actorAddr + Offsets.Pawn.Controller);
+                        var controllerPlayerState = teamInfoRound.AddEntry<ulong>(i, 5, controller, null, Offsets.Controller.PlayerState);
 
-                        teamInfoRound.AddEntry<int>(i, 9, pawnPlayerState, null, Offsets.ASQPlayerState.TeamID);
-                        teamInfoRound.AddEntry<int>(i, 10, controllerPlayerState, null, Offsets.ASQPlayerState.TeamID);
+                        teamInfoRound.AddEntry<int>(i, 6, pawnPlayerState, null, Offsets.ASQPlayerState.TeamID);
+                        teamInfoRound.AddEntry<int>(i, 7, controllerPlayerState, null, Offsets.ASQPlayerState.TeamID);
                     }
                     else if (Names.Deployables.Contains(actorType))
                     {
@@ -265,8 +264,13 @@ namespace squad_dma
                         playerInstanceInfoRound.AddEntry<float>(i, 3, actorAddr + Offsets.SQVehicle.MaxHealth);
                     }
 
-                    instigatorAndRootRound.AddEntry<Vector3>(i, 4, rootComponent, null, Offsets.USceneComponent.RelativeLocation);
-                    instigatorAndRootRound.AddEntry<Vector3>(i, 5, rootComponent, null, Offsets.USceneComponent.RelativeRotation);
+                    instigatorAndRootRound.AddEntry<double>(i, 8, rootComponent, null, Offsets.USceneComponent.RelativeLocation);
+                    instigatorAndRootRound.AddEntry<double>(i, 9, rootComponent, null, Offsets.USceneComponent.RelativeLocation + 0x8);
+                    instigatorAndRootRound.AddEntry<double>(i, 10, rootComponent, null, Offsets.USceneComponent.RelativeLocation + 0x10);
+                    
+                    instigatorAndRootRound.AddEntry<double>(i, 11, rootComponent, null, Offsets.USceneComponent.RelativeRotation);
+                    instigatorAndRootRound.AddEntry<double>(i, 12, rootComponent, null, Offsets.USceneComponent.RelativeRotation + 0x8);
+                    instigatorAndRootRound.AddEntry<double>(i, 13, rootComponent, null, Offsets.USceneComponent.RelativeRotation + 0x10);
                 }
 
                 playerInfoScatterMap.Execute();
@@ -300,21 +304,21 @@ namespace squad_dma
                     {
                         bool teamIdFound = false;
 
-                        if (results.TryGetValue(9, out var pawnTeamResult) &&
+                        if (results.TryGetValue(6, out var pawnTeamResult) &&
                             pawnTeamResult.TryGetResult<int>(out var pawnTeamId))
                         {
                             actor.TeamID = pawnTeamId;
                             teamIdFound = true;
                         }
 
-                        if (!teamIdFound && results.TryGetValue(10, out var controllerTeamResult) &&
+                        if (!teamIdFound && results.TryGetValue(7, out var controllerTeamResult) &&
                             controllerTeamResult.TryGetResult<int>(out var controllerTeamId))
                         {
                             actor.TeamID = controllerTeamId;
                             teamIdFound = true;
                         }
 
-                        if (!teamIdFound && results.TryGetValue(7, out var controllerResult) &&
+                        if (!teamIdFound && results.TryGetValue(4, out var controllerResult) &&
                             controllerResult.TryGetResult<ulong>(out var controllerAddr) &&
                             controllerAddr != 0)
                         {
@@ -346,7 +350,7 @@ namespace squad_dma
                                 try
                                 {
                                     ulong playerState = 0;
-                                    if (results.TryGetValue(6, out var psResult))
+                                    if (results.TryGetValue(3, out var psResult))
                                         psResult.TryGetResult<ulong>(out playerState);
 
                                     if (playerState != 0)
@@ -369,16 +373,21 @@ namespace squad_dma
                         }
                     }
 
-                    if (results.TryGetValue(4, out var locResult) &&
-                       locResult.TryGetResult<Vector3>(out var location))
+                    if (results.TryGetValue(8, out var xResult) && results.TryGetValue(9, out var yResult) && 
+                        results.TryGetValue(10, out var zResult) &&
+                        xResult.TryGetResult<double>(out var x) && yResult.TryGetResult<double>(out var y) && 
+                        zResult.TryGetResult<double>(out var z))
                     {
-                        actor.Position = location;
+                        actor.Position = new Vector3D(x, y, z);
                     }
 
-                    if (results.TryGetValue(5, out var rotResult) &&
-                       rotResult.TryGetResult<Vector3>(out var rotation))
+                    if (results.TryGetValue(11, out var rotXResult) && results.TryGetValue(12, out var rotYResult) && 
+                        results.TryGetValue(13, out var rotZResult) &&
+                        rotXResult.TryGetResult<double>(out var rotX) && rotYResult.TryGetResult<double>(out var rotY) && 
+                        rotZResult.TryGetResult<double>(out var rotZ))
                     {
-                        actor.Rotation = new Vector2(rotation.Y, rotation.X);
+                        var rotation = new Vector3D(rotX, rotY, rotZ);
+                        actor.Rotation = new Vector2D(rotation.Y, rotation.X);
                         actor.Rotation3D = rotation;
                     }
                 }
