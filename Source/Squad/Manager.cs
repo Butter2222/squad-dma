@@ -1,4 +1,5 @@
 using Offsets;
+using squad_dma.Source.Misc;
 using squad_dma.Source.Squad.Features;
 using System.Diagnostics.Eventing.Reader;
 
@@ -17,6 +18,10 @@ namespace squad_dma.Source.Squad
         protected ulong _cachedCurrentWeapon = 0;
         protected ulong _cachedCharacterMovement = 0;
         protected ulong _cachedWeaponStaticInfo = 0;
+        protected ulong _cachedCurrentSeat = 0;
+        protected ulong _cachedSeatPawn = 0;
+        protected ulong _cachedVehicleInventory = 0;
+        protected ulong _cachedVehicleWeapon = 0;
         protected DateTime _lastPointerUpdate = DateTime.MinValue;
         
         // Modules
@@ -35,6 +40,7 @@ namespace squad_dma.Source.Squad
         private NoSpread _noSpread;
         private NoRecoil _noRecoil;
         private NoSway _noSway;
+        private InstantGrenade _instantGrenade;
         
         // Weapon manager
         private WeaponManager _weaponManager;
@@ -48,7 +54,9 @@ namespace squad_dma.Source.Squad
         {
             _playerController = playerController;
             _inGame = inGame;
-            _cancellationTokenSource = null; // Features don't need this
+            _cancellationTokenSource = null;
+            
+            _config = Program.Config; 
             
             UpdateCachedPointers();
         }
@@ -58,12 +66,13 @@ namespace squad_dma.Source.Squad
             _playerController = playerController;
             _inGame = inGame;
             _cancellationTokenSource = new CancellationTokenSource();
+            _config = Program.Config;
             
             // Initialize cached pointers
             UpdateCachedPointers();
             
             // Initialize weapon manager
-            _weaponManager = new WeaponManager(_playerController, _inGame);
+            _weaponManager = new WeaponManager(_playerController, _inGame, this);
             
             // Initialize all feature modules
             InitializeFeatures();
@@ -103,6 +112,21 @@ namespace squad_dma.Source.Squad
                 
                 _cachedCharacterMovement = Memory.ReadPtr(_cachedSoldierActor + Character.CharacterMovement);
                 
+                // Update vehicle-related pointers
+                _cachedCurrentSeat = Memory.ReadPtr(_cachedPlayerState + ASQPlayerState.CurrentSeat);
+                if (_cachedCurrentSeat != 0)
+                {
+                    _cachedSeatPawn = Memory.ReadPtr(_cachedCurrentSeat + USQVehicleSeatComponent.SeatPawn);
+                    if (_cachedSeatPawn != 0)
+                    {
+                        _cachedVehicleInventory = Memory.ReadPtr(_cachedSeatPawn + ASQVehicleSeat.VehicleInventory);
+                        if (_cachedVehicleInventory != 0)
+                        {
+                            _cachedVehicleWeapon = Memory.ReadPtr(_cachedVehicleInventory + USQPawnInventoryComponent.CurrentWeapon);
+                        }
+                    }
+                }
+                
                 _lastPointerUpdate = DateTime.Now;
             }
             catch
@@ -114,6 +138,10 @@ namespace squad_dma.Source.Squad
                 _cachedCurrentWeapon = 0;
                 _cachedCharacterMovement = 0;
                 _cachedWeaponStaticInfo = 0;
+                _cachedCurrentSeat = 0;
+                _cachedSeatPawn = 0;
+                _cachedVehicleInventory = 0;
+                _cachedVehicleWeapon = 0;
             }
         }
         
@@ -143,6 +171,7 @@ namespace squad_dma.Source.Squad
             _noSpread = new NoSpread(_playerController, _inGame);
             _noRecoil = new NoRecoil(_playerController, _inGame);
             _noSway = new NoSway(_playerController, _inGame);
+            _instantGrenade = new InstantGrenade(_playerController, _inGame);
             
             // Register weapon features
             _weaponManager.RegisterFeature(_infiniteAmmo);
@@ -153,6 +182,7 @@ namespace squad_dma.Source.Squad
             _weaponManager.RegisterFeature(_quickSwap);
             _weaponManager.RegisterFeature(_rapidFire);
             _weaponManager.RegisterFeature(_shootingInMainBase);
+            _weaponManager.RegisterFeature(_instantGrenade);
         }
         
         /// <summary>
@@ -185,22 +215,30 @@ namespace squad_dma.Source.Squad
                 {
                     try
                     {
+                        if (!_inGame || _playerController == 0)
+                        {
+                            await Task.Delay(1000, _cancellationTokenSource.Token);
+                            continue;
+                        }
+
                         UpdateCachedPointers();
                         _weaponManager.Update();
 
-                        // Only apply features if they are both enabled in config AND the feature itself is enabled
                         if (_config.DisableSuppression && _suppression.IsEnabled)
                             _suppression.Apply();
+
                         if (_config.SetInteractionDistances && _interactionDistances.IsEnabled)
                             _interactionDistances.Apply();
+
                         if (_config.AllowShootingInMainBase && _shootingInMainBase.IsEnabled)
                             _shootingInMainBase.Apply();
+
                         if (_config.SetSpeedHack && _speedHack.IsEnabled)
                             _speedHack.Apply();
+
                         if (_config.SetAirStuck && _airStuck.IsEnabled)
                             _airStuck.Apply();
                         
-                        // Handle DisableCollision, ensuring it's disabled if AirStuck is disabled
                         if (!_config.SetAirStuck && _config.DisableCollision)
                         {
                             _config.DisableCollision = false;
@@ -209,27 +247,32 @@ namespace squad_dma.Source.Squad
                         
                         if (_config.DisableCollision && _collision.IsEnabled)
                             _collision.Apply();
-                        if (_config.RapidFire && _rapidFire.IsEnabled)
-                            _rapidFire.Apply();
-                        if (_config.InfiniteAmmo && _infiniteAmmo.IsEnabled)
-                            _infiniteAmmo.Apply();
-                        if (_config.QuickSwap && _quickSwap.IsEnabled)
-                            _quickSwap.Apply();
-                        if (_config.ForceFullAuto && _FullAuto.IsEnabled)
-                            _FullAuto.Apply();
-                        if (_config.NoCameraShake && _noCameraShake.IsEnabled)
-                            _noCameraShake.Apply();
-                        if (_config.NoSpread && _noSpread.IsEnabled)
-                            _noSpread.Apply();
-                        if (_config.NoRecoil && _noRecoil.IsEnabled)
-                            _noRecoil.Apply();
-                        if (_config.NoSway && _noSway.IsEnabled)
-                            _noSway.Apply();
+
+                        await Task.Delay(1000, _cancellationTokenSource.Token);
                     }
-                    catch { /* Silently fail */ }
-                    await Task.Delay(1000, _cancellationTokenSource.Token);
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"Feature Timer Failed: {ex.Message}");
+                        Logger.Error($"Stack Trace: {ex.StackTrace}");
+                        Logger.Error($"Player Controller: {_playerController}");
+                        Logger.Error($"In Game: {_inGame}");
+                        Logger.Error($"Cached Player State: {_cachedPlayerState}");
+                        Logger.Error($"Cached Soldier Actor: {_cachedSoldierActor}");
+                        
+                        await Task.Delay(1000, _cancellationTokenSource.Token);
+                    }
                 }
-            }, _cancellationTokenSource.Token);
+            }, _cancellationTokenSource.Token).ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                {
+                    Logger.Error($"Feature Timer Task Faulted: {t.Exception?.Message}");
+                }
+            });
         }
         
         /// <summary>
@@ -320,6 +363,11 @@ namespace squad_dma.Source.Squad
             _noSway.SetEnabled(enable);
         }
 
+        public void SetInstantGrenade(bool enable)
+        {
+            _instantGrenade.SetEnabled(enable);
+        }
+
         public void Dispose()
         {
             if (_cancellationTokenSource != null)
@@ -329,6 +377,50 @@ namespace squad_dma.Source.Squad
             }
             _weaponManager?.Dispose();
         }
+        #endregion
+
+        #region Vehicle Helper Methods
+        
+        /// <summary>
+        /// Checks if the player is in a vehicle
+        /// </summary>
+        public bool IsInVehicle()
+        {
+            return _cachedCurrentSeat != 0 && _cachedSeatPawn != 0;
+        }
+        
+        /// <summary>
+        /// Gets the current vehicle weapon if player is in a vehicle
+        /// </summary>
+        public ulong GetVehicleWeapon()
+        {
+            return _cachedVehicleWeapon;
+        }
+        
+        /// <summary>
+        /// Gets the current vehicle inventory if player is in a vehicle
+        /// </summary>
+        public ulong GetVehicleInventory()
+        {
+            return _cachedVehicleInventory;
+        }
+        
+        /// <summary>
+        /// Gets the current seat pawn if player is in a vehicle
+        /// </summary>
+        public ulong GetSeatPawn()
+        {
+            return _cachedSeatPawn;
+        }
+        
+        /// <summary>
+        /// Gets the current seat if player is in a vehicle
+        /// </summary>
+        public ulong GetCurrentSeat()
+        {
+            return _cachedCurrentSeat;
+        }
+        
         #endregion
     }
 }

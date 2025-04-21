@@ -69,6 +69,7 @@ namespace squad_dma
             chkNoSpread = new CheckBox();
             chkNoSway = new CheckBox();
             chkNoCameraShake = new CheckBox();
+            chkInstantGrenade = new CheckBox();
             grpKeybinds = new GroupBox();
             lblKeybindSpeedHack = new Label();
             btnKeybindSpeedHack = new Button();
@@ -400,6 +401,7 @@ namespace squad_dma
             grpLocalSoldier.Controls.Add(chkNoSpread);
             grpLocalSoldier.Controls.Add(chkNoSway);
             grpLocalSoldier.Controls.Add(chkNoCameraShake);
+            grpLocalSoldier.Controls.Add(chkInstantGrenade);
             grpLocalSoldier.Location = new Point(8, 391);
             grpLocalSoldier.Name = "grpLocalSoldier";
             grpLocalSoldier.Padding = new Padding(15);
@@ -563,6 +565,16 @@ namespace squad_dma
             chkNoCameraShake.Text = "No Camera Shake";
             chkNoCameraShake.UseVisualStyleBackColor = true;
             chkNoCameraShake.CheckedChanged += ChkNoCameraShake_CheckedChanged;
+            // 
+            // chkInstantGrenade
+            // 
+            chkInstantGrenade.AutoSize = true;
+            chkInstantGrenade.Location = new Point(210, 195);
+            chkInstantGrenade.Name = "chkInstantGrenade";
+            chkInstantGrenade.Size = new Size(120, 19);
+            chkInstantGrenade.TabIndex = 15;
+            chkInstantGrenade.Text = "Instant Grenade";
+            chkInstantGrenade.UseVisualStyleBackColor = true;
             // 
             // grpKeybinds
             // 
@@ -1159,6 +1171,7 @@ namespace squad_dma
         private CheckBox chkNoSpread;
         private CheckBox chkNoSway;
         private CheckBox chkNoCameraShake;
+        private CheckBox chkInstantGrenade;
         private GroupBox grpKeybinds;
         private Button btnKeybindSpeedHack;
         private Button btnKeybindAirStuck;

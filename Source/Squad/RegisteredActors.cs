@@ -484,8 +484,22 @@ namespace squad_dma
                             claimedBySquadResult.TryGetResult<ulong>(out var claimedBySquad) &&
                             claimedBySquad != 0)
                         {
-                            var teamId = Memory.ReadValue<int>(claimedBySquad + Offsets.ASQSquadState.TeamId);
-                            actor.TeamID = (teamId == 1 || teamId == 2) ? teamId : -1;
+                            try
+                            {
+                                if (claimedBySquad > 0x10000 && claimedBySquad < 0x7FFFFFFFFFFF)
+                                {
+                                    var teamId = Memory.ReadValue<int>(claimedBySquad + Offsets.ASQSquadState.TeamId);
+                                    actor.TeamID = (teamId == 1 || teamId == 2) ? teamId : -1;
+                                }
+                                else
+                                {
+                                    actor.TeamID = -1;
+                                }
+                            }
+                            catch
+                            {
+                                actor.TeamID = -1;
+                            }
                         }
                         else
                         {

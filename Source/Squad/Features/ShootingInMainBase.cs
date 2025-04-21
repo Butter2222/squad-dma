@@ -12,7 +12,6 @@ namespace squad_dma.Source.Squad.Features
         public bool IsEnabled => _isEnabled;
         
         private ulong _lastWeapon = 0;
-        private ulong _lastVehicleWeapon = 0;
         
         public ShootingInMainBase(ulong playerController, bool inGame)
             : base(playerController, inGame)
@@ -30,26 +29,26 @@ namespace squad_dma.Source.Squad.Features
             _isEnabled = enable;
             Logger.Debug($"[{NAME}] Shooting in main base {(enable ? "enabled" : "disabled")}");
             
-            // If disabling, restore the last weapons' states
             if (!enable)
             {
                 if (_lastWeapon != 0)
                 {
-                    RestoreWeapon(_lastWeapon, false);
+                    RestoreWeapon(_lastWeapon);
                 }
-                if (_lastVehicleWeapon != 0)
+                
+                UpdateCachedPointers();
+                if (_cachedCurrentWeapon != 0)
                 {
-                    RestoreWeapon(_lastVehicleWeapon, true);
+                    RestoreWeapon(_cachedCurrentWeapon);
                 }
             }
             
-            // Apply to current weapons if enabled
             if (enable)
             {
                 UpdateCachedPointers();
                 if (_cachedCurrentWeapon != 0)
                 {
-                    Apply(_cachedCurrentWeapon, false);
+                    Apply(_cachedCurrentWeapon);
                 }
             }
         }
@@ -63,13 +62,13 @@ namespace squad_dma.Source.Squad.Features
                 // Restore the old weapon's state
                 if (oldWeapon != 0)
                 {
-                    RestoreWeapon(oldWeapon, false);
+                    RestoreWeapon(oldWeapon);
                 }
                 
                 // Apply to new weapon if enabled
                 if (Program.Config.AllowShootingInMainBase && newWeapon != 0)
                 {
-                    Apply(newWeapon, false);
+                    Apply(newWeapon);
                 }
                 
                 _lastWeapon = newWeapon;
@@ -80,43 +79,43 @@ namespace squad_dma.Source.Squad.Features
             }
         }
         
-        private void RestoreWeapon(ulong weapon, bool isVehicle)
+        private void RestoreWeapon(ulong weapon)
         {
             try
             {
                 ulong itemStaticInfo = Memory.ReadPtr(weapon + ASQEquipableItem.ItemStaticInfo);
                 if (itemStaticInfo == 0)
                 {
-                    Logger.Error($"[{NAME}] Cannot restore {(isVehicle ? "vehicle" : "soldier")} weapon - item static info is not valid");
+                    Logger.Error($"[{NAME}] Cannot restore weapon - item static info is not valid");
                     return;
                 }
 
                 Memory.WriteValue<bool>(itemStaticInfo + ASQSoldier.bUsableInMainBase, false);
-                Logger.Debug($"[{NAME}] Restored {(isVehicle ? "vehicle" : "soldier")} weapon at 0x{weapon:X}");
+                Logger.Debug($"[{NAME}] Restored weapon at 0x{weapon:X}");
             }
             catch (Exception ex)
             {
-                Logger.Error($"[{NAME}] Error restoring {(isVehicle ? "vehicle" : "soldier")} weapon at 0x{weapon:X}: {ex.Message}");
+                Logger.Error($"[{NAME}] Error restoring weapon at 0x{weapon:X}: {ex.Message}");
             }
         }
         
-        private void Apply(ulong weapon, bool isVehicle)
+        private void Apply(ulong weapon)
         {
             try
             {
                 ulong itemStaticInfo = Memory.ReadPtr(weapon + ASQEquipableItem.ItemStaticInfo);
                 if (itemStaticInfo == 0)
                 {
-                    Logger.Error($"[{NAME}] Cannot apply shooting in main base to {(isVehicle ? "vehicle" : "soldier")} weapon - item static info is not valid");
+                    Logger.Error($"[{NAME}] Cannot apply shooting in main base to weapon - item static info is not valid");
                     return;
                 }
 
                 Memory.WriteValue<bool>(itemStaticInfo + ASQSoldier.bUsableInMainBase, Program.Config.AllowShootingInMainBase);
-                Logger.Debug($"[{NAME}] Applied shooting in main base to {(isVehicle ? "vehicle" : "soldier")} weapon at 0x{weapon:X}");
+                Logger.Debug($"[{NAME}] Applied shooting in main base to weapon at 0x{weapon:X}");
             }
             catch (Exception ex)
             {
-                Logger.Error($"[{NAME}] Error applying shooting in main base to {(isVehicle ? "vehicle" : "soldier")} weapon at 0x{weapon:X}: {ex.Message}");
+                Logger.Error($"[{NAME}] Error applying shooting in main base to weapon at 0x{weapon:X}: {ex.Message}");
             }
         }
         
