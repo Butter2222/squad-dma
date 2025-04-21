@@ -86,7 +86,7 @@ namespace squad_dma
         public void SetNoRecoil(bool enable) => _soldierManager?.SetNoRecoil(enable);
         public void SetNoSway(bool enable) => _soldierManager?.SetNoSway(enable);
         public void SetInstantGrenade(bool enable) => _soldierManager?.SetInstantGrenade(enable);
-
+        
         public void SetInstantSeatSwitch() => _debugVehicles?.SetInstantSeatSwitch();
         public void LogVehicles(bool force = false) => _debugVehicles?.LogVehicles(force);
         public void VehicleTeam() => _debugVehicles?.VehicleTeam();

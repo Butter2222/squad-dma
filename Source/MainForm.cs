@@ -1294,6 +1294,9 @@ namespace squad_dma
 
             foreach (var actor in allPlayers)
             {
+                if (actor.ActorType == ActorType.Projectile || actor.ActorType == ActorType.ProjectileAA)
+                    continue;
+
                 var actorPos = actor.Position + AbsoluteLocation;
                 if (Math.Abs(actorPos.X - AbsoluteLocation.X) + Math.Abs(actorPos.Y - AbsoluteLocation.Y) + Math.Abs(actorPos.Z - AbsoluteLocation.Z) < 1.0)
                     continue;
@@ -1308,11 +1311,22 @@ namespace squad_dma
                     continue;
                 }
 
-                if (actor.ActorType != ActorType.ProjectileAA)
-                {
-                    int aimlineLength = actor == LocalPlayer ? 0 : 15;
-                    DrawActor(canvas, actor, actorZoomedPos, aimlineLength, localPlayerMapPos);
-                }
+                int aimlineLength = actor == LocalPlayer ? 0 : 15;
+                DrawActor(canvas, actor, actorZoomedPos, aimlineLength, localPlayerMapPos);
+            }
+
+            foreach (var actor in allPlayers)
+            {
+                if (actor.ActorType != ActorType.Projectile)
+                    continue;
+
+                var actorPos = actor.Position + AbsoluteLocation;
+                if (Math.Abs(actorPos.X - AbsoluteLocation.X) + Math.Abs(actorPos.Y - AbsoluteLocation.Y) + Math.Abs(actorPos.Z - AbsoluteLocation.Z) < 1.0)
+                    continue;
+
+                var actorMapPos = actorPos.ToMapPos(_selectedMap);
+                var actorZoomedPos = actorMapPos.ToZoomedPos(mapParams);
+                actorZoomedPos.DrawProjectile(canvas, actor);
             }
         }
 

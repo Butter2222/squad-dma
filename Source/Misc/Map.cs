@@ -83,6 +83,8 @@ namespace squad_dma
         public float Y = 0;
         public float Height = 0;
 
+        private static SKPaint _projectileOutlinePaint;
+        private static SKPaint _projectileFillPaint;
 
         public SKPoint GetPoint(float xOff = 0, float yOff = 0)
         {
@@ -163,31 +165,51 @@ namespace squad_dma
             float size = 6 * UIScale;
             SKPoint center = this.GetPoint();
 
-            using var outlinePaint = new SKPaint
+            if (_projectileOutlinePaint == null)
             {
-                Color = SKColors.Black,
-                StrokeWidth = 4 * UIScale,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                StrokeCap = SKStrokeCap.Round
-            };
+                _projectileOutlinePaint = new SKPaint
+                {
+                    Color = SKColors.Black,
+                    StrokeWidth = 4 * UIScale,
+                    IsAntialias = true,
+                    Style = SKPaintStyle.Stroke,
+                    StrokeCap = SKStrokeCap.Round,
+                    FilterQuality = SKFilterQuality.High
+                };
+            }
 
-            using var fillPaint = new SKPaint
+            if (_projectileFillPaint == null)
             {
-                Color = SKColors.Orange,
-                StrokeWidth = 2 * UIScale,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                StrokeCap = SKStrokeCap.Round
-            };
+                _projectileFillPaint = new SKPaint
+                {
+                    Color = SKColors.Orange,
+                    StrokeWidth = 2 * UIScale,
+                    IsAntialias = true,
+                    Style = SKPaintStyle.Stroke,
+                    StrokeCap = SKStrokeCap.Round,
+                    FilterQuality = SKFilterQuality.High
+                };
+            }
+
+            _projectileOutlinePaint.Color = SKColors.Black;
+            _projectileFillPaint.Color = SKColors.Orange;
+
+            _projectileOutlinePaint.StrokeWidth = 4 * UIScale;
+            _projectileFillPaint.StrokeWidth = 2 * UIScale;
+
+            // Save canvas state
+            canvas.Save();
 
             // Draw horizontal line
-            canvas.DrawLine(center.X - size, center.Y, center.X + size, center.Y, outlinePaint);
-            canvas.DrawLine(center.X - size, center.Y, center.X + size, center.Y, fillPaint);
+            canvas.DrawLine(center.X - size, center.Y, center.X + size, center.Y, _projectileOutlinePaint);
+            canvas.DrawLine(center.X - size, center.Y, center.X + size, center.Y, _projectileFillPaint);
 
             // Draw vertical line
-            canvas.DrawLine(center.X, center.Y - size, center.X, center.Y + size, outlinePaint);
-            canvas.DrawLine(center.X, center.Y - size, center.X, center.Y + size, fillPaint);
+            canvas.DrawLine(center.X, center.Y - size, center.X, center.Y + size, _projectileOutlinePaint);
+            canvas.DrawLine(center.X, center.Y - size, center.X, center.Y + size, _projectileFillPaint);
+
+            // Restore canvas state
+            canvas.Restore();
         }
 
         public void DrawTechMarker(SKCanvas canvas, UActor actor)

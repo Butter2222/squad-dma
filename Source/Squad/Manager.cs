@@ -215,7 +215,7 @@ namespace squad_dma.Source.Squad
                 {
                     try
                     {
-                        if (!_inGame || _playerController == 0)
+                        if (!_inGame || _playerController == 0 || !IsLocalPlayerValid()) 
                         {
                             await Task.Delay(1000, _cancellationTokenSource.Token);
                             continue;
