@@ -12,7 +12,7 @@ namespace squad_dma.Source.Squad.Features
         
         public bool IsEnabled => _isEnabled;
         
-        private ulong _lastWeapon = 0;
+        private ulong _lastWeaponStaticInfo = 0;
         
         public QuickSwap(ulong playerController, bool inGame)
             : base(playerController, inGame)
@@ -30,13 +30,15 @@ namespace squad_dma.Source.Squad.Features
             _isEnabled = enable;
             Logger.Debug($"[{NAME}] Quick swap {(enable ? "enabled" : "disabled")}");
             
-            // If disabling, restore the last weapon's state
-            if (!enable && _lastWeapon != 0)
+            if (!enable)
             {
-                RestoreWeapon(_lastWeapon);
+                UpdateCachedPointers();
+                if (_cachedCurrentWeapon != 0)
+                {
+                    RestoreWeapon(_cachedCurrentWeapon);
+                }
             }
             
-            // Apply to current weapon if enabled
             if (enable)
             {
                 UpdateCachedPointers();
@@ -53,19 +55,20 @@ namespace squad_dma.Source.Squad.Features
             
             try
             {
-                // Restore the old weapon's state
-                if (oldWeapon != 0)
+                ulong newWeaponStaticInfo = GetCachedWeaponStaticInfo(newWeapon);
+                ulong oldWeaponStaticInfo = oldWeapon != 0 ? GetCachedWeaponStaticInfo(oldWeapon) : 0;
+                
+                if (oldWeapon != 0 && oldWeaponStaticInfo != _lastWeaponStaticInfo)
                 {
                     RestoreWeapon(oldWeapon);
                 }
                 
-                // Apply to new weapon if enabled
-                if (Program.Config.QuickSwap && newWeapon != 0)
+                if (Program.Config.QuickSwap && newWeapon != 0 && newWeaponStaticInfo != _lastWeaponStaticInfo)
                 {
                     Apply(newWeapon);
                 }
                 
-                _lastWeapon = newWeapon;
+                _lastWeaponStaticInfo = newWeaponStaticInfo;
             }
             catch (Exception ex)
             {

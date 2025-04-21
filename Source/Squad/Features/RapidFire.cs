@@ -39,49 +39,36 @@ namespace squad_dma.Source.Squad.Features
             _isEnabled = enable;
             Logger.Debug($"[{NAME}] Rapid fire {(enable ? "enabled" : "disabled")}");
             
-            // If disabling, restore the last weapons' states
+            UpdateCachedPointers();
+            
             if (!enable)
             {
                 if (_lastWeapon != 0)
                 {
                     RestoreWeapon(_lastWeapon, ref _soldierOriginalTimeBetweenShots, ref _soldierOriginalTimeBetweenSingleShots, false);
                 }
-                if (_lastVehicleWeapon != 0)
+                
+                if (_cachedCurrentWeapon != 0)
                 {
-                    RestoreWeapon(_lastVehicleWeapon, ref _vehicleOriginalTimeBetweenShots, ref _vehicleOriginalTimeBetweenSingleShots, true);
+                    RestoreWeapon(_cachedCurrentWeapon, ref _soldierOriginalTimeBetweenShots, ref _soldierOriginalTimeBetweenSingleShots, false);
+                }
+                
+                if (IsInVehicle() && _cachedVehicleWeapon != 0)
+                {
+                    RestoreWeapon(_cachedVehicleWeapon, ref _vehicleOriginalTimeBetweenShots, ref _vehicleOriginalTimeBetweenSingleShots, true);
                 }
             }
-            
-            // Apply to current weapons if enabled
-            if (enable)
+            else
             {
-                UpdateCachedPointers();
                 if (_cachedCurrentWeapon != 0)
                 {
                     Apply(_cachedCurrentWeapon, ref _soldierOriginalTimeBetweenShots, ref _soldierOriginalTimeBetweenSingleShots, false);
                 }
-
-                // Check for vehicle weapon
-                ulong playerState = Memory.ReadPtr(_playerController + Controller.PlayerState);
-                if (playerState != 0)
+                
+                if (IsInVehicle() && _cachedVehicleWeapon != 0)
                 {
-                    ulong currentSeat = Memory.ReadPtr(playerState + ASQPlayerState.CurrentSeat);
-                    if (currentSeat != 0)
-                    {
-                        ulong seatPawn = Memory.ReadPtr(currentSeat + USQVehicleSeatComponent.SeatPawn);
-                        if (seatPawn != 0)
-                        {
-                            ulong vehicleInventory = Memory.ReadPtr(seatPawn + ASQVehicleSeat.VehicleInventory);
-                            if (vehicleInventory != 0)
-                            {
-                                ulong vehicleWeapon = Memory.ReadPtr(vehicleInventory + USQPawnInventoryComponent.CurrentWeapon);
-                                if (vehicleWeapon != 0)
-                                {
-                                    Apply(vehicleWeapon, ref _vehicleOriginalTimeBetweenShots, ref _vehicleOriginalTimeBetweenSingleShots, true);
-                                }
-                            }
-                        }
-                    }
+                    Apply(_cachedVehicleWeapon, ref _vehicleOriginalTimeBetweenShots, ref _vehicleOriginalTimeBetweenSingleShots, true);
+                    _lastVehicleWeapon = _cachedVehicleWeapon;
                 }
             }
         }
@@ -99,12 +86,26 @@ namespace squad_dma.Source.Squad.Features
                 }
                 
                 // Apply to new weapon if enabled
-                if (Program.Config.RapidFire && newWeapon != 0)
+                if (_isEnabled && newWeapon != 0)
                 {
                     Apply(newWeapon, ref _soldierOriginalTimeBetweenShots, ref _soldierOriginalTimeBetweenSingleShots, false);
                 }
                 
                 _lastWeapon = newWeapon;
+                
+                // Also handle vehicle weapon if in vehicle
+                if (IsInVehicle() && _cachedVehicleWeapon != 0)
+                {
+                    if (_isEnabled)
+                    {
+                        Apply(_cachedVehicleWeapon, ref _vehicleOriginalTimeBetweenShots, ref _vehicleOriginalTimeBetweenSingleShots, true);
+                        _lastVehicleWeapon = _cachedVehicleWeapon;
+                    }
+                    else
+                    {
+                        RestoreWeapon(_cachedVehicleWeapon, ref _vehicleOriginalTimeBetweenShots, ref _vehicleOriginalTimeBetweenSingleShots, true);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -141,7 +142,7 @@ namespace squad_dma.Source.Squad.Features
                 ulong weaponConfigOffset = weapon + ASQWeapon.WeaponConfig;
                 Logger.Debug($"[{NAME}] Found weapon config at 0x{weaponConfigOffset:X} for {(isVehicle ? "vehicle" : "soldier")} weapon");
 
-                if (Program.Config.RapidFire)
+                if (_isEnabled)
                 {
                     // Store original values when first enabled
                     if (originalTimeBetweenShots == 0.0f)

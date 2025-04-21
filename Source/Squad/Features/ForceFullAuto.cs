@@ -35,46 +35,35 @@ namespace squad_dma.Source.Squad.Features
             _isEnabled = enable;
             Logger.Debug($"[{NAME}] Force Full Auto {(enable ? "enabled" : "disabled")}");
             
-            // If disabling, restore the last weapon's state
-            if (!enable && _lastWeapon != 0)
-            {
-                RestoreWeapon(_lastWeapon);
-            }
+            UpdateCachedPointers();
             
-            // Apply to current weapon if enabled
-            if (enable)
+            if (!enable)
             {
-                UpdateCachedPointers();
+                if (_lastWeapon != 0)
+                {
+                    RestoreWeapon(_lastWeapon);
+                }
+                
+                if (_cachedCurrentWeapon != 0)
+                {
+                    RestoreWeapon(_cachedCurrentWeapon);
+                }
+                
+                if (IsInVehicle() && _cachedVehicleWeapon != 0)
+                {
+                    RestoreWeapon(_cachedVehicleWeapon);
+                }
+            }
+            else
+            {
                 if (_cachedCurrentWeapon != 0)
                 {
                     Apply(_cachedCurrentWeapon);
                 }
-
-                // Check for vehicle weapon
-                ulong playerState = Memory.ReadPtr(_playerController + Controller.PlayerState);
-                if (playerState != 0)
+                
+                if (IsInVehicle() && _cachedVehicleWeapon != 0)
                 {
-                    ulong currentSeat = Memory.ReadPtr(playerState + ASQPlayerState.CurrentSeat);
-                    if (currentSeat != 0)
-                    {
-                        Logger.Debug($"[{NAME}] Found current seat at 0x{currentSeat:X}");
-                        ulong seatPawn = Memory.ReadPtr(currentSeat + USQVehicleSeatComponent.SeatPawn);
-                        if (seatPawn != 0)
-                        {
-                            Logger.Debug($"[{NAME}] Found seat pawn at 0x{seatPawn:X}");
-                            ulong vehicleInventory = Memory.ReadPtr(seatPawn + ASQVehicleSeat.VehicleInventory);
-                            if (vehicleInventory != 0)
-                            {
-                                Logger.Debug($"[{NAME}] Found vehicle inventory at 0x{vehicleInventory:X}");
-                                ulong vehicleWeapon = Memory.ReadPtr(vehicleInventory + USQPawnInventoryComponent.CurrentWeapon);
-                                if (vehicleWeapon != 0)
-                                {
-                                    Logger.Debug($"[{NAME}] Applying force full auto to vehicle weapon at 0x{vehicleWeapon:X}");
-                                    Apply(vehicleWeapon);
-                                }
-                            }
-                        }
-                    }
+                    Apply(_cachedVehicleWeapon);
                 }
             }
         }
@@ -92,12 +81,25 @@ namespace squad_dma.Source.Squad.Features
                 }
                 
                 // Apply to new weapon if enabled
-                if (Program.Config.ForceFullAuto && newWeapon != 0)
+                if (_isEnabled && newWeapon != 0)
                 {
                     Apply(newWeapon);
                 }
                 
                 _lastWeapon = newWeapon;
+                
+                // Also handle vehicle weapon if in vehicle
+                if (IsInVehicle() && _cachedVehicleWeapon != 0)
+                {
+                    if (_isEnabled)
+                    {
+                        Apply(_cachedVehicleWeapon);
+                    }
+                    else
+                    {
+                        RestoreWeapon(_cachedVehicleWeapon);
+                    }
+                }
             }
             catch (Exception ex)
             {

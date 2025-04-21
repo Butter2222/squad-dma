@@ -144,25 +144,6 @@
         public const uint PlayerStateData = 0x6D0; // FPlayerStateDataObject
     }
 
-    public struct APlayerState
-    {
-        public const uint Score = 0x228; // float
-        public const uint PlayerId = 0x22c; // int32
-        public const uint Ping = 0x230; // uint8
-        public const uint bShouldUpdateReplicatedPing = 0x232; // uint8
-        public const uint bIsSpectator = 0x232; // uint8
-        public const uint bOnlySpectator = 0x232; // uint8
-        public const uint bIsABot = 0x232; // uint8
-        public const uint bIsInactive = 0x232; // uint8
-        public const uint bFromPreviousLevel = 0x232; // uint8
-        public const uint StartTime = 0x234; // int32
-        public const uint EngineMessageClass = 0x238; // TSubclassOf<ULocalMessage*>
-        public const uint SavedNetworkAddress = 0x248; // FString
-        public const uint UniqueID = 0x258; // FUniqueNetIdRepl
-        public const uint PawnPrivate = 0x288; // APawn*
-        public const uint PlayerNamePrivate = 0x308; // FString
-    }
-
     public struct ASQTeamState
     {
         public const uint Tickets = 0x228;
@@ -259,6 +240,27 @@
     public struct ASQGrenade
     {
         public const uint GrenadeConfig = 0x480; // FSQGrenadeData
+        public const uint GrenadeStaticInfo = 0x4e0; // USQGrenadeStaticInfo*
+    }
+
+    public struct USQGrenadeStaticInfo
+    {
+        public const uint WeaponOverhandPinpull1pMontage = 0x5f0; // UAnimMontage*
+        public const uint WeaponOverhandPinpull3pMontage = 0x5f8; // UAnimMontage*
+        public const uint OverhandPinpull1pMontage = 0x600; // UAnimMontage*
+        public const uint OverhandPinpull3pMontage = 0x608; // UAnimMontage*
+        public const uint WeaponOverhandThrow1pMontage = 0x610; // UAnimMontage*
+        public const uint WeaponOverhandThrow3pMontage = 0x618; // UAnimMontage*
+        public const uint OverhandThrow1pMontage = 0x620; // UAnimMontage*
+        public const uint OverhandThrow3pMontage = 0x628; // UAnimMontage*
+        public const uint WeaponUnderhandPinpull1pMontage = 0x630; // UAnimMontage*
+        public const uint WeaponUnderhandPinpull3pMontage = 0x638; // UAnimMontage*
+        public const uint UnderhandPinpull1pMontage = 0x640; // UAnimMontage*
+        public const uint UnderhandPinpull3pMontage = 0x648; // UAnimMontage*
+        public const uint WeaponUnderhandThrow1pMontage = 0x650; // UAnimMontage*
+        public const uint WeaponUnderhandThrow3pMontage = 0x658; // UAnimMontage*
+        public const uint UnderhandThrow1pMontage = 0x660; // UAnimMontage*
+        public const uint UnderhandThrow3pMontage = 0x668; // UAnimMontage*
     }
 
     public struct FSQGrenadeData
@@ -267,8 +269,10 @@
         public const uint ThrowReadyTime = 0x14; // float
         public const uint OverhandThrowTime = 0x18; // float
         public const uint UnderhandThrowTime = 0x1c; // float
+        public const uint OverhandThrowDuration = 0x20; // float
+        public const uint UnderhandThrowDuration = 0x24; // float
+        public const uint ThrowModeTransitionTime = 0x28; // float
         public const uint ReloadTime = 0x34; // float
-        public const uint EquipTime = 0x38; // float
     }
 
     public struct SQVehicle
@@ -419,5 +423,21 @@
         public const uint MaxMoveSwayFactor = 0xb18; // float
         public const uint SwayData = 0x9c4; // FSQSwayData
         public const uint SwayAlignmentData = 0xa58; // FSQSwayData
+    }
+
+    public struct UAnimMontage
+    {
+        public const uint BlendIn = 0xa8; // FAlphaBlend
+        public const uint BlendInTime = 0xd8; // float
+        public const uint BlendOut = 0xe0; // FAlphaBlend
+        public const uint blendOutTime = 0x110; // float
+        public const uint BlendOutTriggerTime = 0x114; // float
+        public const uint bEnableAutoBlendOut = 0x17a; // bool
+    }
+
+    public struct UAnimSequenceBase
+    {
+        public const uint SequenceLength = 0x90; // float
+        public const uint RateScale = 0x94; // float
     }
 }

@@ -6,12 +6,14 @@ namespace squad_dma.Source.Squad.Features
     public class NoCameraShake : Manager
     {
         public const string NAME = "NoCameraShake";
+        private const int SHAKE_INFO_SIZE = 0x18;
+        private const float DISABLED_SHAKE_SCALE = 0f;
+        private const int TIMER_INTERVAL_MS = 1;
+        
         private bool _isEnabled = false;
+        private CancellationTokenSource _cancellationTokenSource;
         
         public bool IsEnabled => _isEnabled;
-        
-        private CancellationTokenSource _cancellationTokenSource;
-        private float _originalShakeScale;
         
         public NoCameraShake(ulong playerController, bool inGame)
             : base(playerController, inGame)
@@ -44,17 +46,22 @@ namespace squad_dma.Source.Squad.Features
         {
             Task.Run(async () =>
             {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested && _isEnabled)
+                while (!_cancellationTokenSource.Token.IsCancellationRequested)
                 {
                     try
                     {
+                        if (!_isEnabled || !IsLocalPlayerValid())
+                        {
+                            StopTimer();
+                            return;
+                        }
                         Apply();
                     }
                     catch (Exception ex)
                     {
                         Logger.Error($"[{NAME}] Error in timer task: {ex.Message}");
                     }
-                    await Task.Delay(1, _cancellationTokenSource.Token);
+                    await Task.Delay(TIMER_INTERVAL_MS, _cancellationTokenSource.Token);
                 }
             }, _cancellationTokenSource.Token);
         }
@@ -69,62 +76,86 @@ namespace squad_dma.Source.Squad.Features
         {
             try
             {
-                if (!IsLocalPlayerValid())
+                if (!_isEnabled || !IsLocalPlayerValid() || !Memory.InGame)
                 {
-                    //Logger.Error($"[{NAME}] Cannot apply no camera shake - local player is not valid");
-                    return;
-                }
-
-                // Get camera manager
-                ulong cameraManagerPtr = Memory.ReadPtr(_playerController + PlayerController.PlayerCameraManager);
-                if (cameraManagerPtr == 0)
-                {
-                    Logger.Error($"[{NAME}] Cannot apply no camera shake - camera manager is not valid");
-                    return;
-                }
-
-                // Get camera shake modifier
-                ulong cameraShakeModPtr = Memory.ReadPtr(cameraManagerPtr + PlayerCameraManager.CachedCameraShakeMod);
-                if (cameraShakeModPtr == 0)
-                {
-                    Logger.Error($"[{NAME}] Cannot apply no camera shake - camera shake modifier is not valid");
-                    return;
-                }
-
-                // Prevent new shakes by setting scale to 0
-                Memory.WriteValue(cameraShakeModPtr + UCameraModifier_CameraShake.SplitScreenShakeScale, 0f);
-
-                // Get active shakes data
-                ulong activeShakesDataPtr = Memory.ReadPtr(cameraShakeModPtr + UCameraModifier_CameraShake.ActiveShakes);
-                if (activeShakesDataPtr == 0) return;
-
-                // Get number of active shakes
-                int activeShakesCount = Memory.ReadValue<int>(cameraShakeModPtr + UCameraModifier_CameraShake.ActiveShakes + 0x8);
-                if (activeShakesCount <= 0) return;
-
-                // Create scatter write entries for each active shake
-                var scatterEntries = new List<IScatterWriteDataEntry<float>>();
-                const int shakeInfoSize = 0x18;
-
-                for (int i = 0; i < activeShakesCount; i++)
-                {
-                    ulong shakeBasePtr = Memory.ReadPtr(activeShakesDataPtr + (uint)(i * shakeInfoSize));
-                    if (shakeBasePtr != 0)
+                    if (!Memory.InGame)
                     {
-                        // Set shake scale to 0 to ensure shake is removed
-                        scatterEntries.Add(new ScatterWriteDataEntry<float>(shakeBasePtr + UCameraShakeBase.ShakeScale, 0f));
+                        StopTimer();
                     }
+                    return;
                 }
 
-                if (scatterEntries.Count > 0)
+                var cameraPointers = GetCameraPointers();
+                if (!cameraPointers.IsValid)
                 {
-                    Memory.WriteScatter(scatterEntries);
-                    //Logger.Debug($"[{NAME}] Successfully modified {scatterEntries.Count} camera shakes");
+                    return;
                 }
+
+                DisableCameraShake(cameraPointers);
             }
             catch (Exception ex)
             {
                 Logger.Error($"[{NAME}] Error setting no camera shake: {ex.Message}");
+            }
+        }
+
+        private (bool IsValid, ulong CameraManager, ulong ShakeModifier, ulong ActiveShakes) GetCameraPointers()
+        {
+            ulong cameraManagerPtr = Memory.ReadPtr(_playerController + PlayerController.PlayerCameraManager);
+            if (cameraManagerPtr == 0)
+            {
+                if (Memory.InGame)
+                {
+                    Logger.Error($"[{NAME}] Cannot apply no camera shake - camera manager is not valid");
+                }
+                return (false, 0, 0, 0);
+            }
+
+            ulong cameraShakeModPtr = Memory.ReadPtr(cameraManagerPtr + PlayerCameraManager.CachedCameraShakeMod);
+            if (cameraShakeModPtr == 0)
+            {
+                if (Memory.InGame)
+                {
+                    Logger.Error($"[{NAME}] Cannot apply no camera shake - camera shake modifier is not valid");
+                }
+                return (false, 0, 0, 0);
+            }
+
+            ulong activeShakesDataPtr = Memory.ReadPtr(cameraShakeModPtr + UCameraModifier_CameraShake.ActiveShakes);
+            return (true, cameraManagerPtr, cameraShakeModPtr, activeShakesDataPtr);
+        }
+
+        private void DisableCameraShake((bool IsValid, ulong CameraManager, ulong ShakeModifier, ulong ActiveShakes) pointers)
+        {
+            // Prevent new shakes by setting scale to 0
+            Memory.WriteValue(pointers.ShakeModifier + UCameraModifier_CameraShake.SplitScreenShakeScale, DISABLED_SHAKE_SCALE);
+
+            if (pointers.ActiveShakes == 0)
+            {
+                return;
+            }
+
+            // Get number of active shakes
+            int activeShakesCount = Memory.ReadValue<int>(pointers.ShakeModifier + UCameraModifier_CameraShake.ActiveShakes + 0x8);
+            if (activeShakesCount <= 0)
+            {
+                return;
+            }
+
+            // Create scatter write entries for each active shake
+            var scatterEntries = new List<IScatterWriteDataEntry<float>>();
+            for (int i = 0; i < activeShakesCount; i++)
+            {
+                ulong shakeBasePtr = Memory.ReadPtr(pointers.ActiveShakes + (uint)(i * SHAKE_INFO_SIZE));
+                if (shakeBasePtr != 0)
+                {
+                    scatterEntries.Add(new ScatterWriteDataEntry<float>(shakeBasePtr + UCameraShakeBase.ShakeScale, DISABLED_SHAKE_SCALE));
+                }
+            }
+
+            if (scatterEntries.Count > 0)
+            {
+                Memory.WriteScatter(scatterEntries);
             }
         }
 

@@ -20,7 +20,6 @@ namespace squad_dma
         private readonly System.Timers.Timer _mapChangeTimer = new(100);
         private readonly List<Map> _maps = new();
         private DarkModeCS _darkmode;
-        private readonly Dictionary<UActor, Vector3> _aaProjectileOrigins = new();
         private readonly List<PointOfInterest> _pointsOfInterest = new();
         private System.Windows.Forms.Timer _panTimer;
         private GameStatus _previousGameStatus = GameStatus.NotFound;
@@ -803,6 +802,8 @@ namespace squad_dma
             chkNoSpread.CheckedChanged += ChkNoSpread_CheckedChanged;
             chkNoSway.Checked = _config.NoSway;
             chkNoSway.CheckedChanged += ChkNoSway_CheckedChanged;
+            chkInstantGrenade.Checked = _config.InstantGrenade;
+            chkInstantGrenade.CheckedChanged += ChkInstantGrenade_CheckedChanged;
             #endregion
 
             #endregion
@@ -1009,6 +1010,9 @@ namespace squad_dma
 
                             if (_config.NoCameraShake)
                                 Memory._game.SetNoCameraShake(true);
+
+                            if (_config.InstantGrenade)
+                                Memory._game.SetInstantGrenade(true);
 
                             return;
                         }
@@ -1279,11 +1283,7 @@ namespace squad_dma
                 return;
 
             var activeProjectiles = allPlayers.Where(a => a.ActorType == ActorType.ProjectileAA).ToList();
-            var removedProjectiles = _aaProjectileOrigins.Keys.Except(activeProjectiles).ToList();
-            foreach (var projectile in removedProjectiles)
-            {
-                _aaProjectileOrigins.Remove(projectile);
-            }
+            projectileAAs.AddRange(activeProjectiles);
 
             var localPlayerPos = LocalPlayer.Position + AbsoluteLocation;
             var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
@@ -1312,11 +1312,6 @@ namespace squad_dma
                 {
                     int aimlineLength = actor == LocalPlayer ? 0 : 15;
                     DrawActor(canvas, actor, actorZoomedPos, aimlineLength, localPlayerMapPos);
-                }
-
-                if (actor.ActorType == ActorType.ProjectileAA)
-                {
-                    projectileAAs.Add(actor);
                 }
             }
         }
@@ -1369,17 +1364,7 @@ namespace squad_dma
                 }
                 else if (actor.ActorType == ActorType.ProjectileAA)
                 {
-                    if (!_aaProjectileOrigins.ContainsKey(actor))
-                        _aaProjectileOrigins[actor] = actor.Position + AbsoluteLocation;
-
                     actorZoomedPos.DrawProjectileAA(canvas, actor);
-
-                    if (_aaProjectileOrigins.TryGetValue(actor, out var startPos))
-                    {
-                        var startPosMap = startPos.ToMapPos(_selectedMap);
-                        var startZoomedPos = startPosMap.ToZoomedPos(GetMapLocation());
-                        DrawAAStartMarker(canvas, startZoomedPos);
-                    }
                 }
                 else if (actor.ActorType == ActorType.Admin)
                 {
@@ -1458,93 +1443,6 @@ namespace squad_dma
                 var actorZoomedPos = actorMapPos.ToZoomedPos(mapParams);
 
                 actorZoomedPos.DrawProjectileAA(canvas, projectile);
-
-                if (_aaProjectileOrigins.TryGetValue(projectile, out var startPos))
-                {
-                    var startMapPos = startPos.ToMapPos(_selectedMap);
-                    var startZoomedPos = startMapPos.ToZoomedPos(mapParams);
-                    DrawAAStartMarker(canvas, startZoomedPos);
-                }
-            }
-        }
-        // Dont work 
-        // Fix later
-        private void DrawAAStartMarker(SKCanvas canvas, MapPosition startPos)
-        {
-            float size = 8 * _uiScale;
-            float thickness = 2 * _uiScale;
-
-            using (var outlinePaint = new SKPaint
-            {
-                Color = SKColors.Black,
-                StrokeWidth = thickness + 2 * _uiScale,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                StrokeCap = SKStrokeCap.Round
-            })
-            using (var xPaint = new SKPaint
-            {
-                Color = SKColors.Yellow,
-                StrokeWidth = thickness,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                StrokeCap = SKStrokeCap.Round
-            })
-            {
-                canvas.DrawLine(
-                    startPos.X - size, startPos.Y - size,
-                    startPos.X + size, startPos.Y + size,
-                    outlinePaint
-                );
-                canvas.DrawLine(
-                    startPos.X + size, startPos.Y - size,
-                    startPos.X - size, startPos.Y + size,
-                    outlinePaint
-                );
-
-                canvas.DrawLine(
-                    startPos.X - size, startPos.Y - size,
-                    startPos.X + size, startPos.Y + size,
-                    xPaint
-                );
-                canvas.DrawLine(
-                    startPos.X + size, startPos.Y - size,
-                    startPos.X - size, startPos.Y + size,
-                    xPaint
-                );
-            }
-
-            string text = "AA";
-            float textSize = 12 * _uiScale;
-            float textOffset = size + 4 * _uiScale;
-
-            using (var outlinePaint = new SKPaint
-            {
-                Color = SKColors.Black,
-                TextSize = textSize,
-                IsAntialias = true,
-                TextAlign = SKTextAlign.Left,
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = 2 * _uiScale,
-                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
-            })
-            using (var textPaint = new SKPaint
-            {
-                Color = SKColors.Yellow,
-                TextSize = textSize,
-                IsAntialias = true,
-                TextAlign = SKTextAlign.Left,
-                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
-            })
-            {
-                SKRect textBounds = new SKRect();
-                textPaint.MeasureText(text, ref textBounds);
-
-                float textX = startPos.X + textOffset;
-                float textY = startPos.Y + (textBounds.Height / 2);
-
-                canvas.DrawText(text, textX, textY, outlinePaint);
-                canvas.DrawText(text, textX, textY, textPaint);
             }
         }
 
@@ -2174,6 +2072,17 @@ namespace squad_dma
             if (InGame)
             {
                 Memory._game?.SetNoCameraShake(_config.NoCameraShake);
+            }
+        }
+
+        private void ChkInstantGrenade_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.InstantGrenade = chkInstantGrenade.Checked;
+            Config.SaveConfig(_config);
+            
+            if (InGame)
+            {
+                Memory._game?.SetInstantGrenade(_config.InstantGrenade);
             }
         }
 

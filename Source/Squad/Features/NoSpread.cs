@@ -92,13 +92,20 @@ namespace squad_dma.Source.Squad.Features
             _isEnabled = enable;
             Logger.Debug($"[{NAME}] No spread {(enable ? "enabled" : "disabled")}");
             
-            // If disabling, restore the last weapon's state
-            if (!enable && _lastWeapon != 0)
+            if (!enable)
             {
-                RestoreWeapon(_lastWeapon);
+                if (_lastWeapon != 0)
+                {
+                    RestoreWeapon(_lastWeapon);
+                }
+                
+                UpdateCachedPointers();
+                if (_cachedCurrentWeapon != 0)
+                {
+                    RestoreWeapon(_cachedCurrentWeapon);
+                }
             }
             
-            // Apply to current weapon if enabled
             if (enable)
             {
                 UpdateCachedPointers();

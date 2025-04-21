@@ -140,6 +140,9 @@ namespace squad_dma
 
         [JsonPropertyName("noCameraShake")]
         public bool NoCameraShake { get; set; } = false;
+
+        [JsonPropertyName("instantGrenade")]
+        public bool InstantGrenade { get; set; } = false;
         #endregion
 
         #region Feature Cache
@@ -218,6 +221,15 @@ namespace squad_dma
         [JsonPropertyName("originalRequireAdsToShoot")]
         public bool OriginalRequireAdsToShoot { get; set; } = false;
 
+        [JsonPropertyName("originalGrenadeValues")]
+        public Dictionary<string, float> OriginalGrenadeValues { get; set; } = new Dictionary<string, float>();
+
+        [JsonPropertyName("originalGrenadeAnimValues")]
+        public Dictionary<string, float> OriginalGrenadeAnimValues { get; set; } = new Dictionary<string, float>();
+
+        [JsonPropertyName("originalGrenadeItemValues")]
+        public Dictionary<string, byte> OriginalGrenadeItemValues { get; set; } = new Dictionary<string, byte>();
+
         /// <summary>
         /// Clears all cached feature values to ensure a clean state on game/app restart.
         /// This should be called when the game closes or the application is terminated.
@@ -235,6 +247,9 @@ namespace squad_dma
             OriginalNoSpreadWeaponValues = new Dictionary<string, float>();
             OriginalNoSwayAnimValues = new Dictionary<string, float>();
             OriginalNoSwayWeaponValues = new Dictionary<string, float>();
+            OriginalGrenadeValues = new Dictionary<string, float>();
+            OriginalGrenadeAnimValues = new Dictionary<string, float>();
+            OriginalGrenadeItemValues = new Dictionary<string, byte>();
             OriginalTimeBetweenShots = 0.0f;
             OriginalTimeBetweenSingleShots = 0.0f;
             OriginalVehicleTimeBetweenShots = 0.0f;
@@ -292,7 +307,8 @@ namespace squad_dma
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
             WriteIndented = true,
-            Converters = { new JsonKeyEnumConverter() }
+            Converters = { new JsonKeyEnumConverter() },
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
 
         [JsonIgnore]
@@ -317,7 +333,7 @@ namespace squad_dma
             VSync = false;
 
             // Initialize ESP settings
-            EnableEsp = true;
+            EnableEsp = false;
             ESPFontSize = 10f;
             EspShowDistance = true;
             EspShowHealth = false;

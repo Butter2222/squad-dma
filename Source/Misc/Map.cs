@@ -160,36 +160,34 @@ namespace squad_dma
 
         public void DrawProjectile(SKCanvas canvas, UActor projectile) // Normal Projectiles Like Mortars / CAS Rockets / etc
         {
-            SKPaint paint = projectile.GetProjectilePaint();
-
-            float crosshairSize = 8 * UIScale;
-            float crosshairThickness = 2 * UIScale;
-
+            float size = 6 * UIScale;
             SKPoint center = this.GetPoint();
 
-            canvas.DrawLine(
-                center.X - crosshairSize, center.Y,
-                center.X + crosshairSize, center.Y,
-                new SKPaint
-                {
-                    Color = paint.Color,
-                    StrokeWidth = crosshairThickness,
-                    IsAntialias = true,
-                    Style = SKPaintStyle.Stroke
-                }
-            );
+            using var outlinePaint = new SKPaint
+            {
+                Color = SKColors.Black,
+                StrokeWidth = 4 * UIScale,
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeCap = SKStrokeCap.Round
+            };
 
-            canvas.DrawLine(
-                center.X, center.Y - crosshairSize,
-                center.X, center.Y + crosshairSize,
-                new SKPaint
-                {
-                    Color = paint.Color,
-                    StrokeWidth = crosshairThickness,
-                    IsAntialias = true,
-                    Style = SKPaintStyle.Stroke
-                }
-            );
+            using var fillPaint = new SKPaint
+            {
+                Color = SKColors.Orange,
+                StrokeWidth = 2 * UIScale,
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeCap = SKStrokeCap.Round
+            };
+
+            // Draw horizontal line
+            canvas.DrawLine(center.X - size, center.Y, center.X + size, center.Y, outlinePaint);
+            canvas.DrawLine(center.X - size, center.Y, center.X + size, center.Y, fillPaint);
+
+            // Draw vertical line
+            canvas.DrawLine(center.X, center.Y - size, center.X, center.Y + size, outlinePaint);
+            canvas.DrawLine(center.X, center.Y - size, center.X, center.Y + size, fillPaint);
         }
 
         public void DrawTechMarker(SKCanvas canvas, UActor actor)

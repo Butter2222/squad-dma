@@ -11,9 +11,6 @@ namespace squad_dma.Source.Squad.Features
         
         public bool IsEnabled => _isEnabled;
         
-        private float _originalInteractionDistance;
-        private float _originalMaxInteractionDistance;
-        
         public InteractionDistances(ulong playerController, bool inGame)
             : base(playerController, inGame)
         {
