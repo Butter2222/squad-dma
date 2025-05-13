@@ -792,6 +792,14 @@ namespace squad_dma {
             {"SD_BP_LPPV_Woodland_Child_C", ActorType.JeepRWSTurret},
             {"SD_BP_LPPV_Stinger_Woodland_C", ActorType.JeepRWSTurret},
             {"SD_BP_LPPV_M2RWS_Woodland_Child_C", ActorType.JeepRWSTurret},
+            {"SD_BP_M113A3_Logistics_Desert_C", ActorType.TrackedLogistics},
+            {"SD_BP_M1117_Desert_C", ActorType.JeepRWSTurret},
+            {"SD_BP_M1151_Strela_Desert_PMC_C", ActorType.JeepTurret},
+            {"SD_BP_CPV_Transport_Desert_C", ActorType.JeepTransport},
+            {"SD_BP_CSK131_Strela_Desert_C", ActorType.JeepTurret},
+            {"SD_BP_CTM131_Logistic_Desert_C", ActorType.TruckLogistics},
+            {"SD_BP_CTM131_QJZ89_Desert_Propaganda_C", ActorType.TruckTransportArmed},
+
 
             {"SD_BP_minsk_Child_C", ActorType.Motorcycle},
 
@@ -831,6 +839,12 @@ namespace squad_dma {
             {"SD_BP_FV432_RWS_Woodland_Child_C", ActorType.TrackedAPC},
             {"SD_BP_FV432_MSV_Woodland_C", ActorType.TrackedAPC},
             {"SD_BP_FV107_Woodland_Child_C", ActorType.TrackedIFV},
+            {"SD_BP_FV510UA_CTAS40_Child_C", ActorType.TrackedIFV},
+            {"SD_BP_FV107_Child_C", ActorType.TrackedIFV},
+            {"SD_BP_FV510UA_Child_C", ActorType.TrackedIFV},
+            {"SD_BP_FV432_RWS_Child_C", ActorType.TrackedAPC},
+            {"SD_BP_ZBD04A_Desert_C", ActorType.TrackedIFV},
+            {"SD_BP_ZSL10_QJZ-89_Desert_C", ActorType.APC},
 
             {"BP_M163_C", ActorType.AntiAir},
             {"BP_2k22m1_C", ActorType.AntiAir},
@@ -876,6 +890,9 @@ namespace squad_dma {
             {"SD_BP_ZTD05_WoodLand_C", ActorType.TankMGS},
             {"SD_BP_ZTZ99_wCage_C", ActorType.Tank},
             {"SD_BP_FV4034_Woodland_Child_C", ActorType.Tank},
+            {"SD_BP_Sprut_Desert_C", ActorType.TankMGS},
+            {"SD_BP_FV4034_Child_C", ActorType.Tank},
+            {"SD_BP_ZTZ99_Desert_wCage_C", ActorType.Tank},
 
             {"BP_HIMARS_C", ActorType.TruckArtillery},
             {"SD_BP_M1064A3_M121_Woodland_C", ActorType.TrackedAPCArtillery},
@@ -1038,7 +1055,7 @@ namespace squad_dma {
             ActorType.AttackHelicopter,
             ActorType.Boat,
             ActorType.BoatLogistics,
-            ActorType.Motorcycle,
+            //ActorType.Motorcycle,
             ActorType.AntiAir,
             ActorType.TrackedLogistics,
             ActorType.LoachCAS,

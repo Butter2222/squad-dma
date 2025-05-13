@@ -10,7 +10,7 @@ namespace squad_dma
         public static readonly SKColor Unknown = SKColors.Purple;
         public static readonly SKColor Squad = SKColors.Green;
 
-        public static readonly SKColor DefaultTextColor = new SKColor(233, 0, 255, 255);
+        public static readonly SKColor DefaultTextColor = SKColors.Magenta;
 
         #endregion
 
@@ -27,22 +27,24 @@ namespace squad_dma
         {
             Style = SKPaintStyle.Fill,
             Color = SKColors.WhiteSmoke,
-            TextSize = 13,
+            TextSize = 12,
             TextEncoding = SKTextEncoding.Utf8,
             IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial"),
+            SubpixelText = true,
+            Typeface = CustomFonts.SKFontFamilyRegular,
             FilterQuality = SKFilterQuality.High
         };
 
-        public static readonly SKPaint TextBaseOutline = new SKPaint()
+        public static readonly SKPaint TextOutline = new SKPaint()
         {
             Style = SKPaintStyle.Stroke,
             Color = SKColors.Black,
-            StrokeWidth = 1,
-            TextSize = 13,
+            StrokeWidth = 2,
+            TextSize = 12,
             TextEncoding = SKTextEncoding.Utf8,
             IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial"),
+            SubpixelText = true,
+            Typeface = CustomFonts.SKFontFamilyRegular,
             FilterQuality = SKFilterQuality.High
         };
         #endregion
@@ -69,13 +71,54 @@ namespace squad_dma
             TextSize = 48,
             TextEncoding = SKTextEncoding.Utf8,
             IsAntialias = true,
-            Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold),
+            Typeface = CustomFonts.SKFontFamilyBold,
             TextAlign = SKTextAlign.Center
         };
-        #endregion
-}
 
-public class PaintColor {
+        public static readonly SKPaint TextActor = new SKPaint()
+        {
+            SubpixelText = true,
+            Color = SKColors.WhiteSmoke,
+            IsStroke = false,
+            TextSize = 12,
+            TextEncoding = SKTextEncoding.Utf8,
+            IsAntialias = true,
+            Typeface = CustomFonts.SKFontFamilyRegular,
+            FilterQuality = SKFilterQuality.High
+        };
+
+        public static readonly SKPaint ProjectileAA = new SKPaint()
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            FilterQuality = SKFilterQuality.High,
+            TextSize = 16f,
+            TextAlign = SKTextAlign.Center,
+            Typeface = CustomFonts.SKFontFamilyRegular
+        };
+
+        public static readonly SKPaint ProjectileOutline = new SKPaint()
+        {
+            Color = SKColors.Black,
+            StrokeWidth = 4,
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeCap = SKStrokeCap.Round,
+            FilterQuality = SKFilterQuality.High
+        };
+
+        public static readonly SKPaint ProjectileFill = new SKPaint()
+        {
+            StrokeWidth = 2,
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeCap = SKStrokeCap.Round,
+            FilterQuality = SKFilterQuality.High
+        };
+        #endregion
+    }
+
+    public class PaintColor {
         public struct Colors {
             public byte A { get; set; }
             public byte R { get; set; }

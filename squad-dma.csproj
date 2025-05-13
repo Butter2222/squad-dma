@@ -73,4 +73,12 @@
 	    <LastGenOutput>Resources.Designer.cs</LastGenOutput>
 	  </EmbeddedResource>
 	</ItemGroup>
+
+	<ItemGroup>
+		<None Remove="Resources\**" />
+		<EmbeddedResource Include="Resources\NeoSansStdRegular.otf" />
+		<EmbeddedResource Include="Resources\NeoSansStdBold.otf" />
+		<EmbeddedResource Include="Resources\NeoSansStdItalic.otf" />
+		<EmbeddedResource Include="Resources\NeoSansStdMedium.otf" />
+	</ItemGroup>
 </Project>

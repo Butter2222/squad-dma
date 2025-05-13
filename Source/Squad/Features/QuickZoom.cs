@@ -51,8 +51,8 @@ namespace squad_dma.Source.Squad.Features
                             Logger.Debug($"[{NAME}] Saved original FOV to config");
                         }
                     }
-                    Memory.WriteValue<float>(cameraManager + PlayerCameraManager.DefaultFOV, 20.0f);
-                    Logger.Debug($"[{NAME}] Set FOV to 20.0");
+                    Memory.WriteValue<float>(cameraManager + PlayerCameraManager.DefaultFOV, 30.0f);
+                    Logger.Debug($"[{NAME}] Set FOV to 30.0");
                 }
                 else if (_originalFov != 0.0f)
                 {

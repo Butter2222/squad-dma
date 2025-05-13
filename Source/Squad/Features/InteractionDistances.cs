@@ -50,8 +50,8 @@ namespace squad_dma.Source.Squad.Features
                 if (Program.Config.SetInteractionDistances)
                 {
                     Memory.WriteValue<float>(soldierActor + ASQSoldier.UseInteractDistance, 5000.0f);
-                    Memory.WriteValue<float>(soldierActor + ASQSoldier.InteractableRadiusMultiplier, 70.0f);
-                    Logger.Debug($"[{NAME}] Set interaction distances to extended values (5000.0f, 70.0f)");
+                    Memory.WriteValue<float>(soldierActor + ASQSoldier.InteractableRadiusMultiplier, 100.0f);
+                    Logger.Debug($"[{NAME}] Set interaction distances to extended values (5000.0f, 100.0f)");
                 }
                 else
                 {

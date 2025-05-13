@@ -8,10 +8,12 @@ namespace squad_dma.Source.Squad.Features
         public const string NAME = "NoCameraShake";
         private const int SHAKE_INFO_SIZE = 0x18;
         private const float DISABLED_SHAKE_SCALE = 0f;
-        private const int TIMER_INTERVAL_MS = 1;
+        private const int TIMER_INTERVAL_MS = 1000; // Increased to 1 second to reduce spam
+        private const int MAX_RETRIES = 3;
         
         private bool _isEnabled = false;
         private CancellationTokenSource _cancellationTokenSource;
+        private int _retryCount = 0;
         
         public bool IsEnabled => _isEnabled;
         
@@ -25,7 +27,7 @@ namespace squad_dma.Source.Squad.Features
         {
             if (!IsLocalPlayerValid())
             {
-                Logger.Error($"[{NAME}] Cannot enable/disable no camera shake - local player is not valid");
+                Logger.Debug($"[{NAME}] Cannot enable/disable no camera shake - local player is not valid");
                 return;
             }
             
@@ -34,6 +36,7 @@ namespace squad_dma.Source.Squad.Features
             
             if (enable)
             {
+                _retryCount = 0; // Reset retry count when enabling
                 StartTimer();
             }
             else
@@ -55,11 +58,28 @@ namespace squad_dma.Source.Squad.Features
                             StopTimer();
                             return;
                         }
+
+                        if (!Memory.InGame)
+                        {
+                            await Task.Delay(TIMER_INTERVAL_MS, _cancellationTokenSource.Token);
+                            continue;
+                        }
+
                         Apply();
                     }
                     catch (Exception ex)
                     {
-                        Logger.Error($"[{NAME}] Error in timer task: {ex.Message}");
+                        if (_retryCount < MAX_RETRIES)
+                        {
+                            _retryCount++;
+                            Logger.Debug($"[{NAME}] Retry attempt {_retryCount}/{MAX_RETRIES}: {ex.Message}");
+                        }
+                        else
+                        {
+                            Logger.Error($"[{NAME}] Max retries reached, stopping timer: {ex.Message}");
+                            StopTimer();
+                            return;
+                        }
                     }
                     await Task.Delay(TIMER_INTERVAL_MS, _cancellationTokenSource.Token);
                 }
@@ -70,6 +90,7 @@ namespace squad_dma.Source.Squad.Features
         {
             _cancellationTokenSource.Cancel();
             _cancellationTokenSource = new CancellationTokenSource();
+            _retryCount = 0;
         }
 
         public override void Apply()
@@ -101,14 +122,23 @@ namespace squad_dma.Source.Squad.Features
 
         private (bool IsValid, ulong CameraManager, ulong ShakeModifier, ulong ActiveShakes) GetCameraPointers()
         {
-            ulong cameraManagerPtr = Memory.ReadPtr(_playerController + PlayerController.PlayerCameraManager);
+            if (!IsLocalPlayerValid())
+            {
+                return (false, 0, 0, 0);
+            }
+
+            ulong cameraManagerPtr = _cachedCameraManager;
             if (cameraManagerPtr == 0)
             {
-                if (Memory.InGame)
+                cameraManagerPtr = Memory.ReadPtr(_playerController + PlayerController.PlayerCameraManager);
+                if (cameraManagerPtr == 0)
                 {
-                    Logger.Error($"[{NAME}] Cannot apply no camera shake - camera manager is not valid");
+                    if (Memory.InGame)
+                    {
+                        Logger.Debug($"[{NAME}] Camera manager not ready yet");
+                    }
+                    return (false, 0, 0, 0);
                 }
-                return (false, 0, 0, 0);
             }
 
             ulong cameraShakeModPtr = Memory.ReadPtr(cameraManagerPtr + PlayerCameraManager.CachedCameraShakeMod);
@@ -116,7 +146,7 @@ namespace squad_dma.Source.Squad.Features
             {
                 if (Memory.InGame)
                 {
-                    Logger.Error($"[{NAME}] Cannot apply no camera shake - camera shake modifier is not valid");
+                    Logger.Debug($"[{NAME}] Camera shake modifier not ready yet");
                 }
                 return (false, 0, 0, 0);
             }

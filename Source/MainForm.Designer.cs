@@ -47,6 +47,7 @@ namespace squad_dma
             txtMapSetupScale = new TextBox();
             chkMapFree = new CheckBox();
             btnApplyMapScale = new Button();
+            chkHighAlert = new CheckBox();
             tabSettings = new TabPage();
             grpUserInterface = new GroupBox();
             lblUIScale = new Label();
@@ -158,9 +159,9 @@ namespace squad_dma
             // btnDumpNames
             // 
             btnDumpNames.Font = new Font("Segoe UI", 9F);
-            btnDumpNames.Location = new Point(265, 80);
+            btnDumpNames.Location = new Point(405, 60);
             btnDumpNames.Name = "btnDumpNames";
-            btnDumpNames.Size = new Size(200, 30);
+            btnDumpNames.Size = new Size(180, 30);
             btnDumpNames.TabIndex = 16;
             btnDumpNames.Text = "Dump Names";
             toolTip.SetToolTip(btnDumpNames, "Dump entity names in the game instance");
@@ -234,7 +235,7 @@ namespace squad_dma
             btnToggleMap.Font = new Font("Segoe UI", 9F);
             btnToggleMap.Location = new Point(15, 60);
             btnToggleMap.Name = "btnToggleMap";
-            btnToggleMap.Size = new Size(200, 30);
+            btnToggleMap.Size = new Size(180, 30);
             btnToggleMap.TabIndex = 2;
             btnToggleMap.Text = "Toggle Map";
             toolTip.SetToolTip(btnToggleMap, "Switch between available maps");
@@ -244,9 +245,9 @@ namespace squad_dma
             // btnRestartRadar
             // 
             btnRestartRadar.Font = new Font("Segoe UI", 9F);
-            btnRestartRadar.Location = new Point(230, 60);
+            btnRestartRadar.Location = new Point(210, 60);
             btnRestartRadar.Name = "btnRestartRadar";
-            btnRestartRadar.Size = new Size(200, 30);
+            btnRestartRadar.Size = new Size(180, 30);
             btnRestartRadar.TabIndex = 0;
             btnRestartRadar.Text = "Restart Radar";
             toolTip.SetToolTip(btnRestartRadar, "Restart the radar functionality");
@@ -307,6 +308,19 @@ namespace squad_dma
             btnApplyMapScale.UseVisualStyleBackColor = true;
             btnApplyMapScale.Click += btnApplyMapScale_Click;
             // 
+            // chkHighAlert
+            // 
+            chkHighAlert.AutoSize = true;
+            chkHighAlert.Font = new Font("Segoe UI", 9F);
+            chkHighAlert.Location = new Point(265, 25);
+            chkHighAlert.Name = "chkHighAlert";
+            chkHighAlert.Size = new Size(80, 19);
+            chkHighAlert.TabIndex = 18;
+            chkHighAlert.Text = "High Alert";
+            toolTip.SetToolTip(chkHighAlert, "Extend aimlines of enemies looking at you");
+            chkHighAlert.UseVisualStyleBackColor = true;
+            chkHighAlert.CheckedChanged += chkHighAlert_CheckedChanged;
+            // 
             // tabSettings
             // 
             tabSettings.BackColor = SystemColors.Control;
@@ -331,7 +345,7 @@ namespace squad_dma
             grpUserInterface.Controls.Add(lblTechMarkerScale);
             grpUserInterface.Controls.Add(trkTechMarkerScale);
             grpUserInterface.Controls.Add(chkShowEnemyDistance);
-            grpUserInterface.Controls.Add(btnDumpNames);
+            grpUserInterface.Controls.Add(chkHighAlert);
             grpUserInterface.Location = new Point(8, 6);
             grpUserInterface.Name = "grpUserInterface";
             grpUserInterface.Padding = new Padding(15);
@@ -376,6 +390,7 @@ namespace squad_dma
             grpRadar.Controls.Add(btnRestartRadar);
             grpRadar.Controls.Add(chkShowMapSetup);
             grpRadar.Controls.Add(btnToggleMap);
+            grpRadar.Controls.Add(btnDumpNames);
             grpRadar.Location = new Point(8, 265);
             grpRadar.Name = "grpRadar";
             grpRadar.Padding = new Padding(15);
@@ -527,9 +542,9 @@ namespace squad_dma
             chkNoRecoil.AutoSize = true;
             chkNoRecoil.Location = new Point(210, 95);
             chkNoRecoil.Name = "chkNoRecoil";
-            chkNoRecoil.Size = new Size(77, 19);
+            chkNoRecoil.Size = new Size(124, 19);
             chkNoRecoil.TabIndex = 11;
-            chkNoRecoil.Text = "No Recoil";
+            chkNoRecoil.Text = "No Recoil ( Crash )";
             chkNoRecoil.UseVisualStyleBackColor = true;
             chkNoRecoil.CheckedChanged += ChkNoRecoil_CheckedChanged;
             // 
@@ -560,9 +575,9 @@ namespace squad_dma
             chkNoCameraShake.AutoSize = true;
             chkNoCameraShake.Location = new Point(210, 170);
             chkNoCameraShake.Name = "chkNoCameraShake";
-            chkNoCameraShake.Size = new Size(120, 19);
+            chkNoCameraShake.Size = new Size(167, 19);
             chkNoCameraShake.TabIndex = 14;
-            chkNoCameraShake.Text = "No Camera Shake";
+            chkNoCameraShake.Text = "No Camera Shake ( Crash )";
             chkNoCameraShake.UseVisualStyleBackColor = true;
             chkNoCameraShake.CheckedChanged += ChkNoCameraShake_CheckedChanged;
             // 
@@ -571,7 +586,7 @@ namespace squad_dma
             chkInstantGrenade.AutoSize = true;
             chkInstantGrenade.Location = new Point(210, 195);
             chkInstantGrenade.Name = "chkInstantGrenade";
-            chkInstantGrenade.Size = new Size(120, 19);
+            chkInstantGrenade.Size = new Size(109, 19);
             chkInstantGrenade.TabIndex = 15;
             chkInstantGrenade.Text = "Instant Grenade";
             chkInstantGrenade.UseVisualStyleBackColor = true;
@@ -1221,6 +1236,7 @@ namespace squad_dma
         private TextBox txtSecondScopeMag;
         private Label lblThirdScopeMag;
         private TextBox txtThirdScopeMag;
+        private CheckBox chkHighAlert;
 
         private void BtnKeybindZoomIn_Click(object sender, EventArgs e)
         {

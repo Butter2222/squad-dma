@@ -22,6 +22,7 @@ namespace squad_dma.Source.Squad
         protected ulong _cachedSeatPawn = 0;
         protected ulong _cachedVehicleInventory = 0;
         protected ulong _cachedVehicleWeapon = 0;
+        protected ulong _cachedCameraManager = 0;
         protected DateTime _lastPointerUpdate = DateTime.MinValue;
         
         // Modules
@@ -127,6 +128,8 @@ namespace squad_dma.Source.Squad
                     }
                 }
                 
+                _cachedCameraManager = Memory.ReadPtr(_playerController + PlayerController.PlayerCameraManager);
+                
                 _lastPointerUpdate = DateTime.Now;
             }
             catch
@@ -142,6 +145,7 @@ namespace squad_dma.Source.Squad
                 _cachedSeatPawn = 0;
                 _cachedVehicleInventory = 0;
                 _cachedVehicleWeapon = 0;
+                _cachedCameraManager = 0;
             }
         }
         

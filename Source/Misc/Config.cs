@@ -1,6 +1,7 @@
-﻿using System.Text.Json.Serialization;
-using System.Text.Json;
+﻿using SkiaSharp;
 using squad_dma.Source.Misc;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 
 namespace squad_dma
@@ -41,6 +42,9 @@ namespace squad_dma
 
         [JsonPropertyName("showEnemyDistance")]
         public bool ShowEnemyDistance { get; set; } = true;
+
+        [JsonPropertyName("highAlert")]
+        public bool HighAlert { get; set; } = true;
         #endregion
 
         #region Zoom Settings
@@ -321,13 +325,14 @@ namespace squad_dma
         #region Public Methods
         public Config()
         {
+            HighAlert = true;
             ShowEnemyDistance = true;
             DefaultZoom = 100;
             EnemyCount = false;
             Font = 0;
             FontSize = 13;
             PaintColors = DefaultPaintColors;
-            PlayerAimLineLength = 1000;
+            PlayerAimLineLength = 1500;
             EspShowNames = false;
             UIScale = 100;
             VSync = false;

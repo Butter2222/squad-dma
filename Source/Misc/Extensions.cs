@@ -1,5 +1,6 @@
 ﻿using SkiaSharp;
 using System;
+using System.Numerics;
 
 namespace squad_dma
 {
@@ -61,7 +62,7 @@ namespace squad_dma
             };
         }
 
-        public static SKPaint GetEntityPaint(this UActor actor)
+        public static SKPaint GetActorPaint(this UActor actor)
         {
             SKColor color = actor.IsInMySquad() ? SKPaints.Squad
                           : actor.IsFriendly() ? SKPaints.Friendly
@@ -83,8 +84,8 @@ namespace squad_dma
             SKColor textColor = actor.ActorType switch
             {
                 ActorType.Player => actor.IsFriendly() ? SKColors.Blue : SKColors.Red,
-                ActorType.Projectile => SKColors.Magenta,
-                ActorType.ProjectileAA => SKColors.Cyan,
+                ActorType.Projectile => SKColors.Orange,
+                ActorType.ProjectileAA => SKColors.Orange,
                 _ => SKPaints.DefaultTextColor // Default
             };
 
@@ -102,43 +103,44 @@ namespace squad_dma
             return paint;
         }
 
-        /// <summary>
-        /// Gets projectile drawing paintbrush
-        /// </summary>
-        public static SKPaint GetProjectilePaint(this UActor actor)
+        public static bool IsLookingAtPlayer(this UActor actor, UActor targetPlayer, float maxAngle = 5f)
         {
-            if (projectilePaint != null)
+            if (actor?.Position == null || actor?.Rotation == null || targetPlayer?.Position == null || actor.IsFriendly()) 
+                return false;
+
+            try
             {
-                return projectilePaint;
+                float distance = Vector3.Distance(actor.Position, targetPlayer.Position);
+                
+                if (distance > 300 * 100)
+                    return false;
+
+                Vector3 directionToTarget = targetPlayer.Position - actor.Position;
+                directionToTarget = Vector3.Normalize(directionToTarget);
+
+                float radians = (float)actor.Rotation.X.ToRadians();
+                Vector3 forwardVector = new Vector3(
+                    (float)Math.Cos(radians),
+                    (float)Math.Sin(radians),
+                    0
+                );
+
+                float dotProduct = Vector3.Dot(directionToTarget, forwardVector);
+                float angle = (float)(Math.Acos(dotProduct) * (180.0 / Math.PI));
+
+                float angleThreshold = 31.3573f - 3.51726f * (float)Math.Log(Math.Abs(0.626957f - 15.6948f * distance));
+                if (angleThreshold < 1f)
+                    angleThreshold = 1f; 
+
+                float finalThreshold = Math.Min(angleThreshold, maxAngle);
+
+                return angle <= finalThreshold;
             }
-
-            SKPaint basePaint = SKPaints.PaintBase.Clone();
-            basePaint.Color = new SKColor(255, 0, 255);
-            projectilePaint = basePaint;
-            return basePaint;
-        }
-
-        /// <summary>
-        public static SKPaint GetTextOutlinePaint()
-        {
-            if (textOutlinePaint != null)
-                return textOutlinePaint;
-
-            // Create and cache the outline paint
-            textOutlinePaint = new SKPaint
+            catch
             {
-                Color = SKColors.Black, // Outline color
-                TextSize = SKPaints.TextBase.TextSize, // Match the text size
-                IsStroke = true,
-                StrokeWidth = 3, // Thicker outline for better visibility
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                Typeface = SKPaints.TextBase.Typeface // Use the same font
-            };
-
-            return textOutlinePaint;
+                return false;
+            }
         }
-
         #endregion
     }
 }

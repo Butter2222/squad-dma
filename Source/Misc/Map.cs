@@ -100,14 +100,13 @@ namespace squad_dma
         public void DrawPlayerMarker(SKCanvas canvas, UActor player, int aimlineLength, SKColor? color = null)
         {
             var radians = player.Rotation.X.ToRadians();
-            SKPaint paint = player.GetEntityPaint();
+            SKPaint paint = player.GetActorPaint();
 
             if (color.HasValue)
             {
                 paint.Color = color.Value;
             }
 
-            // Draw the outline for the player marker
             SKPaint outlinePaint = new SKPaint
             {
                 Color = SKColors.Black,
@@ -131,33 +130,25 @@ namespace squad_dma
             SKPoint center = this.GetPoint();
             string text = "AA";
 
-            using (var outlinePaint = new SKPaint
-            {
-                Color = SKColors.Black,
-                TextSize = size,
-                IsAntialias = true,
-                TextAlign = SKTextAlign.Center,
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = 2 * UIScale,
-                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
-            })
-            using (var textPaint = new SKPaint
-            {
-                Color = SKColors.Yellow,
-                TextSize = size,
-                IsAntialias = true,
-                TextAlign = SKTextAlign.Center,
-                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
-            })
-            {
-                SKRect textBounds = new SKRect();
-                textPaint.MeasureText(text, ref textBounds);
+            var outlinePaint = SKPaints.TextOutline.Clone();
+            var textPaint = SKPaints.ProjectileAA.Clone();
+            
+            textPaint.Color = projectile.GetTextPaint().Color;
 
-                float yOffset = textBounds.Height / 2 - textBounds.Bottom;
+            outlinePaint.TextSize = size;
+            textPaint.TextSize = size;
+            outlinePaint.TextAlign = SKTextAlign.Center;
+            textPaint.TextAlign = SKTextAlign.Center;
+            outlinePaint.Typeface = textPaint.Typeface;
 
-                canvas.DrawText(text, center.X, center.Y - yOffset, outlinePaint);
-                canvas.DrawText(text, center.X, center.Y - yOffset, textPaint);
-            }
+            SKRect textBounds = new SKRect();
+            textPaint.MeasureText(text, ref textBounds);
+
+            float x = center.X;
+            float y = center.Y - (textBounds.Height / 2) + (textBounds.Height / 2);
+
+            canvas.DrawText(text, x, y, outlinePaint);
+            canvas.DrawText(text, x, y, textPaint);
         }
 
         public void DrawProjectile(SKCanvas canvas, UActor projectile) // Normal Projectiles Like Mortars / CAS Rockets / etc
@@ -165,126 +156,68 @@ namespace squad_dma
             float size = 6 * UIScale;
             SKPoint center = this.GetPoint();
 
-            if (_projectileOutlinePaint == null)
-            {
-                _projectileOutlinePaint = new SKPaint
-                {
-                    Color = SKColors.Black,
-                    StrokeWidth = 4 * UIScale,
-                    IsAntialias = true,
-                    Style = SKPaintStyle.Stroke,
-                    StrokeCap = SKStrokeCap.Round,
-                    FilterQuality = SKFilterQuality.High
-                };
-            }
+            var outlinePaint = SKPaints.ProjectileOutline.Clone();
+            var fillPaint = SKPaints.ProjectileFill.Clone();
 
-            if (_projectileFillPaint == null)
-            {
-                _projectileFillPaint = new SKPaint
-                {
-                    Color = SKColors.Orange,
-                    StrokeWidth = 2 * UIScale,
-                    IsAntialias = true,
-                    Style = SKPaintStyle.Stroke,
-                    StrokeCap = SKStrokeCap.Round,
-                    FilterQuality = SKFilterQuality.High
-                };
-            }
+            fillPaint.Color = projectile.GetTextPaint().Color;
 
-            _projectileOutlinePaint.Color = SKColors.Black;
-            _projectileFillPaint.Color = SKColors.Orange;
+            outlinePaint.StrokeWidth = 4 * UIScale;
+            fillPaint.StrokeWidth = 2 * UIScale;
 
-            _projectileOutlinePaint.StrokeWidth = 4 * UIScale;
-            _projectileFillPaint.StrokeWidth = 2 * UIScale;
-
-            // Save canvas state
             canvas.Save();
 
-            // Draw horizontal line
-            canvas.DrawLine(center.X - size, center.Y, center.X + size, center.Y, _projectileOutlinePaint);
-            canvas.DrawLine(center.X - size, center.Y, center.X + size, center.Y, _projectileFillPaint);
+            canvas.DrawLine(center.X - size, center.Y, center.X + size, center.Y, outlinePaint);
+            canvas.DrawLine(center.X - size, center.Y, center.X + size, center.Y, fillPaint);
 
-            // Draw vertical line
-            canvas.DrawLine(center.X, center.Y - size, center.X, center.Y + size, _projectileOutlinePaint);
-            canvas.DrawLine(center.X, center.Y - size, center.X, center.Y + size, _projectileFillPaint);
+            canvas.DrawLine(center.X, center.Y - size, center.X, center.Y + size, outlinePaint);
+            canvas.DrawLine(center.X, center.Y - size, center.X, center.Y + size, fillPaint);
 
-            // Restore canvas state
             canvas.Restore();
         }
 
         public void DrawTechMarker(SKCanvas canvas, UActor actor)
         {
-            var scale = 0.2f; // Default scale for most icons
-
-            if (actor.ActorType == ActorType.Mine)
-            {
-                scale /= 1.5f; // Shrink
-            }
-            else if (actor.ActorType == ActorType.Drone)
-            {
-                scale *= 1.5f; // Enlarge
-            }
-
-            scale *= TechScale;
-
-            if (!Names.BitMaps.TryGetValue(actor.ActorType, out SKBitmap skBitMap))
-            {
+            if (!Names.BitMaps.TryGetValue(actor.ActorType, out SKBitmap icon))
                 return;
-            }
-            var icon = skBitMap;
 
-            var iconWidth = icon.Width * scale;
-            var iconHeight = icon.Height * scale;
-            var point = this.GetPoint();
-            var rotation = actor.Rotation.X + 90;
-            if (Names.DoNotRotate.Contains(actor.ActorType))
-            {
-                rotation = 0;
-            }
-            else if (Names.RotateBy45Degrees.Contains(actor.ActorType))
-            {
-                rotation -= 45;
-            }
-            SKMatrix matrix = SKMatrix.CreateTranslation(point.X, point.Y);
+            float scale = 0.2f * TechScale;
+            if (actor.ActorType == ActorType.Mine)
+                scale /= 1.5f;
+            else if (actor.ActorType == ActorType.Drone)
+                scale *= 1.5f;
+
+            float iconWidth = icon.Width * scale;
+            float iconHeight = icon.Height * scale;
+            SKPoint center = this.GetPoint();
+
+            float rotation = Names.DoNotRotate.Contains(actor.ActorType) ? 0 
+                           : Names.RotateBy45Degrees.Contains(actor.ActorType) ? actor.Rotation.X + 45 
+                           : actor.Rotation.X + 90;
+
+            SKMatrix matrix = SKMatrix.CreateTranslation(center.X, center.Y);
             matrix = SKMatrix.Concat(matrix, SKMatrix.CreateRotationDegrees(rotation));
             matrix = SKMatrix.Concat(matrix, SKMatrix.CreateTranslation(-iconWidth / 2, -iconHeight / 2));
 
-            SKPaint paint;
+            SKPaint paint = new SKPaint
+            {
+                IsAntialias = true,
+                FilterQuality = SKFilterQuality.High
+            };
+
             if (Names.Vehicles.Contains(actor.ActorType) || Names.Deployables.Contains(actor.ActorType))
             {
-                SKColor teamColor;
                 if (actor.IsFriendly())
                 {
-                    teamColor = SKPaints.Friendly;
+                    paint.ColorFilter = SKColorFilter.CreateBlendMode(SKPaints.Friendly, SKBlendMode.Modulate);
                 }
                 else
                 {
-                    paint = new SKPaint
-                    {
-                        IsAntialias = true,
-                        FilterQuality = SKFilterQuality.High
-                    };
                     canvas.Save();
                     canvas.SetMatrix(matrix);
                     canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), paint);
                     canvas.Restore();
                     return;
                 }
-
-                paint = new SKPaint
-                {
-                    IsAntialias = true,
-                    FilterQuality = SKFilterQuality.High,
-                    ColorFilter = SKColorFilter.CreateBlendMode(teamColor, SKBlendMode.Modulate)
-                };
-            }
-            else
-            {
-                paint = new SKPaint
-                {
-                    IsAntialias = true,
-                    FilterQuality = SKFilterQuality.High
-                };
             }
 
             canvas.Save();
@@ -298,14 +231,19 @@ namespace squad_dma
             if (lines == null || lines.Length == 0)
                 return;
 
-            SKPaint textPaint = actor.GetTextPaint();
-            SKPaint outlinePaint = Extensions.GetTextOutlinePaint();
+            SKPaint textPaint = SKPaints.TextBase.Clone();
+            textPaint.Color = actor.GetTextPaint().Color;
+            textPaint.TextSize = 12 * UIScale * 1.3f;
+
+            SKPaint outlinePaint = SKPaints.TextOutline.Clone();
+            outlinePaint.TextSize = 12 * UIScale * 1.3f;
+            outlinePaint.StrokeWidth = 2 * UIScale;
+
             SKPoint iconPosition = this.GetPoint(0, 0);
-
-            float horizontalOffset = 15 * UIScale; // Adjust this value for horizontal separation
-            float verticalOffset = 5 * UIScale;   // Adjust this value for vertical separation
-
-            SKPoint textPosition = new SKPoint(iconPosition.X + horizontalOffset, iconPosition.Y + verticalOffset);
+            SKPoint textPosition = new SKPoint(
+                iconPosition.X + (15 * UIScale),
+                iconPosition.Y + (5 * UIScale)
+            );
 
             foreach (var line in lines)
             {
@@ -314,29 +252,8 @@ namespace squad_dma
 
                 canvas.DrawText(line, textPosition, outlinePaint);
                 canvas.DrawText(line, textPosition, textPaint);
-
-                textPosition.Y += 12 * UIScale;
+                textPosition.Y += 12 * UIScale * 1.3f;
             }
-        }
-
-        public void DrawToolTip(SKCanvas canvas, UActor actor)
-        {
-            if (!actor.IsAlive)
-            {
-                //DrawCorpseTooltip(canvas, player);
-                return;
-            }
-
-            DrawHostileTooltip(canvas, actor);
-        }
-
-        private void DrawHostileTooltip(SKCanvas canvas, UActor actor)
-        {
-            var lines = new List<string>();
-
-            lines.Insert(0, actor.Name);
-
-            DrawToolTip(canvas, string.Join("\n", lines));
         }
 
         private void DrawToolTip(SKCanvas canvas, string tooltipText)
@@ -375,13 +292,11 @@ namespace squad_dma
         {
             if (!actor.IsAlive)
             {
-                //DrawCorpseTooltip(canvas, player);
                 return;
             }
 
             var lines = new List<string>();
 
-            // Add the player name and distance to the tooltip
             lines.Insert(0, actor.Name);
             lines.Insert(1, $"Distance: {distanceText}");
 

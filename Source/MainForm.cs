@@ -704,27 +704,32 @@ namespace squad_dma
             _uiScale = (.01f * _config.UIScale);
 
             #region Update Paints/Text
-            SKPaints.TextBaseOutline.StrokeWidth = 2 * _uiScale;
+            SKPaints.TextOutline.StrokeWidth = 2 * _uiScale;
             SKPaints.TextRadarStatus.TextSize = 48 * _uiScale;
             SKPaints.PaintBase.StrokeWidth = 3 * _uiScale;
             SKPaints.PaintTransparentBacker.StrokeWidth = 1 * _uiScale;
             #endregion
 
             InitiateFontSize();
+            
+            if (_mapCanvas != null)
+            {
+                _mapCanvas.Invalidate();
+            }
         }
 
         private void InitiateFont()
         {
             var fontToUse = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
             SKPaints.TextBase.Typeface = fontToUse;
-            SKPaints.TextBaseOutline.Typeface = fontToUse;
+            SKPaints.TextOutline.Typeface = fontToUse;
             SKPaints.TextRadarStatus.Typeface = fontToUse;
         }
 
         private void InitiateFontSize()
         {
             SKPaints.TextBase.TextSize = _config.FontSize * _uiScale;
-            SKPaints.TextBaseOutline.TextSize = _config.FontSize * _uiScale;
+            SKPaints.TextOutline.TextSize = _config.FontSize * _uiScale;
         }
 
         private DialogResult ShowErrorDialog(string message)
@@ -758,6 +763,9 @@ namespace squad_dma
             #region UI Config
             chkShowEnemyDistance.Checked = _config.ShowEnemyDistance;
             chkShowEnemyDistance.CheckedChanged += ChkShowEnemyDistance_CheckedChanged;
+            chkHighAlert.Checked = _config.HighAlert;
+            chkHighAlert.CheckedChanged += chkHighAlert_CheckedChanged;
+
             trkAimLength.Value = _config.PlayerAimLineLength;
             trkUIScale.Value = _config.UIScale;
             #endregion
@@ -1207,11 +1215,11 @@ namespace squad_dma
             return new MapParameters
             {
                 UIScale = _uiScale,
-                TechScale = (.01f * _config.TechMarkerScale),
+                TechScale = localPlayerPos.TechScale,
                 MapLayerIndex = mapLayerIndex,
                 Bounds = bounds,
-                XScale = (float)_mapCanvas.Width / bounds.Width, // Set scale for this frame
-                YScale = (float)_mapCanvas.Height / bounds.Height // Set scale for this frame
+                XScale = (float)_mapCanvas.Width / bounds.Width,
+                YScale = (float)_mapCanvas.Height / bounds.Height
             };
         }
 
@@ -1222,11 +1230,12 @@ namespace squad_dma
             {
                 var localPlayerPos = localPlayer.Position + AbsoluteLocation;
                 var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
+                localPlayerMapPos.TechScale = (.01f * _config.TechMarkerScale); // Set tech scale for map position
 
                 if (_isFreeMapToggled)
                 {
                     _mapPanPosition.Height = localPlayerMapPos.Height;
-                    _mapPanPosition.TechScale = (.01f * _config.TechMarkerScale);
+                    _mapPanPosition.TechScale = localPlayerMapPos.TechScale;
                     return GetMapParameters(_mapPanPosition);
                 }
                 else
@@ -1234,7 +1243,7 @@ namespace squad_dma
                     _mapPanPosition.X = localPlayerMapPos.X;
                     _mapPanPosition.Y = localPlayerMapPos.Y;
                     _mapPanPosition.Height = localPlayerMapPos.Height;
-                    _mapPanPosition.TechScale = (.01f * _config.TechMarkerScale);
+                    _mapPanPosition.TechScale = localPlayerMapPos.TechScale;
                     return GetMapParameters(localPlayerMapPos);
                 }
             }
@@ -1359,7 +1368,11 @@ namespace squad_dma
 
                 if (actor.ActorType == ActorType.Player)
                 {
-                    var color = actor.IsInMySquad() ? SKPaints.Squad : actor.GetEntityPaint().Color;
+                    var color = actor.IsInMySquad() ? SKPaints.Squad : actor.GetActorPaint().Color;
+                    
+                    if (actor != LocalPlayer && _config.HighAlert && this.InGame && actor.IsLookingAtPlayer(LocalPlayer))
+                        aimlineLength = 9999;
+                    
                     actorZoomedPos.DrawPlayerMarker(canvas, actor, aimlineLength, color);
 
                     if (!actor.IsFriendly() && _config.ShowEnemyDistance)
@@ -1547,11 +1560,15 @@ namespace squad_dma
                 $"{distanceMeters}m"
             };
 
-            SKPaint textPaint = SKPaints.TextBase;
-            SKPaint outlinePaint = SKPaints.TextBaseOutline;
+            SKPaint textPaint = SKPaints.TextBase.Clone();
+            textPaint.TextSize = 12 * _uiScale * 1.2f;
+
+            SKPaint outlinePaint = SKPaints.TextOutline.Clone();
+            outlinePaint.TextSize = 12 * _uiScale * 1.2f;
+            outlinePaint.StrokeWidth = 2 * _uiScale;
 
             var basePosition = position.GetPoint(crosshairSize + 6 * _uiScale, 0);
-            float verticalSpacing = 12 * _uiScale;
+            float verticalSpacing = 12 * _uiScale * 1.2f;
 
             foreach (var line in lines)
             {
@@ -1885,23 +1902,24 @@ namespace squad_dma
             Config.SaveConfig(_config);
         }
 
+        private void chkHighAlert_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.HighAlert = chkHighAlert.Checked;
+            Config.SaveConfig(_config);
+        }
+
         private void trkUIScale_Scroll(object sender, EventArgs e)
         {
             _config.UIScale = trkUIScale.Value;
-            _uiScale = .01f * trkUIScale.Value;
-
             InitiateUIScaling();
+            _mapCanvas.Invalidate();
+            Config.SaveConfig(_config);
         }
 
         private void trkTechMarkerScale_Scroll(object sender, EventArgs e)
         {
             _config.TechMarkerScale = trkTechMarkerScale.Value;
-            
-            if (_isFreeMapToggled)
-            {
-                _mapPanPosition.TechScale = .01f * _config.TechMarkerScale;
-            }
-            
+            InitiateUIScaling();
             _mapCanvas.Invalidate();
             Config.SaveConfig(_config);
         }
