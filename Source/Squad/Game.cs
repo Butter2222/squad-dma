@@ -92,6 +92,7 @@ namespace squad_dma
         public void VehicleTeam() => _debugVehicles?.VehicleTeam();
         public void LogTeamInfo() => _debugTeam?.LogTeamInfo();
         public void ReadCurrentWeapons(bool includeOtherPlayers = false) => _debugSoldier?.ReadCurrentWeapons(includeOtherPlayers);
+        public void ListVehicles() => _debugVehicles?.ListVehicles();
         public void WaitForGame()
         {
             while (true)

@@ -645,6 +645,9 @@ namespace squad_dma {
             {"BP_TAPV_Child_Finland_C", ActorType.JeepRWSTurret},
             {"BP_PLF_MATV_Mk19_Woodland_C", ActorType.JeepArtillery},
             {"BP_PLF_MATV_Woodland_C", ActorType.JeepTurret},
+            {"BP_Ural_4320_logi_Desert_GE_C", ActorType.TruckLogistics},
+            {"BP_M1151_TOW_IRAQ_C", ActorType.JeepAntitank},
+            {"BP_M1151_IRAQ_C", ActorType.JeepTurret},
 
             {"BP_BMP2M_Child_GE_C", ActorType.TrackedIFV},
             {"BP_BMP2M_Child_GE_WAGNER_C", ActorType.TrackedIFV},
@@ -655,6 +658,7 @@ namespace squad_dma {
             {"BP_NAMER_IFV_C", ActorType.TrackedAPC},
             {"BP_APC_EITAN_M2_C", ActorType.APC},
             {"BP_BFV_Black_C", ActorType.TrackedIFV},
+            {"BP_BMP1_IRAQ_C", ActorType.TrackedIFV},
 
             {"BP_M113A3_CIWS-AA_Cage_GE_Woodland_C", ActorType.AntiAir},
             {"BP_M113A3_CIWS-AA_Desert_Cage_GE_C", ActorType.AntiAir},
@@ -694,6 +698,7 @@ namespace squad_dma {
             {"BP_T72B3_Green_GE_WAGNER_C", ActorType.Tank},
             {"BP_MERKAVA_4_C", ActorType.Tank},
             {"BP_2A6_Woodland_Child_Finland_C", ActorType.Tank},
+            {"BP_T72B3_Green_GE_KONNI_C", ActorType.Tank},
 
             {"GE_RGF_Hab_C", ActorType.Hab},
             {"GE_NATO_Hab_C", ActorType.Hab},
@@ -799,7 +804,8 @@ namespace squad_dma {
             {"SD_BP_CSK131_Strela_Desert_C", ActorType.JeepTurret},
             {"SD_BP_CTM131_Logistic_Desert_C", ActorType.TruckLogistics},
             {"SD_BP_CTM131_QJZ89_Desert_Propaganda_C", ActorType.TruckTransportArmed},
-
+            {"SD_BP_CTM131_QJZ89_Propaganda_C", ActorType.TruckTransportArmed},
+            {"SD_BP_Technical_Kornet_PMC_Desert_C", ActorType.JeepAntitank},
 
             {"SD_BP_minsk_Child_C", ActorType.Motorcycle},
 
@@ -908,9 +914,17 @@ namespace squad_dma {
             {"BP_HIMARS_Rocket_Proj2_C", ActorType.Projectile},
             {"BP_Projectile_155_29th_C", ActorType.Projectile},
             {"BP_BM21_Rocket_Napalm_C", ActorType.Projectile},
+            {"BP_Projectile_155_29th_Smoke_C", ActorType.Projectile},
+
             {"BP_Projectile_GuidedAA_Stinger_C", ActorType.ProjectileAA},
             {"BP_Projectile_GuidedAA_Strela_C", ActorType.ProjectileAA},
             {"BP_Projectile_GuidedAA_Parent_C", ActorType.ProjectileAA},
+
+            {"BP_Hydra70_Proj2_C", ActorType.ProjectileSmall},
+            {"BP_RPG7_Heat_Proj2_C", ActorType.ProjectileSmall},
+            {"BP_RPG7_Frag_Proj2_C", ActorType.ProjectileSmall},
+            {"BP_40MM_VOG_Proj2_C", ActorType.ProjectileSmall},
+            {"BP_RPG28_Tandem_Proj_C", ActorType.ProjectileSmall},
 
             {"BP_FlyingDrone_THWK_C", ActorType.Drone}, // Russia
             {"BP_FlyingDrone_SOF_C", ActorType.Drone}, // Ukraine

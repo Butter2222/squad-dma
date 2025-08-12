@@ -86,6 +86,7 @@ namespace squad_dma
                 ActorType.Player => actor.IsFriendly() ? SKColors.Blue : SKColors.Red,
                 ActorType.Projectile => SKColors.Orange,
                 ActorType.ProjectileAA => SKColors.Orange,
+                ActorType.ProjectileSmall => SKPaints.SmallProjectile,
                 _ => SKPaints.DefaultTextColor // Default
             };
 

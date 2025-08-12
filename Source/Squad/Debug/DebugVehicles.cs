@@ -1,5 +1,8 @@
 namespace squad_dma.Source.Squad.Debug
 {
+    using squad_dma.Source.Misc;
+    using squad_dma;
+
     public class DebugVehicles
     {
         private readonly ulong _playerController;
@@ -127,6 +130,124 @@ namespace squad_dma.Source.Squad.Debug
             catch (Exception ex)
             {
                 Program.Log($"Error in VehicleTeam: {ex.Message}");
+            }
+        }
+
+        public void ListVehicles()
+        {
+            if (!_inGame || _playerController == 0) return;
+
+            try
+            {
+                ulong playerState = Memory.ReadPtr(_playerController + Offsets.Controller.PlayerState);
+                if (playerState == 0)
+                {
+                    Program.Log("Failed to get player state");
+                    return;
+                }
+
+                int localTeamId = Memory.ReadValue<int>(playerState + PlayerStateTeamIdOffset);
+                
+                var vehiclesByTeam = new Dictionary<int, List<(string name, ActorType type)>>();
+                var unclaimedVehicles = new List<(string name, ActorType type)>();
+                var totalVehiclesFound = 0;
+                
+                var processedActors = new HashSet<string>(); // Track actors we've already categorized
+
+                foreach (var actor in _actors.Actors)
+                {
+                    try
+                    {
+                        var actorName = actor.Value.Name;
+                        var actorBase = actor.Value.Base;
+
+                        if (actorName.Contains("BP_Soldier"))
+                            continue;
+
+                        if (Names.TechNames.TryGetValue(actorName, out var actorType) && 
+                            squad_dma.Names.Vehicles.Contains(actorType))
+                        {
+                            totalVehiclesFound++;
+                            processedActors.Add(actorName); // Mark as processed
+                            
+                            int teamId = -1;
+                            ulong claimedBySquad = Memory.ReadPtr(actorBase + VehicleClaimedBySquadOffset);
+                            if (claimedBySquad != 0)
+                            {
+                                teamId = Memory.ReadValue<int>(claimedBySquad + SquadStateTeamIdOffset);
+                            }
+
+                            if (teamId == -1)
+                            {
+                                unclaimedVehicles.Add((actorName, actorType));
+                            }
+                            else
+                            {
+                                if (!vehiclesByTeam.ContainsKey(teamId))
+                                {
+                                    vehiclesByTeam[teamId] = new List<(string name, ActorType type)>();
+                                }
+                                vehiclesByTeam[teamId].Add((actorName, actorType));
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Log($"Error processing vehicle {actor.Value.Name}: {ex.Message}");
+                    }
+                }
+
+                // Collect all remaining actors that weren't categorized as known vehicles
+                var remainingActors = new List<string>();
+                foreach (var actor in _actors.Actors)
+                {
+                    var actorName = actor.Value.Name;
+                    if (!actorName.Contains("BP_Soldier") && 
+                        !actorName.Contains("BP_PlayerStart") && 
+                        !Names.TechNames.ContainsKey(actorName))  // Only include actors that aren't in our TechNames dictionary
+                    {
+                        remainingActors.Add(actorName);
+                    }
+                }
+
+                Program.Log("\n=== Vehicle Information ===");
+                Program.Log($"Local Team ID: {localTeamId}");
+                Program.Log($"Total Vehicles Found: {totalVehiclesFound}\n");
+
+                foreach (var team in vehiclesByTeam.OrderBy(t => t.Key))
+                {
+                    Program.Log($"Team {team.Key} ({team.Value.Count}):");
+                    foreach (var vehicle in team.Value)
+                    {
+                        Program.Log($"  {vehicle.name} ({vehicle.type})");
+                    }
+                    Program.Log("");
+                }
+
+                if (unclaimedVehicles.Any())
+                {
+                    Program.Log($"Unclaimed Vehicles ({unclaimedVehicles.Count}):");
+                    foreach (var vehicle in unclaimedVehicles)
+                    {
+                        Program.Log($"  {vehicle.name} ({vehicle.type})");
+                    }
+                    Program.Log("");
+                }
+
+                // Export all remaining actors
+                if (remainingActors.Any())
+                {
+                    Program.Log($"Remaining Actors ({remainingActors.Count}):");
+                    foreach (var actor in remainingActors.OrderBy(a => a))
+                    {
+                        Program.Log($"  {actor}");
+                    }
+                    Program.Log("");
+                }
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"Error in ListVehiclesInfo: {ex.Message}");
             }
         }
     }

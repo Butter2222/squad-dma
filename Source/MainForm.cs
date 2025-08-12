@@ -473,6 +473,12 @@ namespace squad_dma
             {
                 var mousePos = _mapCanvas.PointToClient(Cursor.Position);
                 var mapParams = GetMapLocation();
+                
+                if (mapParams == null)
+                {
+                    return; 
+                }
+                
                 var mapMousePos = new SKPoint(
                     mapParams.Bounds.Left + mousePos.X / mapParams.XScale,
                     mapParams.Bounds.Top + mousePos.Y / mapParams.YScale
@@ -543,11 +549,18 @@ namespace squad_dma
             if (InGame && _pointsOfInterest.Count > 0)
             {
                 var mapParams = GetMapLocation();
+                
+                if (mapParams == null)
+                {
+                    return; 
+                }
+                
                 var mousePos = new SKPoint(e.X, e.Y);
 
                 _hoveredPoi = _pointsOfInterest.FirstOrDefault(poi =>
                 {
-                    var poiPos = poi.Position.ToMapPos(_selectedMap).ToZoomedPos(mapParams).GetPoint();
+                    var poiRenderPos = poi.Position + AbsoluteLocation;
+                    var poiPos = poiRenderPos.ToMapPos(_selectedMap).ToZoomedPos(mapParams).GetPoint();
                     return SKPoint.Distance(mousePos, poiPos) < 20 * _uiScale;
                 });
             }
@@ -574,15 +587,26 @@ namespace squad_dma
         {
             if (e.Button == MouseButtons.Left && this.InGame && this.LocalPlayer is not null)
             {
+                if (_selectedMap == null || _loadedBitmaps == null || _loadedBitmaps.Length == 0)
+                {
+                    return;
+                }
+
                 var mapParams = GetMapLocation();
+                
+                if (mapParams == null)
+                {
+                    return; 
+                }
+                
                 var mouseX = e.X / mapParams.XScale + mapParams.Bounds.Left;
                 var mouseY = e.Y / mapParams.YScale + mapParams.Bounds.Top;
 
                 var worldX = (mouseX - _selectedMap.ConfigFile.X) / _selectedMap.ConfigFile.Scale;
                 var worldY = (mouseY - _selectedMap.ConfigFile.Y) / _selectedMap.ConfigFile.Scale;
-                var worldZ = this.LocalPlayer.Position.Z;
+                var worldZ = (this.LocalPlayer.Position + AbsoluteLocation).Z;
 
-                var poiPosition = new Vector3(worldX, worldY, worldZ);
+                var poiPosition = new Vector3(worldX, worldY, worldZ) - AbsoluteLocation;
 
                 AddPointOfInterest(poiPosition, "POI");
 
@@ -682,7 +706,7 @@ namespace squad_dma
         #region GUI Events / Functions
         #region General Helper Functions
         private bool ToggleMap()
-        {
+        { /*
             if (!btnToggleMap.Enabled)
                 return false;
 
@@ -695,9 +719,9 @@ namespace squad_dma
             _mapChangeTimer.Restart(); // Start delay
             ClearPointsOfInterest();
             Logger.Info("Toggled Map");
-
-            return true;
-        }
+            */
+            return true; 
+        } 
 
         private void InitiateUIScaling()
         {
@@ -1198,7 +1222,17 @@ namespace squad_dma
 
         private MapParameters GetMapParameters(MapPosition localPlayerPos)
         {
+            if (_loadedBitmaps == null || _loadedBitmaps.Length == 0)
+            {
+                return null; 
+            }
+
             int mapLayerIndex = GetMapLayerIndex(localPlayerPos.Height);
+            
+            if (mapLayerIndex >= _loadedBitmaps.Length || _loadedBitmaps[mapLayerIndex] == null)
+            {
+                return null;
+            }
 
             var bitmap = _loadedBitmaps[mapLayerIndex];
             float zoomFactor = 0.01f * _config.DefaultZoom;
@@ -1266,6 +1300,12 @@ namespace squad_dma
             }
 
             var mapParams = GetMapLocation();
+            
+            if (mapParams == null)
+            {
+                return; 
+            }
+            
             var mapCanvasBounds = new SKRect
             {
                 Left = _mapCanvas.Left,
@@ -1297,13 +1337,19 @@ namespace squad_dma
             var localPlayerPos = LocalPlayer.Position + AbsoluteLocation;
             var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
             var mapParams = GetMapLocation();
+            
+            if (mapParams == null)
+            {
+                return;
+            }
+            
             var localPlayerZoomedPos = localPlayerMapPos.ToZoomedPos(mapParams);
 
             localPlayerZoomedPos.DrawPlayerMarker(canvas, LocalPlayer, trkAimLength.Value);
 
             foreach (var actor in allPlayers)
             {
-                if (actor.ActorType == ActorType.Projectile || actor.ActorType == ActorType.ProjectileAA)
+                if (actor.ActorType == ActorType.Projectile || actor.ActorType == ActorType.ProjectileAA || actor.ActorType == ActorType.ProjectileSmall)
                     continue;
 
                 var actorPos = actor.Position + AbsoluteLocation;
@@ -1326,7 +1372,7 @@ namespace squad_dma
 
             foreach (var actor in allPlayers)
             {
-                if (actor.ActorType != ActorType.Projectile)
+                if (actor.ActorType != ActorType.Projectile && actor.ActorType != ActorType.ProjectileSmall)
                     continue;
 
                 var actorPos = actor.Position + AbsoluteLocation;
@@ -1389,6 +1435,10 @@ namespace squad_dma
                 {
                     actorZoomedPos.DrawProjectile(canvas, actor);
                 }
+                else if (actor.ActorType == ActorType.ProjectileSmall)
+                {
+                    actorZoomedPos.DrawProjectile(canvas, actor);
+                }
                 else if (actor.ActorType == ActorType.ProjectileAA)
                 {
                     actorZoomedPos.DrawProjectileAA(canvas, actor);
@@ -1419,7 +1469,7 @@ namespace squad_dma
 
         private void DrawAdmin(SKCanvas canvas, UActor admin, MapPosition position)
         {
-            int adminAimlineLength = 40;
+            int adminAimlineLength = 9999;
 
             position.DrawPlayerMarker(canvas, admin, adminAimlineLength, SKPaints.DefaultTextColor);
 
@@ -1510,7 +1560,13 @@ namespace squad_dma
             if (!IsReadyToRender()) return;
 
             var mapParams = GetMapLocation();
-            var localPlayerPos = LocalPlayer.Position + AbsoluteLocation;
+            
+            if (mapParams == null)
+            {
+                return;
+            }
+            
+            var localPlayerPos = LocalPlayer.Position; 
 
             using var crosshairPaint = new SKPaint
             {
@@ -1522,10 +1578,11 @@ namespace squad_dma
 
             foreach (var poi in _pointsOfInterest)
             {
-                var poiMapPos = poi.Position.ToMapPos(_selectedMap);
+                var poiRenderPos = poi.Position + AbsoluteLocation;
+                var poiMapPos = poiRenderPos.ToMapPos(_selectedMap);
                 var poiZoomedPos = poiMapPos.ToZoomedPos(mapParams);
 
-                var distance = Vector3.Distance(localPlayerPos, poi.Position);
+                var distance = Vector3.Distance(localPlayerPos, poi.Position); 
                 int distanceMeters = (int)Math.Round(distance / 100);
                 double milliradians = MetersToMilliradians(distanceMeters);
 
@@ -1615,6 +1672,11 @@ namespace squad_dma
         {
             var localPlayer = this.LocalPlayer;
             var mapParams = GetMapLocation();
+
+            if (mapParams == null)
+            {
+                return; 
+            }
 
             if (localPlayer is not null)
             {
@@ -1814,13 +1876,26 @@ namespace squad_dma
         {
             if (e.Button == MouseButtons.Left && InGame)
             {
+                if (_selectedMap == null || _loadedBitmaps == null || _loadedBitmaps.Length == 0)
+                {
+                    return;
+                }
+
                 var mapParams = GetMapLocation();
+                
+                if (mapParams == null)
+                {
+                    return; 
+                }
+                
                 var mouseX = (e.X / mapParams.XScale) + mapParams.Bounds.Left;
                 var mouseY = (e.Y / mapParams.YScale) + mapParams.Bounds.Top;
 
                 var worldX = (mouseX - _selectedMap.ConfigFile.X) / _selectedMap.ConfigFile.Scale;
                 var worldY = (mouseY - _selectedMap.ConfigFile.Y) / _selectedMap.ConfigFile.Scale;
-                var worldPos = new Vector3(worldX, worldY, LocalPlayer.Position.Z);
+                var worldZ = (LocalPlayer.Position + AbsoluteLocation).Z;
+
+                var worldPos = new Vector3(worldX, worldY, worldZ) - AbsoluteLocation;
 
                 _pointsOfInterest.Add(new PointOfInterest(worldPos, "POI"));
                 _mapCanvas.Invalidate();
@@ -1892,6 +1967,13 @@ namespace squad_dma
             if (!InGame) return;
 
             Memory._game.LogVehicles(force: true);
+        }
+
+        private void btnListVehicles_Click(object sender, EventArgs e)
+        {
+            if (!InGame) return;
+
+            Memory._game.ListVehicles();
         }
 
         private void ChkShowEnemyDistance_CheckedChanged(object sender, EventArgs e)

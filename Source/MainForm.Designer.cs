@@ -39,6 +39,7 @@ namespace squad_dma
             trkUIScale = new TrackBar();
             trkAimLength = new TrackBar();
             trkTechMarkerScale = new TrackBar();
+            btnListVehicles = new Button();
             chkShowMapSetup = new CheckBox();
             btnToggleMap = new Button();
             btnRestartRadar = new Button();
@@ -217,16 +218,28 @@ namespace squad_dma
             trkTechMarkerScale.Value = 100;
             trkTechMarkerScale.Scroll += trkTechMarkerScale_Scroll;
             // 
+            // btnListVehicles
+            // 
+            btnListVehicles.Font = new Font("Segoe UI", 9F);
+            btnListVehicles.Location = new Point(15, 30);
+            btnListVehicles.Name = "btnListVehicles";
+            btnListVehicles.Size = new Size(100, 25);
+            btnListVehicles.TabIndex = 19;
+            btnListVehicles.Text = "List Vehicles";
+            toolTip.SetToolTip(btnListVehicles, "Display information about all vehicles in the game");
+            btnListVehicles.UseVisualStyleBackColor = true;
+            btnListVehicles.Click += btnListVehicles_Click;
+            // 
             // chkShowMapSetup
             // 
             chkShowMapSetup.AutoSize = true;
             chkShowMapSetup.Font = new Font("Segoe UI", 9F);
-            chkShowMapSetup.Location = new Point(15, 30);
+            chkShowMapSetup.Location = new Point(125, 34);
             chkShowMapSetup.Name = "chkShowMapSetup";
             chkShowMapSetup.Size = new Size(115, 19);
-            chkShowMapSetup.TabIndex = 1;
+            chkShowMapSetup.TabIndex = 20;
             chkShowMapSetup.Text = "Show Map Setup";
-            toolTip.SetToolTip(chkShowMapSetup, "Show/hide the map setup panel");
+            toolTip.SetToolTip(chkShowMapSetup, "Show map setup controls");
             chkShowMapSetup.UseVisualStyleBackColor = true;
             chkShowMapSetup.CheckedChanged += chkShowMapSetup_CheckedChanged;
             // 
@@ -391,6 +404,7 @@ namespace squad_dma
             grpRadar.Controls.Add(chkShowMapSetup);
             grpRadar.Controls.Add(btnToggleMap);
             grpRadar.Controls.Add(btnDumpNames);
+            grpRadar.Controls.Add(btnListVehicles);
             grpRadar.Location = new Point(8, 265);
             grpRadar.Name = "grpRadar";
             grpRadar.Padding = new Padding(15);
@@ -1237,6 +1251,7 @@ namespace squad_dma
         private Label lblThirdScopeMag;
         private TextBox txtThirdScopeMag;
         private CheckBox chkHighAlert;
+        private Button btnListVehicles;
 
         private void BtnKeybindZoomIn_Click(object sender, EventArgs e)
         {
