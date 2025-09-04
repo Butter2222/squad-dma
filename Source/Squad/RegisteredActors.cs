@@ -32,7 +32,8 @@ namespace squad_dma
                 {
                     try
                     {
-                        var count = Memory.ReadValue<int>(_persistentLevel + Offsets.Level.MaxPacket);
+                        var actorsTArray = _persistentLevel + Offsets.Level.Actors;
+                        var count = Memory.ReadValue<int>(actorsTArray + 0x8);
 
                         if (count < 1)
                         {

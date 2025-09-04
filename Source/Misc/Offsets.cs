@@ -2,43 +2,42 @@
 {
     public struct GameObjects
     {
-        public const uint GObjects = 0xa41d120;
-        public const uint GNames = 0xa376640;
-        public const uint GWorld = 0xa596938;
+        public const uint GObjects = 0xC7FEAE0;
+        public const uint GNames = 0xC71AB80;
+        public const uint GWorld = 0xC987EE8;
     }
 
     public struct World
     {
         public const uint PersistentLevel = 0x30;
-        public const uint AuthorityGameMode = 0x150;
-        public const uint GameState = 0x158;
-        public const uint Levels = 0x170;
-        public const uint OwningGameInstance = 0x1B8;
+        public const uint AuthorityGameMode = 0x158;
+        public const uint GameState = 0x160;
+        public const uint Levels = 0x178;
+        public const uint OwningGameInstance = 0x1E0;
         public const uint WorldOrigin = 0x5B8; // 0x5B8 or 0x5C4
     }
 
     public struct GameInstance
     {
         public const uint LocalPlayers = 0x38;
-        public const uint CurrentLayer = 0x618;
+        public const uint CurrentLayer = 0x628;
     }
 
     public struct SQLayer {
-        public const uint LevelID = 0x70;
+        public const uint LevelID = 0x68;
     }
 
-    public struct Level // UNetConnection
+    public struct Level // ULevel
     {
-        public const uint Actors = 0x98; // OwningActor
-        public const uint MaxPacket = 0xA0;
+        public const uint Actors = 0xA0; // TArray<AActor*>
     }
 
     public struct Actor
     {
-        public const uint Instigator = 0x190;
-        public const uint RootComponent = 0x1A8;
+        public const uint Instigator = 0x1A8;
+        public const uint RootComponent = 0x1C0;
         public const uint ID = 0x18; // Object ID
-        public const uint CustomTimeDilation = 0x64; // float
+        public const uint CustomTimeDilation = 0x68; // float
         public const uint bReplicateMovement = 0x58; // uint8
         public const uint bHidden = 0x58; // uint8
         public const uint bActorEnableCollision = 0x5c; // uint8
@@ -53,12 +52,12 @@
 
     public struct UPrimitiveComponent
     {
-        public const uint BodyInstance = 0x3B0; // FBodyInstance
+        public const uint BodyInstance = 0x358; // FBodyInstance
     }
 
     public struct FBodyInstance
     {
-        public const uint CollisionEnabled = 0x20; // uint8
+        public const uint CollisionEnabled = 0x17; // uint8
     }
 
     public struct UPlayer
@@ -73,22 +72,22 @@
 
     public struct Pawn
     {
-        public const uint PlayerState = 0x2C0;
-        public const uint Controller = 0x2D8;
+        public const uint PlayerState = 0x2D0;
+        public const uint Controller = 0x2E0;
     }
 
     public struct Controller
     {
-        public const uint PlayerState = 0x2A8;
-        public const uint Pawn = 0x2F0;
-        public const uint Character = 0x300;
+        public const uint PlayerState = 0x2B8;
+        public const uint Pawn = 0x300;
+        public const uint Character = 0x310;
     }
 
     public struct PlayerController
     {
-        public const uint Player = 0x358;
-        public const uint AcknowledgedPawn = 0x360;
-        public const uint PlayerCameraManager = 0x370;
+        public const uint Player = 0x368;
+        public const uint AcknowledgedPawn = 0x370;
+        public const uint PlayerCameraManager = 0x380;
     }
 
     public struct SQPlayerController
@@ -99,9 +98,9 @@
 
     public struct PlayerCameraManager
     {
-        public const uint PCOwner = 0x2A0;
-        public const uint DefaultFOV = 0x2B8;
-        public const uint ViewTarget = 0x330;
+        public const uint PCOwner = 0x2B0;
+        public const uint DefaultFOV = 0x2C8;
+        public const uint ViewTarget = 0x340;
     }
 
     public struct FTViewTarget
@@ -111,21 +110,21 @@
 
     public struct ASQGameState
     {
-        public const uint TeamStates = 0x3A8;
+        public const uint TeamStates = 0x3E0;
     }
 
     public struct ASQPlayerState
     {
-        public const uint TeamID = 0x4C0; // per player
-        public const uint SquadState = 0x778; // ASQSquadState*
-        public const uint PlayerStateData = 0x6E8;
-        public const uint Soldier = 0x780; // ASQSoldier*
+        public const uint TeamID = 0x4E8; // per player
+        public const uint SquadState = 0x7C8; // ASQSquadState*
+        public const uint PlayerStateData = 0x710;
+        public const uint Soldier = 0x7D0; // ASQSoldier*
     }
 
     public struct ASQTeamState
     {
-        public const uint Tickets = 0x2A0;
-        public const uint ID = 0x2D0; // global | Team ID (0, 1, 2)
+        public const uint Tickets = 0x2B0;
+        public const uint ID = 0x2E0; // global | Team ID (0, 1, 2)
     }
 
     public struct ASQSquadState
@@ -134,7 +133,7 @@
         public const uint TeamId = 0x324; // int32
         public const uint PlayerStates = 0x328; // TArray<ASQPlayerState*>
         public const uint LeaderState = 0x338; // ASQPlayerState*
-        public const uint AuthoritySquad = 0x2A0;
+        public const uint AuthoritySquad = 0x2B0;
     }
 
     public struct FPlayerStateDataObject
@@ -145,14 +144,14 @@
 
     public struct ASQSoldier
     {
-        public const uint Health = 0x2648; // float
-        public const uint UnderSuppressionPercentage = 0x1D04; // float
-        public const uint MaxSuppressionPercentage = 0x1D08; // float
-        public const uint SuppressionMultiplier = 0x1D10; // float
-        public const uint UseInteractDistance = 0x1E94; // float
-        public const uint InteractableRadiusMultiplier = 0x1EB0; // float
-        public const uint InventoryComponent = 0x2998; // USQPawnInventoryComponent*
-        public const uint CurrentItemStaticInfo = 0x29C0; // USQItemStaticInfo*
+        public const uint Health = 0x26E0; // float
+        public const uint UnderSuppressionPercentage = 0x1D44; // float
+        public const uint MaxSuppressionPercentage = 0x1D48; // float
+        public const uint SuppressionMultiplier = 0x1D50; // float
+        public const uint UseInteractDistance = 0x1EEC; // float
+        public const uint InteractableRadiusMultiplier = 0x1F08; // float
+        public const uint InventoryComponent = 0x2A40; // USQPawnInventoryComponent*
+        public const uint CurrentItemStaticInfo = 0x2A68; // USQItemStaticInfo*
         public const uint bUsableInMainBase = 0x788; // bool
     }
 
@@ -181,9 +180,9 @@
 
     public struct ASQEquipableItem
     {
-        public const uint ItemStaticInfo = 0x2A0; // USQItemStaticInfo*
-        public const uint ItemStaticInfoClass = 0x2A8; // TSubclassOf<USQItemStaticInfo*>
-        public const uint DisplayName = 0x330; // FText
+        public const uint ItemStaticInfo = 0x2B0; // USQItemStaticInfo*
+        public const uint ItemStaticInfoClass = 0x2B8; // TSubclassOf<USQItemStaticInfo*>
+        public const uint DisplayName = 0x340; // FText
         public const uint ItemCount = 0x40C; // int32
         public const uint MaxItemCount = 0x410; // int32
         public const uint EquipDuration = 0x42C; // float
@@ -194,14 +193,14 @@
 
     public struct SQVehicle
     {
-        public const uint Health = 0x9F0;
-        public const uint MaxHealth = 0x9F4;
+        public const uint Health = 0x9A0;
+        public const uint MaxHealth = 0x9A4;
     }
 
     public struct SQDeployable
     {
-        public const uint Health = 0x41C;
-        public const uint MaxHealth = 0x414;
+        public const uint Health = 0x424;
+        public const uint MaxHealth = 0x41C;
     }
 
     public struct FString
@@ -211,15 +210,15 @@
 
     public struct Character
     {
-        public const uint CharacterMovement = 0x330; // UCharacterMovementComponent*
-        public const uint ReplicatedMovementMode = 0x428; // uint8
+        public const uint CharacterMovement = 0x338; // UCharacterMovementComponent*
+        public const uint ReplicatedMovementMode = 0x390; // uint8
     }
 
     public struct CharacterMovementComponent
     {
-        public const uint MovementMode = 0x211; // Engine::EMovementMode
-        public const uint MaxFlySpeed = 0x264; // float
-        public const uint MaxCustomMovementSpeed = 0x268; // float
-        public const uint MaxAcceleration = 0x26C; // float
+        public const uint MovementMode = 0x2C1; // Engine::EMovementMode
+        public const uint MaxFlySpeed = 0x314; // float
+        public const uint MaxCustomMovementSpeed = 0x318; // float
+        public const uint MaxAcceleration = 0x31C; // float
     }
 }
