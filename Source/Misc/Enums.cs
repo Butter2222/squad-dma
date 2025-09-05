@@ -73,5 +73,13 @@ namespace squad_dma {
         Menu,
         InGame,
     }
+    
+    public enum PlayerState {
+        Unknown,
+        MainMenu,
+        CommandMenu,
+        Alive,
+        Dead
+    }
 
 }

@@ -33,6 +33,8 @@ namespace squad_dma
         private float _currentFOV;
         private int _magnificationIndex;
         private bool _isFiring = false;
+        private PlayerState _currentPlayerState = PlayerState.Unknown;
+        private PlayerState _previousPlayerState = PlayerState.Unknown;
 
         public Source.Squad.Manager _soldierManager;
 
@@ -57,6 +59,7 @@ namespace squad_dma
         public float CurrentFOV => _currentFOV;
         public bool IsFiring => _isFiring;
         public int MagnificationIndex => _magnificationIndex;
+        public PlayerState CurrentPlayerState => _currentPlayerState;
         #endregion
 
         #region Constructor
@@ -75,6 +78,7 @@ namespace squad_dma
         public void SetShootingInMainBase(bool enable) => _soldierManager?.SetShootingInMainBase(enable);
         public void SetSpeedHack(bool enable) => _soldierManager?.SetSpeedHack(enable);
         public void SetAirStuck(bool enable) => _soldierManager?.SetAirStuck(enable);
+        public void ForceDisableAirStuck() => _soldierManager?.ForceDisableAirStuck();
         public void DisableCollision(bool disable) => _soldierManager?.DisableCollision(disable);
         public void SetQuickZoom(bool enable) => _soldierManager?.SetQuickZoom(enable);
         public void SetRapidFire(bool enable) => _soldierManager?.SetRapidFire(enable);
@@ -87,12 +91,15 @@ namespace squad_dma
         public void SetNoSway(bool enable) => _soldierManager?.SetNoSway(enable);
         public void SetInstantGrenade(bool enable) => _soldierManager?.SetInstantGrenade(enable);
         
+        public PlayerState GetPlayerState() => _currentPlayerState;
+        
         public void SetInstantSeatSwitch() => _debugVehicles?.SetInstantSeatSwitch();
         public void LogVehicles(bool force = false) => _debugVehicles?.LogVehicles(force);
         public void VehicleTeam() => _debugVehicles?.VehicleTeam();
         public void LogTeamInfo() => _debugTeam?.LogTeamInfo();
         public void ReadCurrentWeapons(bool includeOtherPlayers = false) => _debugSoldier?.ReadCurrentWeapons(includeOtherPlayers);
         public void ListVehicles() => _debugVehicles?.ListVehicles();
+        
         public void WaitForGame()
         {
             while (true)
@@ -163,7 +170,7 @@ namespace squad_dma
         #region Private Methods
         private void InitializeManagers()
         {
-            _soldierManager = new Source.Squad.Manager(_playerController, _inGame, _actors);
+            _soldierManager = new Source.Squad.Manager(_playerController, _inGame, _actors, this);
 
             _debugVehicles = new DebugVehicles(_playerController, _inGame, _actors);
             _debugTeam = new DebugTeam(_inGame, _localUPlayer, _actors?.Actors);
@@ -264,6 +271,7 @@ namespace squad_dma
                 }
                 GetCameraCache();
                 ProcessPlayerInfo();
+                DetectPlayerState();
                 return true;
             }
             catch
@@ -482,6 +490,64 @@ namespace squad_dma
         private ulong ReadPawnPointer()
         {
             return Memory.ReadPtr(_playerController + Offsets.PlayerController.AcknowledgedPawn);
+        }
+        
+        /// <summary>
+        /// Detects the current player state based on game data
+        /// </summary>
+        private void DetectPlayerState()
+        {
+            try
+            {
+                PlayerState newState = PlayerState.Unknown;
+                
+                // If not in game, player is in main menu
+                if (!_inGame)
+                {
+                    newState = PlayerState.MainMenu;
+                }
+                else if (_playerController == 0)
+                {
+                    // Check if we have a valid player controller and player state
+                    newState = PlayerState.Unknown;
+                }
+                else
+                {
+                    ulong playerState = Memory.ReadPtr(_playerController + Offsets.Controller.PlayerState);
+                    if (playerState == 0)
+                    {
+                        newState = PlayerState.CommandMenu;
+                    }
+                    else
+                    {
+                        // Check if we have a soldier actor (spawned)
+                        ulong soldierActor = Memory.ReadPtr(playerState + Offsets.ASQPlayerState.Soldier);
+                        if (soldierActor == 0)
+                        {
+                            newState = PlayerState.CommandMenu;
+                        }
+                        else
+                        {
+                            // Check soldier health to determine if alive or dead
+                            float health = Memory.ReadValue<float>(soldierActor + Offsets.ASQSoldier.Health);
+                            newState = health > 0 ? PlayerState.Alive : PlayerState.Dead;
+                        }
+                    }
+                }
+                
+                // Log state changes
+                if (newState != _currentPlayerState)
+                {
+                    Logger.Debug($"Player state changed: {_currentPlayerState} -> {newState}");
+                    _previousPlayerState = _currentPlayerState;
+                    _currentPlayerState = newState;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error detecting player state: {ex.Message}");
+                _currentPlayerState = PlayerState.Unknown;
+            }
         }
         #endregion
     }

@@ -1066,6 +1066,7 @@ namespace squad_dma
             ticketsPanel.Size = new Size(285, 30);
             ticketsPanel.TabIndex = 12;
             // 
+            // 
             // grpMapSetup
             // 
             grpMapSetup.Controls.Add(btnApplyMapScale);

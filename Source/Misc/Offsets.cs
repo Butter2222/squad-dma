@@ -2,9 +2,9 @@
 {
     public struct GameObjects
     {
-        public const uint GObjects = 0xC7FEAE0;
-        public const uint GNames = 0xC71AB80;
-        public const uint GWorld = 0xC987EE8;
+        public const uint GObjects = 0xC7FFAE0;
+        public const uint GNames = 0xC71BB80;
+        public const uint GWorld = 0xC988EE8;
     }
 
     public struct World
@@ -160,18 +160,18 @@
 
     public struct ASQSoldier
     {
-        public const uint Health = 0x26E0; // float
+        public const uint Health = 0x26D0; // float
         public const uint UnderSuppressionPercentage = 0x1D44; // float
         public const uint MaxSuppressionPercentage = 0x1D48; // float
         public const uint SuppressionMultiplier = 0x1D50; // float
         public const uint UseInteractDistance = 0x1EEC; // float
         public const uint InteractableRadiusMultiplier = 0x1F08; // float
-        public const uint InventoryComponent = 0x2A40; // USQPawnInventoryComponent*
-        public const uint CurrentItemStaticInfo = 0x2A68; // USQItemStaticInfo*
+        public const uint InventoryComponent = 0x2A30; // USQPawnInventoryComponent*
+        public const uint CurrentItemStaticInfo = 0x2A58; // USQItemStaticInfo*
         public const uint bUsableInMainBase = 0x788; // bool
-        public const uint bIsCameraRecoilActive = 0x2192; // bool
-        public const uint WeaponBasedFOV = 0x288; // Float
-        public const uint CachedAnimInstance1p = 0x2260; // USQAnimInstanceSoldier1P*
+        public const uint bIsCameraRecoilActive = 0x2ADA; // bool
+        public const uint WeaponBasedFOV = 0x7B0; // Float
+        public const uint CachedAnimInstance1p = 0x2BF0; // USQAnimInstanceSoldier1P*
         public const uint Mesh = 0x288; // USkeletalMeshComponent*
     }
 
@@ -187,13 +187,13 @@
     public struct ASQWeapon
     {
         public const uint WeaponConfig = 0x750; // FSQWeaponData
-        public const uint CurrentFireMode = 0x740; // int32
-        public const uint bAimingDownSights = 0x6fc; // bool
-        public const uint CachedPipScope = 0x6f0; // USQPipScopeCaptureComponent*
-        public const uint CurrentFOV = 0x7e8; // float
-        public const uint bFireInput = 0x6fd; // bool
-        public const uint WeaponStaticInfo = 0x488; // USQWeaponStaticInfo*
-        public const uint CurrentState = 0x6e8; // ESQWeaponState
+        public const uint CurrentFireMode = 0x878; // int32
+        public const uint bAimingDownSights = 0x834; // bool
+        public const uint CachedPipScope = 0x828; // USQPipScopeCaptureComponent*
+        public const uint CurrentFOV = 0x92C; // float
+        public const uint bFireInput = 0x835; // bool
+        public const uint WeaponStaticInfo = 0x590; // USQWeaponStaticInfo*
+        public const uint CurrentState = 0x820; // ESQWeaponState
     }
 
     public struct FSQWeaponData
@@ -221,9 +221,9 @@
 
     public struct FSQSwayData
     {
-        public const uint UnclampedTotalSway = 0x74; // float
-        public const uint TotalSway = 0x78; // float
-        public const uint Sway = 0x7c; // FRotator
+        public const uint UnclampedTotalSway = 0x80; // float
+        public const uint TotalSway = 0x84; // float
+        public const uint Sway = 0x88; // FRotator
     }
     public struct USQPipScopeCaptureComponent
     {
@@ -233,36 +233,36 @@
 
     public struct ASQGrenade
     {
-        public const uint GrenadeConfig = 0x480; // FSQGrenadeData
-        public const uint GrenadeStaticInfo = 0x4e0; // USQGrenadeStaticInfo*
+        public const uint GrenadeConfig = 0x580; // FSQGrenadeData
+        public const uint GrenadeStaticInfo = 0x5E0; // USQGrenadeStaticInfo*
     }
 
     public struct USQGrenadeStaticInfo
     {
-        public const uint WeaponOverhandPinpull1pMontage = 0x5f0; // UAnimMontage*
-        public const uint WeaponOverhandPinpull3pMontage = 0x5f8; // UAnimMontage*
-        public const uint OverhandPinpull1pMontage = 0x600; // UAnimMontage*
-        public const uint OverhandPinpull3pMontage = 0x608; // UAnimMontage*
-        public const uint WeaponOverhandThrow1pMontage = 0x610; // UAnimMontage*
-        public const uint WeaponOverhandThrow3pMontage = 0x618; // UAnimMontage*
-        public const uint OverhandThrow1pMontage = 0x620; // UAnimMontage*
-        public const uint OverhandThrow3pMontage = 0x628; // UAnimMontage*
-        public const uint WeaponUnderhandPinpull1pMontage = 0x630; // UAnimMontage*
-        public const uint WeaponUnderhandPinpull3pMontage = 0x638; // UAnimMontage*
-        public const uint UnderhandPinpull1pMontage = 0x640; // UAnimMontage*
-        public const uint UnderhandPinpull3pMontage = 0x648; // UAnimMontage*
-        public const uint WeaponUnderhandThrow1pMontage = 0x650; // UAnimMontage*
-        public const uint WeaponUnderhandThrow3pMontage = 0x658; // UAnimMontage*
-        public const uint UnderhandThrow1pMontage = 0x660; // UAnimMontage*
-        public const uint UnderhandThrow3pMontage = 0x668; // UAnimMontage*
+        public const uint WeaponOverhandPinpull1pMontage = 0x7C0; // UAnimMontage*
+        public const uint WeaponOverhandPinpull3pMontage = 0x7C8; // UAnimMontage*
+        public const uint OverhandPinpull1pMontage = 0x7D0; // UAnimMontage*
+        public const uint OverhandPinpull3pMontage = 0x7D8; // UAnimMontage*
+        public const uint WeaponOverhandThrow1pMontage = 0x7E0; // UAnimMontage*
+        public const uint WeaponOverhandThrow3pMontage = 0x7E8; // UAnimMontage*
+        public const uint OverhandThrow1pMontage = 0x7F0; // UAnimMontage*
+        public const uint OverhandThrow3pMontage = 0x7F8; // UAnimMontage*
+        public const uint WeaponUnderhandPinpull1pMontage = 0x800; // UAnimMontage*
+        public const uint WeaponUnderhandPinpull3pMontage = 0x808; // UAnimMontage*
+        public const uint UnderhandPinpull1pMontage = 0x810; // UAnimMontage*
+        public const uint UnderhandPinpull3pMontage = 0x818; // UAnimMontage*
+        public const uint WeaponUnderhandThrow1pMontage = 0x820; // UAnimMontage*
+        public const uint WeaponUnderhandThrow3pMontage = 0x828; // UAnimMontage*
+        public const uint UnderhandThrow1pMontage = 0x830; // UAnimMontage*
+        public const uint UnderhandThrow3pMontage = 0x838; // UAnimMontage*
     }
 
     public struct FSQGrenadeData
     {
-        public const uint bInfiniteAmmo = 0x0; // bool
+        public const uint bInfiniteAmmo = 0x0;  // bool
         public const uint ThrowReadyTime = 0x14; // float
         public const uint OverhandThrowTime = 0x18; // float
-        public const uint UnderhandThrowTime = 0x1c; // float
+        public const uint UnderhandThrowTime = 0x1C; // float
         public const uint OverhandThrowDuration = 0x20; // float
         public const uint UnderhandThrowDuration = 0x24; // float
         public const uint ThrowModeTransitionTime = 0x28; // float
@@ -291,7 +291,7 @@
     public struct Character
     {
         public const uint CharacterMovement = 0x338; // UCharacterMovementComponent*
-        public const uint ReplicatedMovementMode = 0x390; // uint8
+        public const uint ReplicatedMovementMode = 0x452; // uint8
     }
 
     public struct CharacterMovementComponent
@@ -319,119 +319,119 @@
 
     public struct USQAnimInstanceSoldier1P
     {
-        public const uint WeapRecoilRelLoc = 0x6e8; // FVector
-        public const uint MoveRecoilFactor = 0x8cc; // float
-        public const uint RecoilCanRelease = 0x8d0; // float
-        public const uint FinalRecoilSigma = 0x8d4; // FVector
-        public const uint FinalRecoilMean = 0x8e0; // FVector
-        public const uint MoveDeviationFactor = 0x898; // float
-        public const uint ShotDeviationFactor = 0x89c; // float
-        public const uint FinalDeviation = 0x8a0; // FVector4
-        public const uint StandRecoilMean = 0xa80; // FVector
-        public const uint StandRecoilSigma = 0xa8c; // FVector
-        public const uint CrouchRecoilMean = 0xa50; // FVector
-        public const uint CrouchRecoilSigma = 0xa5c; // FVector
-        public const uint ProneRecoilMean = 0xa20; // FVector
-        public const uint ProneRecoilSigma = 0xa2c; // FVector
-        public const uint BipodRecoilMean = 0xac8; // FVector
-        public const uint BipodRecoilSigma = 0xad4; // FVector
-        public const uint ProneTransitionRecoilMean = 0xa98; // FVector
-        public const uint ProneTransitionRecoilSigma = 0xaa4; // FVector
-        public const uint WeaponPunch = 0xc44; // FRotator
-        public const uint MoveSwayFactorMultiplier = 0xc0c; // float
-        public const uint SuppressSwayFactorMultiplier = 0xc10; // float
-        public const uint WeaponPunchSwayCombinedRotator = 0xc14; // FRotator
-        public const uint UnclampedTotalSway = 0xc94; // float
-        public const uint SwayData = 0xae0; // FSQSwayData
-        public const uint SwayAlignmentData = 0xb74; // FSQSwayData
-        public const uint AddMoveDeviation = 0x970; // float
-        public const uint MoveDeviationFactorRelease = 0x974; // float
-        public const uint MaxMoveDeviationFactor = 0x978; // float
-        public const uint MinMoveDeviationFactor = 0x97c; // float
-        public const uint FullStaminaDeviationFactor = 0x980; // float
-        public const uint LowStaminaDeviationFactor = 0x984; // float
-        public const uint AddShotDeviationFactor = 0x988; // float
-        public const uint AddShotDeviationFactorAds = 0x98c; // float
-        public const uint ShotDeviationFactorRelease = 0x990; // float
-        public const uint MinShotDeviationFactor = 0x994; // float
-        public const uint MaxShotDeviationFactor = 0x998; // float
-        public const uint MinBipodAdsDeviation = 0x9a8; // float
-        public const uint MinBipodDeviation = 0x9ac; // float
-        public const uint MinProneAdsDeviation = 0x9b0; // float
-        public const uint MinProneDeviation = 0x9b4; // float
-        public const uint MinCrouchAdsDeviation = 0x9b8; // float
-        public const uint MinCrouchDeviation = 0x9bc; // float
-        public const uint MinStandAdsDeviation = 0x9c0; // float
-        public const uint MinStandDeviation = 0x9c4; // float
-        public const uint MinProneTransitionDeviation = 0x9c8; // float
-        public const uint FireShake = 0x948; // TSubclassOf<UCameraShakeBase*>
+        public const uint WeapRecoilRelLoc = 0xA20; // FVector
+        public const uint MoveRecoilFactor = 0xD70; // float
+        public const uint RecoilCanRelease = 0xD74; // float
+        public const uint FinalRecoilSigma = 0xD78; // FVector
+        public const uint FinalRecoilMean = 0xD90; // FVector
+        public const uint MoveDeviationFactor = 0xD14; // float
+        public const uint ShotDeviationFactor = 0xD18; // float
+        public const uint FinalDeviation = 0xD20; // FVector4
+        public const uint StandRecoilMean = 0x1000; // FVector
+        public const uint StandRecoilSigma = 0x1018; // FVector
+        public const uint CrouchRecoilMean = 0xFA0; // FVector
+        public const uint CrouchRecoilSigma = 0xFB8; // FVector
+        public const uint ProneRecoilMean = 0xF40; // FVector
+        public const uint ProneRecoilSigma = 0xF58; // FVector
+        public const uint BipodRecoilMean = 0x1090; // FVector
+        public const uint BipodRecoilSigma = 0x10A8; // FVector
+        public const uint ProneTransitionRecoilMean = 0x1030; // FVector
+        public const uint ProneTransitionRecoilSigma = 0x1048; // FVector
+        public const uint WeaponPunch = 0x12A0; // FRotator
+        public const uint MoveSwayFactorMultiplier = 0x1234; // float
+        public const uint SuppressSwayFactorMultiplier = 0x1238; // float
+        public const uint WeaponPunchSwayCombinedRotator = 0x1240; // FRotator
+        public const uint UnclampedTotalSway = 0x1330; // float
+        public const uint SwayData = 0x10C0; // FSQSwayData
+        public const uint SwayAlignmentData = 0x1178; // FSQSwayData
+        public const uint AddMoveDeviation = 0xE78; // float
+        public const uint MoveDeviationFactorRelease = 0xE7C; // float
+        public const uint MaxMoveDeviationFactor = 0xE80; // float
+        public const uint MinMoveDeviationFactor = 0xE84; // float
+        public const uint FullStaminaDeviationFactor = 0xE88; // float
+        public const uint LowStaminaDeviationFactor = 0xE8C; // float
+        public const uint AddShotDeviationFactor = 0xE90; // float
+        public const uint AddShotDeviationFactorAds = 0xE94; // float
+        public const uint ShotDeviationFactorRelease = 0xE98; // float
+        public const uint MinShotDeviationFactor = 0xE9C; // float
+        public const uint MaxShotDeviationFactor = 0xEA0; // float
+        public const uint MinBipodAdsDeviation = 0xEB0; // float
+        public const uint MinBipodDeviation = 0xEB4; // float
+        public const uint MinProneAdsDeviation = 0xEB8; // float
+        public const uint MinProneDeviation = 0xEBC; // float
+        public const uint MinCrouchAdsDeviation = 0xEC0; // float
+        public const uint MinCrouchDeviation = 0xEC4; // float
+        public const uint MinStandAdsDeviation = 0xEC8; // float
+        public const uint MinStandDeviation = 0xECC; // float
+        public const uint MinProneTransitionDeviation = 0xED0; // float
+        public const uint FireShake = 0xE50; // TSubclassOf<UCameraShakeBase*>
     }
 
     public struct USQWeaponStaticInfo
     {
-        public const uint bRequiresManualBolt = 0xd31; // bool
-        public const uint bRequireAdsToShoot = 0xd69; // bool
-        public const uint RecoilCameraOffsetFactor = 0x7c4; // float
-        public const uint RecoilWeaponRelLocFactor = 0x7dc; // float
-        public const uint AddMoveRecoil = 0x7fc; // float
-        public const uint MaxMoveRecoilFactor = 0x800; // float
-        public const uint StandRecoilMean = 0x8d8; // FVector
-        public const uint StandRecoilSigma = 0x8e4; // FVector
-        public const uint StandAdsRecoilMean = 0x8c0; // FVector
-        public const uint StandAdsRecoilSigma = 0x8cc; // FVector
-        public const uint CrouchRecoilMean = 0x8a4; // FVector
-        public const uint CrouchRecoilSigma = 0x8b0; // FVector
-        public const uint CrouchAdsRecoilMean = 0x88c; // FVector
-        public const uint CrouchAdsRecoilSigma = 0x898; // FVector
-        public const uint ProneRecoilMean = 0x870; // FVector
-        public const uint ProneRecoilSigma = 0x87c; // FVector
-        public const uint ProneAdsRecoilMean = 0x858; // FVector
-        public const uint ProneAdsRecoilSigma = 0x864; // FVector
-        public const uint BipodRecoilMean = 0x924; // FVector
-        public const uint BipodRecoilSigma = 0x930; // FVector
-        public const uint BipodAdsRecoilMean = 0x90c; // FVector
-        public const uint BipodAdsRecoilSigma = 0x918; // FVector
-        public const uint ProneTransitionRecoilMean = 0x8f4; // FVector
-        public const uint ProneTransitionRecoilSigma = 0x900; // FVector
-        public const uint MinShotDeviationFactor = 0x970; // float
-        public const uint MaxShotDeviationFactor = 0x974; // float
-        public const uint AddShotDeviationFactor = 0x978; // float
-        public const uint AddShotDeviationFactorAds = 0x97c; // float
-        public const uint ShotDeviationFactorRelease = 0x980; // float
-        public const uint LowStaminaDeviationFactor = 0x984; // float
-        public const uint FullStaminaDeviationFactor = 0x988; // float
-        public const uint MoveDeviationFactorRelease = 0x98c; // float
-        public const uint AddMoveDeviation = 0x990; // float
-        public const uint MaxMoveDeviationFactor = 0x994; // float
-        public const uint MinMoveDeviationFactor = 0x998; // float
-        public const uint MinBipodAdsDeviation = 0x99c; // float
-        public const uint MinBipodDeviation = 0x9a0; // float
-        public const uint MinProneAdsDeviation = 0x9a4; // float
-        public const uint MinProneDeviation = 0x9a8; // float
-        public const uint MinCrouchAdsDeviation = 0x9ac; // float
-        public const uint MinCrouchDeviation = 0x9b0; // float
-        public const uint MinStandAdsDeviation = 0x9b4; // float
-        public const uint MinStandDeviation = 0x9b8; // float
-        public const uint MinProneTransitionDeviation = 0x9bc; // float
-        public const uint AddMoveSway = 0xb10; // float
-        public const uint MaxMoveSwayFactor = 0xb18; // float
-        public const uint SwayData = 0x9c4; // FSQSwayData
-        public const uint SwayAlignmentData = 0xa58; // FSQSwayData
+        public const uint bRequiresManualBolt = 0x10D1; // bool
+        public const uint bRequireAdsToShoot = 0x1109; // bool
+        public const uint RecoilCameraOffsetFactor = 0x9B0;  // float
+        public const uint RecoilWeaponRelLocFactor = 0x9C8;  // float
+        public const uint AddMoveRecoil = 0x9EC;  // float
+        public const uint MaxMoveRecoilFactor = 0x9F0;  // float
+        public const uint StandRecoilMean = 0xB68;  // FVector
+        public const uint StandRecoilSigma = 0xB80;  // FVector
+        public const uint StandAdsRecoilMean = 0xB38;  // FVector
+        public const uint StandAdsRecoilSigma = 0xB50;  // FVector
+        public const uint CrouchRecoilMean = 0xB00;  // FVector
+        public const uint CrouchRecoilSigma = 0xB18;  // FVector
+        public const uint CrouchAdsRecoilMean = 0xAD0;  // FVector
+        public const uint CrouchAdsRecoilSigma = 0xAE8;  // FVector
+        public const uint ProneRecoilMean = 0xA98;  // FVector
+        public const uint ProneRecoilSigma = 0xAB0;  // FVector
+        public const uint ProneAdsRecoilMean = 0xA68;  // FVector
+        public const uint ProneAdsRecoilSigma = 0xA80;  // FVector
+        public const uint BipodRecoilMean = 0xC00;  // FVector
+        public const uint BipodRecoilSigma = 0xC18;  // FVector
+        public const uint BipodAdsRecoilMean = 0xBD0;  // FVector
+        public const uint BipodAdsRecoilSigma = 0xBE8;  // FVector
+        public const uint ProneTransitionRecoilMean = 0xBA0;  // FVector
+        public const uint ProneTransitionRecoilSigma = 0xBB8;  // FVector
+        public const uint MinShotDeviationFactor = 0xC84;  // float
+        public const uint MaxShotDeviationFactor = 0xC88;  // float
+        public const uint AddShotDeviationFactor = 0xC8C;  // float
+        public const uint AddShotDeviationFactorAds = 0xC90;  // float
+        public const uint ShotDeviationFactorRelease = 0xC94;  // float
+        public const uint LowStaminaDeviationFactor = 0xC98;  // float
+        public const uint FullStaminaDeviationFactor = 0xC9C;  // float
+        public const uint MoveDeviationFactorRelease = 0xCA0;  // float
+        public const uint AddMoveDeviation = 0xCA4;  // float
+        public const uint MaxMoveDeviationFactor = 0xCA8;  // float
+        public const uint MinMoveDeviationFactor = 0xCAC;  // float
+        public const uint MinBipodAdsDeviation = 0xCB0;  // float
+        public const uint MinBipodDeviation = 0xCB4;  // float
+        public const uint MinProneAdsDeviation = 0xCB8;  // float
+        public const uint MinProneDeviation = 0xCBC;  // float
+        public const uint MinCrouchAdsDeviation = 0xCC0;  // float
+        public const uint MinCrouchDeviation = 0xCC4;  // float
+        public const uint MinStandAdsDeviation = 0xCC8;  // float
+        public const uint MinStandDeviation = 0xCCC;  // float
+        public const uint MinProneTransitionDeviation = 0xCD0;  // float
+        public const uint AddMoveSway = 0xE68;  // float
+        public const uint MaxMoveSwayFactor = 0xE70;  // float
+        public const uint SwayData = 0xCD8;  // FSQSwayData
+        public const uint SwayAlignmentData = 0xD90;  // FSQSwayData
     }
 
     public struct UAnimMontage
     {
-        public const uint BlendIn = 0xa8; // FAlphaBlend
-        public const uint BlendInTime = 0xd8; // float
-        public const uint BlendOut = 0xe0; // FAlphaBlend
-        public const uint blendOutTime = 0x110; // float
-        public const uint BlendOutTriggerTime = 0x114; // float
-        public const uint bEnableAutoBlendOut = 0x17a; // bool
+        public const uint BlendIn = 0xC0;  // FAlphaBlend
+        public const uint BlendInTime = 0x0;   // float (no direct match in updated dump)
+        public const uint BlendOut = 0xF0;  // FAlphaBlend
+        public const uint blendOutTime = 0x0;   // float (no direct match in updated dump)
+        public const uint BlendOutTriggerTime = 0x120; // float
+        public const uint bEnableAutoBlendOut = 0x172; // bool
     }
 
     public struct UAnimSequenceBase
     {
         public const uint SequenceLength = 0x90; // float
-        public const uint RateScale = 0x94; // float
+        public const uint RateScale = 0xA8; // float
     }
 }

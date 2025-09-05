@@ -11,6 +11,7 @@ namespace squad_dma.Source.Squad
         public readonly bool _inGame;
         private readonly Config _config;
         private CancellationTokenSource _cancellationTokenSource;
+        private readonly Game _game;
         
         protected ulong _cachedPlayerState = 0;
         protected ulong _cachedSoldierActor = 0;
@@ -29,18 +30,18 @@ namespace squad_dma.Source.Squad
         private Suppression _suppression;
         private InteractionDistances _interactionDistances;
         private ShootingInMainBase _shootingInMainBase;
-        private SpeedHack _speedHack;
-        private Collision _collision;
-        private AirStuck _airStuck;
+        private SpeedHack _speedHack;  // Using state-aware version
+        private Collision _collision;  // Using state-aware version
+        private AirStuck _airStuck;  // Using state-aware version
         private QuickZoom _quickZoom;
         private RapidFire _rapidFire;
         private InfiniteAmmo _infiniteAmmo;
         private QuickSwap _quickSwap;
         private ForceFullAuto _FullAuto;
         private NoCameraShake _noCameraShake;
-        private NoSpread _noSpread;
-        private NoRecoil _noRecoil;
-        private NoSway _noSway;
+        private NoSpread _noSpread;  // Using state-aware version
+        private NoRecoil _noRecoil;  // Using state-aware version
+        private NoSway _noSway;  // Using state-aware version
         private InstantGrenade _instantGrenade;
         
         // Weapon manager
@@ -62,12 +63,13 @@ namespace squad_dma.Source.Squad
             UpdateCachedPointers();
         }
         
-        public Manager(ulong playerController, bool inGame, RegistredActors actors)
+        public Manager(ulong playerController, bool inGame, RegistredActors actors, Game game = null)
         {
             _playerController = playerController;
             _inGame = inGame;
             _cancellationTokenSource = new CancellationTokenSource();
             _config = Program.Config;
+            _game = game;
             
             // Initialize cached pointers
             UpdateCachedPointers();
@@ -160,21 +162,21 @@ namespace squad_dma.Source.Squad
         
         private void InitializeFeatures()
         {
-            _suppression = new Suppression(_playerController, _inGame);
-            _interactionDistances = new InteractionDistances(_playerController, _inGame);
+            _suppression = new Suppression(_playerController, _inGame, _game);
+            _interactionDistances = new InteractionDistances(_playerController, _inGame, _game);
             _shootingInMainBase = new ShootingInMainBase(_playerController, _inGame);
-            _speedHack = new SpeedHack(_playerController, _inGame);
-            _collision = new Collision(_playerController, _inGame);
-            _airStuck = new AirStuck(_playerController, _inGame, _collision);
+            _speedHack = new SpeedHack(_playerController, _inGame, _game);
+            _airStuck = new AirStuck(_playerController, _inGame, _game, null);
+            _collision = new Collision(_playerController, _inGame, _game, _airStuck);
             _quickZoom = new QuickZoom(_playerController, _inGame);
             _rapidFire = new RapidFire(_playerController, _inGame);
-            _infiniteAmmo = new InfiniteAmmo(_playerController, _inGame);
+            _infiniteAmmo = new InfiniteAmmo(_playerController, _inGame, _game);
             _quickSwap = new QuickSwap(_playerController, _inGame);
             _FullAuto = new ForceFullAuto(_playerController, _inGame);
             _noCameraShake = new NoCameraShake(_playerController, _inGame);
-            _noSpread = new NoSpread(_playerController, _inGame);
-            _noRecoil = new NoRecoil(_playerController, _inGame);
-            _noSway = new NoSway(_playerController, _inGame);
+            _noSpread = new NoSpread(_playerController, _inGame, _game);
+            _noRecoil = new NoRecoil(_playerController, _inGame, _game);
+            _noSway = new NoSway(_playerController, _inGame, _game);
             _instantGrenade = new InstantGrenade(_playerController, _inGame);
             
             // Register weapon features
@@ -228,29 +230,11 @@ namespace squad_dma.Source.Squad
                         UpdateCachedPointers();
                         _weaponManager.Update();
 
-                        if (_config.DisableSuppression && _suppression.IsEnabled)
-                            _suppression.Apply();
+                        // Get current player state from game instance
+                        PlayerState currentState = _game?.GetPlayerState() ?? PlayerState.Unknown;
 
-                        if (_config.SetInteractionDistances && _interactionDistances.IsEnabled)
-                            _interactionDistances.Apply();
-
-                        if (_config.AllowShootingInMainBase && _shootingInMainBase.IsEnabled)
-                            _shootingInMainBase.Apply();
-
-                        if (_config.SetSpeedHack && _speedHack.IsEnabled)
-                            _speedHack.Apply();
-
-                        if (_config.SetAirStuck && _airStuck.IsEnabled)
-                            _airStuck.Apply();
-                        
-                        if (!_config.SetAirStuck && _config.DisableCollision)
-                        {
-                            _config.DisableCollision = false;
-                            _collision.SetEnabled(false);
-                        }
-                        
-                        if (_config.DisableCollision && _collision.IsEnabled)
-                            _collision.Apply();
+                        // Apply features based on player state
+                        ApplyFeaturesBasedOnState(currentState);
 
                         await Task.Delay(1000, _cancellationTokenSource.Token);
                     }
@@ -284,6 +268,114 @@ namespace squad_dma.Source.Squad
         /// </summary>
         public virtual void Apply() { }
         
+        /// <summary>
+        /// Apply features based on current player state
+        /// </summary>
+        /// <param name="playerState">Current player state</param>
+        private void ApplyFeaturesBasedOnState(PlayerState playerState)
+        {
+            switch (playerState)
+            {
+                case PlayerState.MainMenu:
+                    // No features should be applied in main menu
+                    break;
+                    
+                case PlayerState.CommandMenu:
+                    // Limited features for command menu state
+                    // Maybe only allow some UI-related features
+                    break;
+                    
+                case PlayerState.Alive:
+                    // Apply all combat and movement features when alive
+                    ApplyAliveStateFeatures();
+                    break;
+                    
+                case PlayerState.Dead:
+                    // Apply limited features when dead (no weapon features)
+                    ApplyDeadStateFeatures();
+                    break;
+                    
+                case PlayerState.Unknown:
+                default:
+                    // Fallback to original behavior for unknown states
+                    ApplyAllFeatures();
+                    break;
+            }
+        }
+        
+        /// <summary>
+        /// Apply features when player is alive
+        /// </summary>
+        private void ApplyAliveStateFeatures()
+        {
+            // State-aware features (handle their own state management)
+            if (_config.DisableSuppression && _suppression.IsEnabled)
+                _suppression.Apply();
+
+            if (_config.SetInteractionDistances && _interactionDistances.IsEnabled)
+                _interactionDistances.Apply();
+                
+            if (_config.NoRecoil && _noRecoil.IsEnabled)
+                _noRecoil.Apply();
+                
+            if (_config.NoSpread && _noSpread.IsEnabled)
+                _noSpread.Apply();
+                
+            if (_config.NoSway && _noSway.IsEnabled)
+                _noSway.Apply();
+                
+            if (_config.SetSpeedHack && _speedHack.IsEnabled)
+                _speedHack.Apply();
+                
+            if (_config.SetAirStuck && _airStuck.IsEnabled)
+                _airStuck.Apply();
+                
+            if (_config.DisableCollision && _collision.IsEnabled)
+                _collision.Apply();
+
+            // Legacy features (still need manual state management)
+            if (_config.AllowShootingInMainBase && _shootingInMainBase.IsEnabled)
+                _shootingInMainBase.Apply();
+        }
+        
+        /// <summary>
+        /// Apply features when player is dead
+        /// </summary>
+        private void ApplyDeadStateFeatures()
+        {
+            // Only apply non-combat features when dead
+            if (_config.SetInteractionDistances && _interactionDistances.IsEnabled)
+                _interactionDistances.Apply();
+                
+            // Maybe allow speed hack for faster respawn movement
+            if (_config.SetSpeedHack && _speedHack.IsEnabled)
+                _speedHack.Apply();
+        }
+        
+        /// <summary>
+        /// Apply all features (fallback behavior)
+        /// </summary>
+        private void ApplyAllFeatures()
+        {
+            if (_config.DisableSuppression && _suppression.IsEnabled)
+                _suppression.Apply();
+
+            if (_config.SetInteractionDistances && _interactionDistances.IsEnabled)
+                _interactionDistances.Apply();
+
+            if (_config.AllowShootingInMainBase && _shootingInMainBase.IsEnabled)
+                _shootingInMainBase.Apply();
+
+            if (_config.SetSpeedHack && _speedHack.IsEnabled)
+                _speedHack.Apply();
+
+            if (_config.SetAirStuck && _airStuck.IsEnabled)
+                _airStuck.Apply();
+                
+            if (_config.DisableCollision && _collision.IsEnabled)
+                _collision.Apply();
+        }
+        
         #region Feature Control Methods
         
         public void SetSuppression(bool enable)
@@ -311,6 +403,11 @@ namespace squad_dma.Source.Squad
             _airStuck.SetEnabled(enable);
         }
         
+        public void ForceDisableAirStuck()
+        {
+            _airStuck.ForceDisable();
+        }
+        
         public void SetQuickZoom(bool enable)
         {
             _quickZoom.SetEnabled(enable);
@@ -318,12 +415,6 @@ namespace squad_dma.Source.Squad
         
         public void DisableCollision(bool disable)
         {
-            // Only allow enabling if AirStuck is enabled
-            if (disable && !Program.Config.SetAirStuck)
-            {
-                return;
-            }
-            
             _collision.SetEnabled(disable);
         }
         

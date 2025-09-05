@@ -5,6 +5,7 @@ using SkiaSharp.Views.Desktop;
 using squad_dma.Source.Misc;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Drawing.Drawing2D;
 using System.Numerics;
 
 namespace squad_dma
@@ -35,6 +36,7 @@ namespace squad_dma
         private int _lastEnemyTickets;
         private int _lastKills;
         private int _lastWoundeds;
+
 
         private Map _selectedMap;
         private SKBitmap[] _loadedBitmaps;
@@ -158,6 +160,7 @@ namespace squad_dma
             var ticketUpdateTimer = new System.Windows.Forms.Timer { Interval = 1000 };
             ticketUpdateTimer.Tick += (s, e) => UpdateTicketsDisplay();
             ticketUpdateTimer.Start();
+
 
             var stateMonitor = new System.Windows.Forms.Timer { Interval = 500 };
             stateMonitor.Tick += (s, e) => HandleGameStateChange();
@@ -1133,6 +1136,9 @@ namespace squad_dma
                 ticketsPanel.Invalidate();
             }
         }
+
+
+
 
         private void UpdateSelectedMap()
         {

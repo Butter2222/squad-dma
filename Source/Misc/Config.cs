@@ -45,6 +45,7 @@ namespace squad_dma
 
         [JsonPropertyName("highAlert")]
         public bool HighAlert { get; set; } = true;
+
         #endregion
 
         #region Zoom Settings
