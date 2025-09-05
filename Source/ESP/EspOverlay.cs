@@ -9,25 +9,18 @@ using System;
 
 namespace squad_dma
 {
-    public struct FTransform
-    {
-        public Quaternion Rotation;
-        public Vector3 Translation;
-        public Vector3 Scale3D;
 
-        public Matrix4x4 ToMatrix()
-        {
-            return Matrix4x4.CreateFromQuaternion(Rotation) *
-                   Matrix4x4.CreateScale(Scale3D) *
-                   Matrix4x4.CreateTranslation(Translation);
-        }
-    }
 
     public static class Vector2Extensions
     {
         public static RawVector2 ToRawVector2(this Vector2 vector)
         {
             return new RawVector2(vector.X, vector.Y);
+        }
+        
+        public static RawVector2 ToRawVector2(this Vector2D vector)
+        {
+            return new RawVector2((float)vector.X, (float)vector.Y);
         }
     }
 
@@ -222,9 +215,9 @@ namespace squad_dma
             const float halfHeight = playerHeight / 2f;
             const float aspectRatio = 0.4f;
 
-            Vector3 middlePos = actor.Position;
-            Vector3 feetPos = middlePos - new Vector3(0, 0, halfHeight);
-            Vector3 headPos = middlePos + new Vector3(0, 0, halfHeight);
+            Vector3D middlePos = actor.Position;
+            Vector3D feetPos = new Vector3D(middlePos.X, middlePos.Y, middlePos.Z - halfHeight);
+            Vector3D headPos = new Vector3D(middlePos.X, middlePos.Y, middlePos.Z + halfHeight);
 
             Vector2 feetScreen = Camera.WorldToScreen(viewInfo, feetPos);
             Vector2 headScreen = Camera.WorldToScreen(viewInfo, headPos);
@@ -270,7 +263,7 @@ namespace squad_dma
                 FOV = Game.CurrentFOV
             };
 
-            Vector3 camPos = viewInfo.Location;
+            Vector3D camPos = viewInfo.Location;
             float maxDistance = Program.Config.EspMaxDistance;
             float vehicleMaxDistance = maxDistance + 1000f;
             bool showAllies = Program.Config.EspShowAllies;
@@ -282,18 +275,22 @@ namespace squad_dma
             int wtsCalls = 0;
             foreach (var actor in actors.Values)
             {
-                if (actor == null || actor.Position == Vector3.Zero)
+                if (actor == null || actor.Position == Vector3D.Zero)
                     continue;
 
                 if (actor.ActorType == ActorType.Player && !actor.IsAlive)
                     continue;
 
-                float distance = Vector3.Distance(camPos, actor.Position) / 100f;
+                Vector3 camPosVec = camPos.ToVector3();
+                Vector3 actorPosVec = actor.Position.ToVector3();
+                float distance = Vector3.Distance(camPosVec, actorPosVec) / 100f;
                 bool isPlayer = actor.ActorType == ActorType.Player;
                 if (distance > (isPlayer ? maxDistance : vehicleMaxDistance))
                     continue;
 
-                if (isPlayer && Vector3.Distance(Memory.LocalPlayer.Position, actor.Position) < 1.0f)
+                Vector3 localPlayerPosVec = Memory.LocalPlayer.Position.ToVector3();
+                Vector3 actorPosVec2 = actor.Position.ToVector3();
+                if (isPlayer && Vector3.Distance(localPlayerPosVec, actorPosVec2) < 1.0f)
                     continue;
 
                 if (!showAllies && actor.IsFriendly())

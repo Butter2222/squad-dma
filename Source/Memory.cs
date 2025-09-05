@@ -62,7 +62,7 @@ namespace squad_dma
             get => _game?.Actors;
         }
 
-        public static Vector3 AbsoluteLocation
+        public static Vector3D AbsoluteLocation
         {
             get => _game.AbsoluteLocation;
         }

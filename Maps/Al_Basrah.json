@@ -2,7 +2,7 @@
   "mapID": [ "AlBasrah", "SD_Al_Basrah", "GE_AlBasrah" ],
   "x": 2048,
   "y": 2048,
-  "scale": 0.0135,
+  "scale": 0.0102,
   "mapLayers": [
     {
       "minHeight": -30000,

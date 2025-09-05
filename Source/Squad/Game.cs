@@ -21,7 +21,7 @@ namespace squad_dma
         private ulong _gameInstance;
         private ulong _localPlayer;
         private ulong _playerController;
-        private Vector3 _absoluteLocation;
+        private Vector3D _absoluteLocation;
         private string _currentLevel = string.Empty;
         private DateTime _lastTeamCheck = DateTime.MinValue;
         private const int TeamCheckInterval = 1000;
@@ -48,7 +48,7 @@ namespace squad_dma
         public string MapName => _currentLevel;
         public UActor LocalPlayer => _localUPlayer;
         public ReadOnlyDictionary<ulong, UActor> Actors => _actors?.Actors;
-        public Vector3 AbsoluteLocation => _absoluteLocation;
+        public Vector3D AbsoluteLocation => _absoluteLocation;
         public Dictionary<int, int> TeamTickets => _gameTickets?.GetTickets();
         public GameTickets GameTickets => _gameTickets;
         public PlayerStats GameStats => _gameStats;
@@ -253,7 +253,7 @@ namespace squad_dma
                         int teamId = Memory.ReadValue<int>(playerState + Offsets.ASQPlayerState.TeamID);
                         _localUPlayer.TeamID = teamId;
 
-                        ulong squadState = Memory.ReadPtr(_playerController + Offsets.PlayerController.SquadState);
+                        ulong squadState = Memory.ReadPtr(_playerController + Offsets.SQPlayerController.SquadState);
                         if (squadState != 0)
                         {
                             int squadId = Memory.ReadValue<int>(squadState + Offsets.ASQSquadState.SquadId);
@@ -276,6 +276,9 @@ namespace squad_dma
         {
             try
             {
+                if (_playerController == 0 || _gameWorld == 0)
+                    return false;
+                
                 var cameraInfoScatterMap = new ScatterReadMap(1);
                 var cameraManagerRound = cameraInfoScatterMap.AddRound();
                 var cameraInfoRound = cameraInfoScatterMap.AddRound();
@@ -286,36 +289,71 @@ namespace squad_dma
 
                 var viewTargetPtr = cameraManagerPtr + Offsets.PlayerCameraManager.ViewTarget;
                 var povPtr = viewTargetPtr + Offsets.FTViewTarget.POV;
+                var worldOriginPtr = _gameWorld + Offsets.World.WorldOrigin;
 
-                cameraManagerRound.AddEntry<ulong>(0, 0, _playerController + Offsets.PlayerController.PlayerCameraManager);
-                cameraManagerRound.AddEntry<int>(0, 11, _gameWorld + Offsets.World.WorldOrigin);
-                cameraManagerRound.AddEntry<int>(0, 12, _gameWorld + Offsets.World.WorldOrigin + 0x4);
-                cameraManagerRound.AddEntry<int>(0, 13, _gameWorld + Offsets.World.WorldOrigin + 0x8);
-                cameraInfoRound.AddEntry<Vector3>(0, 1, povPtr, null, 0x0); // Location
-                cameraInfoRound.AddEntry<Vector3>(0, 2, povPtr, null, 0xc); // Rotation
+                // World Origin (FVector)
+                cameraManagerRound.AddEntry<double>(0, 11, worldOriginPtr);      // World Origin X
+                cameraManagerRound.AddEntry<double>(0, 12, worldOriginPtr + 0x8);  // World Origin Y
+                cameraManagerRound.AddEntry<double>(0, 13, worldOriginPtr + 0x10); // World Origin Z
+
+                // FMinimalViewInfo structure
+                // Location (0x0)
+                cameraInfoRound.AddEntry<double>(0, 14, povPtr + 0x0);  // X
+                cameraInfoRound.AddEntry<double>(0, 15, povPtr + 0x8);  // Y
+                cameraInfoRound.AddEntry<double>(0, 16, povPtr + 0x10); // Z
+                
+                // Rotation (0x18)
+                cameraInfoRound.AddEntry<double>(0, 17, povPtr + 0x18); // Pitch
+                cameraInfoRound.AddEntry<double>(0, 18, povPtr + 0x20); // Yaw
+                cameraInfoRound.AddEntry<double>(0, 19, povPtr + 0x28); // Roll
 
                 cameraInfoScatterMap.Execute();
 
-                if (!cameraInfoScatterMap.Results[0][1].TryGetResult<Vector3>(out var location))
+                if (cameraInfoScatterMap.Results[0][11].TryGetResult<double>(out var absoluteX) &&
+                    cameraInfoScatterMap.Results[0][12].TryGetResult<double>(out var absoluteY) &&
+                    cameraInfoScatterMap.Results[0][13].TryGetResult<double>(out var absoluteZ))
+                {
+                    _absoluteLocation = new Vector3D(absoluteX, absoluteY, absoluteZ);
+                }
+                else
                 {
                     return false;
                 }
-                if (!cameraInfoScatterMap.Results[0][2].TryGetResult<Vector3>(out var rotation))
+
+                if (cameraInfoScatterMap.Results[0][14].TryGetResult<double>(out var x) &&
+                    cameraInfoScatterMap.Results[0][15].TryGetResult<double>(out var y) &&
+                    cameraInfoScatterMap.Results[0][16].TryGetResult<double>(out var z))
+                {
+                    _localUPlayer.Position = new Vector3D(
+                        x + _absoluteLocation.X,
+                        y + _absoluteLocation.Y,
+                        z + _absoluteLocation.Z
+                    );
+                }
+                else
                 {
                     return false;
                 }
-                if (cameraInfoScatterMap.Results[0][11].TryGetResult<int>(out var absoluteX)
-                && cameraInfoScatterMap.Results[0][12].TryGetResult<int>(out var absoluteY)
-                && cameraInfoScatterMap.Results[0][13].TryGetResult<int>(out var absoluteZ))
+
+                if (cameraInfoScatterMap.Results[0][17].TryGetResult<double>(out var rotX) &&
+                    cameraInfoScatterMap.Results[0][18].TryGetResult<double>(out var rotY) &&
+                    cameraInfoScatterMap.Results[0][19].TryGetResult<double>(out var rotZ))
                 {
-                    _absoluteLocation = new Vector3(absoluteX, absoluteY, absoluteZ);
+                    var rotation = new Vector3D(rotX, rotY, rotZ);
+                    _localUPlayer.Rotation = new Vector2D(rotation.Y, rotation.X);
+                    _localUPlayer.Rotation3D = rotation;
                 }
-                _localUPlayer.Position = location;
-                _localUPlayer.Rotation = new Vector2(rotation.Y, rotation.X);
-                _localUPlayer.Rotation3D = rotation;
+                else
+                {
+                    return false;
+                }
+
                 return true;
             }
-            catch { return false; }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         private bool ProcessPlayerInfo()

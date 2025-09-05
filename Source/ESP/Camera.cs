@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Numerics;
+using System.Windows.Forms;
 
 namespace squad_dma
 {
@@ -15,8 +16,8 @@ namespace squad_dma
 
     public struct MinimalViewInfo
     {
-        public Vector3 Location;
-        public Vector3 Rotation;
+        public Vector3D Location;
+        public Vector3D Rotation;
         public float FOV;
     }
 
@@ -61,11 +62,11 @@ namespace squad_dma
             return new ViewMatrix(matrix);
         }
 
-        public static Vector2 WorldToScreen(MinimalViewInfo viewInfo, Vector3 world)
+        public static Vector2 WorldToScreen(MinimalViewInfo viewInfo, Vector3D world)
         {
             Vector3 screenLocation = Vector3.Zero;
-            Vector3 rot = new Vector3(viewInfo.Rotation.X, viewInfo.Rotation.Y, viewInfo.Rotation.Z);
-            Vector3 camPos = viewInfo.Location;
+            Vector3 rot = viewInfo.Rotation.ToVector3();
+            Vector3 camPos = viewInfo.Location.ToVector3();
 
             ViewMatrix tempMatrix = CreateMatrix(rot, Vector3.Zero);
 
@@ -73,7 +74,8 @@ namespace squad_dma
             Vector3 vAxisY = new Vector3(tempMatrix.matrix[1, 0], tempMatrix.matrix[1, 1], tempMatrix.matrix[1, 2]);
             Vector3 vAxisZ = new Vector3(tempMatrix.matrix[2, 0], tempMatrix.matrix[2, 1], tempMatrix.matrix[2, 2]);
 
-            Vector3 vDelta = world - camPos;
+            Vector3 worldVec = world.ToVector3();
+            Vector3 vDelta = worldVec - camPos;
             Vector3 vTransformed = new Vector3(
                 Vector3.Dot(vDelta, vAxisY),
                 Vector3.Dot(vDelta, vAxisZ),

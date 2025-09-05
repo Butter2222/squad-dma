@@ -20,6 +20,7 @@ namespace squad_dma
         private readonly System.Timers.Timer _mapChangeTimer = new(100);
         private readonly List<Map> _maps = new();
         private DarkModeCS _darkmode;
+        private readonly Dictionary<UActor, Vector3D> _aaProjectileOrigins = new();
         private readonly List<PointOfInterest> _pointsOfInterest = new();
         private System.Windows.Forms.Timer _panTimer;
         private GameStatus _previousGameStatus = GameStatus.NotFound;
@@ -70,11 +71,11 @@ namespace squad_dma
         private string MapName => Memory.MapName;
         private UActor LocalPlayer => Memory.LocalPlayer;
         private ReadOnlyDictionary<ulong, UActor> AllActors => Memory.Actors;
-        private Vector3 AbsoluteLocation => Memory.AbsoluteLocation;
+        private Vector3D AbsoluteLocation => Memory.AbsoluteLocation;
         #endregion
 
         #region Getters
-        public void AddPointOfInterest(Vector3 position, string name)
+        public void AddPointOfInterest(Vector3D position, string name)
         {
             _pointsOfInterest.Add(new PointOfInterest(position, name));
         }
@@ -480,8 +481,8 @@ namespace squad_dma
                 }
                 
                 var mapMousePos = new SKPoint(
-                    mapParams.Bounds.Left + mousePos.X / mapParams.XScale,
-                    mapParams.Bounds.Top + mousePos.Y / mapParams.YScale
+                    (float)(mapParams.Bounds.Left + mousePos.X / mapParams.XScale),
+                    (float)(mapParams.Bounds.Top + mousePos.Y / mapParams.YScale)
                 );
 
                 // Only update target position if zooming out
@@ -516,7 +517,7 @@ namespace squad_dma
 
         private void HandlePlayerHover(MouseEventArgs e)
         {
-            var mouse = new Vector2(e.X, e.Y);
+            var mouse = new Vector2D(e.X, e.Y);
             var players = AllActors?.Select(x => x.Value);
             _closestPlayerToMouse = FindClosestObject(players, mouse, x => x.ZoomedPosition, 12 * _uiScale);
         }
@@ -534,8 +535,8 @@ namespace squad_dma
                 _targetPanPosition.Y -= dy * zoomScale;
                 
                 // Update position immediately for direct response
-                _mapPanPosition.X = _targetPanPosition.X;
-                _mapPanPosition.Y = _targetPanPosition.Y;
+                _mapPanPosition.X = (float)_targetPanPosition.X;
+                _mapPanPosition.Y = (float)_targetPanPosition.Y;
                 
                 _mapCanvas.Invalidate();
             }
@@ -559,7 +560,7 @@ namespace squad_dma
 
                 _hoveredPoi = _pointsOfInterest.FirstOrDefault(poi =>
                 {
-                    var poiRenderPos = poi.Position + AbsoluteLocation;
+                    var poiRenderPos = new Vector3D(poi.Position.X + AbsoluteLocation.X, poi.Position.Y + AbsoluteLocation.Y, poi.Position.Z + AbsoluteLocation.Z);
                     var poiPos = poiRenderPos.ToMapPos(_selectedMap).ToZoomedPos(mapParams).GetPoint();
                     return SKPoint.Distance(mousePos, poiPos) < 20 * _uiScale;
                 });
@@ -604,9 +605,9 @@ namespace squad_dma
 
                 var worldX = (mouseX - _selectedMap.ConfigFile.X) / _selectedMap.ConfigFile.Scale;
                 var worldY = (mouseY - _selectedMap.ConfigFile.Y) / _selectedMap.ConfigFile.Scale;
-                var worldZ = (this.LocalPlayer.Position + AbsoluteLocation).Z;
+                var worldZ = this.LocalPlayer.Position.Z + AbsoluteLocation.Z;
 
-                var poiPosition = new Vector3(worldX, worldY, worldZ) - AbsoluteLocation;
+                var poiPosition = new Vector3D(worldX - AbsoluteLocation.X, worldY - AbsoluteLocation.Y, worldZ - AbsoluteLocation.Z);
 
                 AddPointOfInterest(poiPosition, "POI");
 
@@ -1207,7 +1208,7 @@ namespace squad_dma
             return true; // Ready to render
         }
 
-        private int GetMapLayerIndex(float playerHeight)
+        private int GetMapLayerIndex(double playerHeight)
         {
             for (int i = _loadedBitmaps.Length - 1; i >= 0; i--)
             {
@@ -1235,15 +1236,20 @@ namespace squad_dma
             }
 
             var bitmap = _loadedBitmaps[mapLayerIndex];
-            float zoomFactor = 0.01f * _config.DefaultZoom;
-            float zoomWidth = bitmap.Width * zoomFactor;
-            float zoomHeight = bitmap.Height * zoomFactor;
+            double zoomFactor = 0.01 * _config.DefaultZoom;
+            double zoomWidth = bitmap.Width * zoomFactor;
+            double zoomHeight = bitmap.Height * zoomFactor;
+
+            double left = Math.Max(Math.Min(localPlayerPos.X, bitmap.Width - zoomWidth / 2) - zoomWidth / 2, 0);
+            double top = Math.Max(Math.Min(localPlayerPos.Y, bitmap.Height - zoomHeight / 2) - zoomHeight / 2, 0);
+            double right = Math.Min(Math.Max(localPlayerPos.X, zoomWidth / 2) + zoomWidth / 2, bitmap.Width);
+            double bottom = Math.Min(Math.Max(localPlayerPos.Y, zoomHeight / 2) + zoomHeight / 2, bitmap.Height);
 
             var bounds = new SKRect(
-                Math.Max(Math.Min(localPlayerPos.X, bitmap.Width - zoomWidth / 2) - zoomWidth / 2, 0),
-                Math.Max(Math.Min(localPlayerPos.Y, bitmap.Height - zoomHeight / 2) - zoomHeight / 2, 0),
-                Math.Min(Math.Max(localPlayerPos.X, zoomWidth / 2) + zoomWidth / 2, bitmap.Width),
-                Math.Min(Math.Max(localPlayerPos.Y, zoomHeight / 2) + zoomHeight / 2, bitmap.Height)
+                (float)left,
+                (float)top,
+                (float)right,
+                (float)bottom
             ).AspectFill(_mapCanvas.CanvasSize);
 
             return new MapParameters
@@ -1252,8 +1258,8 @@ namespace squad_dma
                 TechScale = localPlayerPos.TechScale,
                 MapLayerIndex = mapLayerIndex,
                 Bounds = bounds,
-                XScale = (float)_mapCanvas.Width / bounds.Width,
-                YScale = (float)_mapCanvas.Height / bounds.Height
+                XScale = (double)_mapCanvas.Width / bounds.Width,
+                YScale = (double)_mapCanvas.Height / bounds.Height
             };
         }
 
@@ -1262,7 +1268,11 @@ namespace squad_dma
             var localPlayer = this.LocalPlayer;
             if (localPlayer is not null)
             {
-                var localPlayerPos = localPlayer.Position + AbsoluteLocation;
+                var localPlayerPos = new Vector3D(
+                    localPlayer.Position.X + AbsoluteLocation.X,
+                    localPlayer.Position.Y + AbsoluteLocation.Y,
+                    localPlayer.Position.Z + AbsoluteLocation.Z
+                );
                 var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
                 localPlayerMapPos.TechScale = (.01f * _config.TechMarkerScale); // Set tech scale for map position
 
@@ -1291,7 +1301,11 @@ namespace squad_dma
         {
             if (grpMapSetup.Visible)
             {
-                var localPlayerPos = LocalPlayer.Position + AbsoluteLocation;
+                var localPlayerPos = new Vector3D(
+                    LocalPlayer.Position.X + AbsoluteLocation.X,
+                    LocalPlayer.Position.Y + AbsoluteLocation.Y,
+                    LocalPlayer.Position.Z + AbsoluteLocation.Z
+                );
                 grpMapSetup.Text = $"Map Setup - X,Y,Z: {localPlayerPos.X}, {localPlayerPos.Y}, {localPlayerPos.Z}";
             }
             else if (grpMapSetup.Text != "Map Setup" && !grpMapSetup.Visible)
@@ -1334,8 +1348,7 @@ namespace squad_dma
             var activeProjectiles = allPlayers.Where(a => a.ActorType == ActorType.ProjectileAA).ToList();
             projectileAAs.AddRange(activeProjectiles);
 
-            var localPlayerPos = LocalPlayer.Position + AbsoluteLocation;
-            var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
+            var localPlayerMapPos = LocalPlayer.Position.ToMapPos(_selectedMap);
             var mapParams = GetMapLocation();
             
             if (mapParams == null)
@@ -1352,13 +1365,17 @@ namespace squad_dma
                 if (actor.ActorType == ActorType.Projectile || actor.ActorType == ActorType.ProjectileAA || actor.ActorType == ActorType.ProjectileSmall)
                     continue;
 
-                var actorPos = actor.Position + AbsoluteLocation;
+                var actorPos = new Vector3D(
+                    actor.Position.X + AbsoluteLocation.X,
+                    actor.Position.Y + AbsoluteLocation.Y,
+                    actor.Position.Z + AbsoluteLocation.Z
+                );
                 if (Math.Abs(actorPos.X - AbsoluteLocation.X) + Math.Abs(actorPos.Y - AbsoluteLocation.Y) + Math.Abs(actorPos.Z - AbsoluteLocation.Z) < 1.0)
                     continue;
 
                 var actorMapPos = actorPos.ToMapPos(_selectedMap);
                 var actorZoomedPos = actorMapPos.ToZoomedPos(mapParams);
-                actor.ZoomedPosition = new Vector2(actorZoomedPos.X, actorZoomedPos.Y);
+                actor.ZoomedPosition = new Vector2D(actorZoomedPos.X, actorZoomedPos.Y);
 
                 if (actor.ActorType == ActorType.Player && !actor.IsAlive)
                 {
@@ -1375,7 +1392,7 @@ namespace squad_dma
                 if (actor.ActorType != ActorType.Projectile && actor.ActorType != ActorType.ProjectileSmall)
                     continue;
 
-                var actorPos = actor.Position + AbsoluteLocation;
+                var actorPos = new Vector3D(actor.Position.X + AbsoluteLocation.X, actor.Position.Y + AbsoluteLocation.Y, actor.Position.Z + AbsoluteLocation.Z);
                 if (Math.Abs(actorPos.X - AbsoluteLocation.X) + Math.Abs(actorPos.Y - AbsoluteLocation.Y) + Math.Abs(actorPos.Z - AbsoluteLocation.Z) < 1.0)
                     continue;
 
@@ -1387,19 +1404,23 @@ namespace squad_dma
 
         private void HandleDeadPlayer(SKCanvas canvas, UActor actor, List<SKPoint> deadMarkers, MapParameters mapParams)
         {
-            if (actor.DeathPosition != Vector3.Zero)
+            if (actor.DeathPosition.X != 0 || actor.DeathPosition.Y != 0 || actor.DeathPosition.Z != 0)
             {
                 var timeSinceDeath = DateTime.Now - actor.TimeOfDeath;
                 if (timeSinceDeath.TotalSeconds <= 8)
                 {
-                    var deathPosAdjusted = actor.DeathPosition + AbsoluteLocation;
+                    var deathPosAdjusted = new Vector3D(
+                        actor.DeathPosition.X + AbsoluteLocation.X,
+                        actor.DeathPosition.Y + AbsoluteLocation.Y,
+                        actor.DeathPosition.Z + AbsoluteLocation.Z
+                    );
                     var deathPosMap = deathPosAdjusted.ToMapPos(_selectedMap);
                     var deathZoomedPos = deathPosMap.ToZoomedPos(mapParams);
                     deadMarkers.Add(deathZoomedPos.GetPoint());
                 }
                 else
                 {
-                    actor.DeathPosition = Vector3.Zero;
+                    actor.DeathPosition = Vector3D.Zero;
                     actor.TimeOfDeath = DateTime.MinValue;
                 }
             }
@@ -1423,7 +1444,10 @@ namespace squad_dma
 
                     if (!actor.IsFriendly() && _config.ShowEnemyDistance)
                     {
-                        var dist = Vector3.Distance(LocalPlayer.Position, actor.Position);
+                        var dx = LocalPlayer.Position.X - actor.Position.X;
+                        var dy = LocalPlayer.Position.Y - actor.Position.Y;
+                        var dz = LocalPlayer.Position.Z - actor.Position.Z;
+                        var dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
                         if (dist > 50 * 100)
                         {
                             lines = new string[1] { $"{(int)Math.Round(dist / 100)}m" };
@@ -1441,6 +1465,13 @@ namespace squad_dma
                 }
                 else if (actor.ActorType == ActorType.ProjectileAA)
                 {
+                    if (!_aaProjectileOrigins.ContainsKey(actor))
+                        _aaProjectileOrigins[actor] = new Vector3D(
+                            actor.Position.X + AbsoluteLocation.X,
+                            actor.Position.Y + AbsoluteLocation.Y,
+                            actor.Position.Z + AbsoluteLocation.Z
+                        );
+
                     actorZoomedPos.DrawProjectileAA(canvas, actor);
                 }
                 else if (actor.ActorType == ActorType.Admin)
@@ -1451,7 +1482,10 @@ namespace squad_dma
                 {
                     if (!actor.IsFriendly())
                     {
-                        var dist = Vector3.Distance(this.LocalPlayer.Position, actor.Position);
+                        var dx = LocalPlayer.Position.X - actor.Position.X;
+                        var dy = LocalPlayer.Position.Y - actor.Position.Y;
+                        var dz = LocalPlayer.Position.Z - actor.Position.Z;
+                        var dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
                         if (dist > 50 * 100)
                         {
                             lines = new string[1] { $"{(int)Math.Round(dist / 100)}m" };
@@ -1497,8 +1531,8 @@ namespace squad_dma
                 SKRect textBounds = new SKRect();
                 textFill.MeasureText(adminText, ref textBounds);
 
-                float textX = position.X - (textBounds.Width / 2);
-                float textY = position.Y + textOffset + (textBounds.Height / 2);
+                float textX = (float)(position.X - (textBounds.Width / 2));
+                float textY = (float)(position.Y + textOffset + (textBounds.Height / 2));
 
                 canvas.DrawText(adminText, textX, textY, textOutline);
                 canvas.DrawText(adminText, textX, textY, textFill);
@@ -1514,12 +1548,102 @@ namespace squad_dma
 
             foreach (var projectile in projectileAAs)
             {
-                var actorPos = projectile.Position + AbsoluteLocation;
+                var actorPos = new Vector3D(
+                    projectile.Position.X + AbsoluteLocation.X,
+                    projectile.Position.Y + AbsoluteLocation.Y,
+                    projectile.Position.Z + AbsoluteLocation.Z
+                );
                 var actorMapPos = actorPos.ToMapPos(_selectedMap);
                 var mapParams = GetMapLocation();
                 var actorZoomedPos = actorMapPos.ToZoomedPos(mapParams);
 
                 actorZoomedPos.DrawProjectileAA(canvas, projectile);
+
+                if (_aaProjectileOrigins.TryGetValue(projectile, out var startPos))
+                {
+                    var startMapPos = startPos.ToMapPos(_selectedMap);
+                    var startZoomedPos = startMapPos.ToZoomedPos(mapParams);
+                    DrawAAStartMarker(canvas, startZoomedPos);
+                }
+            }
+        }
+
+        private void DrawAAStartMarker(SKCanvas canvas, MapPosition startPos)
+        {
+            float size = 8 * _uiScale;
+            float thickness = 2 * _uiScale;
+
+            using (var outlinePaint = new SKPaint
+            {
+                Color = SKColors.Black,
+                StrokeWidth = thickness + 2 * _uiScale,
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeCap = SKStrokeCap.Round
+            })
+            using (var xPaint = new SKPaint
+            {
+                Color = SKColors.Yellow,
+                StrokeWidth = thickness,
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeCap = SKStrokeCap.Round
+            })
+            {
+                canvas.DrawLine(
+                    (float)(startPos.X - size), (float)(startPos.Y - size),
+                    (float)(startPos.X + size), (float)(startPos.Y + size),
+                    outlinePaint
+                );
+                canvas.DrawLine(
+                    (float)(startPos.X + size), (float)(startPos.Y - size),
+                    (float)(startPos.X - size), (float)(startPos.Y + size),
+                    outlinePaint
+                );
+
+                canvas.DrawLine(
+                    (float)(startPos.X - size), (float)(startPos.Y - size),
+                    (float)(startPos.X + size), (float)(startPos.Y + size),
+                    xPaint
+                );
+                canvas.DrawLine(
+                    (float)(startPos.X + size), (float)(startPos.Y - size),
+                    (float)(startPos.X - size), (float)(startPos.Y + size),
+                    xPaint
+                );
+            }
+
+            string text = "AA";
+            float textSize = 12 * _uiScale;
+            float textOffset = size + 4 * _uiScale;
+
+            using (var outlinePaint = new SKPaint
+            {
+                Color = SKColors.Black,
+                TextSize = textSize,
+                IsAntialias = true,
+                TextAlign = SKTextAlign.Left,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = 2 * _uiScale,
+                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
+            })
+            using (var textPaint = new SKPaint
+            {
+                Color = SKColors.Yellow,
+                TextSize = textSize,
+                IsAntialias = true,
+                TextAlign = SKTextAlign.Left,
+                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
+            })
+            {
+                SKRect textBounds = new SKRect();
+                textPaint.MeasureText(text, ref textBounds);
+
+                float textX = (float)(startPos.X + textOffset);
+                float textY = (float)(startPos.Y + (textBounds.Height / 2));
+
+                canvas.DrawText(text, textX, textY, outlinePaint);
+                canvas.DrawText(text, textX, textY, textPaint);
             }
         }
 
@@ -1560,13 +1684,11 @@ namespace squad_dma
             if (!IsReadyToRender()) return;
 
             var mapParams = GetMapLocation();
-            
-            if (mapParams == null)
-            {
-                return;
-            }
-            
-            var localPlayerPos = LocalPlayer.Position; 
+            var localPlayerPos = new Vector3D(
+                LocalPlayer.Position.X + AbsoluteLocation.X,
+                LocalPlayer.Position.Y + AbsoluteLocation.Y,
+                LocalPlayer.Position.Z + AbsoluteLocation.Z
+            );
 
             using var crosshairPaint = new SKPaint
             {
@@ -1578,11 +1700,14 @@ namespace squad_dma
 
             foreach (var poi in _pointsOfInterest)
             {
-                var poiRenderPos = poi.Position + AbsoluteLocation;
+                var poiRenderPos = new Vector3D(poi.Position.X + AbsoluteLocation.X, poi.Position.Y + AbsoluteLocation.Y, poi.Position.Z + AbsoluteLocation.Z);
                 var poiMapPos = poiRenderPos.ToMapPos(_selectedMap);
                 var poiZoomedPos = poiMapPos.ToZoomedPos(mapParams);
 
-                var distance = Vector3.Distance(localPlayerPos, poi.Position); 
+                var dx = localPlayerPos.X - poi.Position.X;
+                var dy = localPlayerPos.Y - poi.Position.Y;
+                var dz = localPlayerPos.Z - poi.Position.Z;
+                var distance = Math.Sqrt(dx * dx + dy * dy + dz * dz);
                 int distanceMeters = (int)Math.Round(distance / 100);
                 double milliradians = MetersToMilliradians(distanceMeters);
 
@@ -1604,7 +1729,7 @@ namespace squad_dma
             }
         }
 
-        private void DrawPOIText(SKCanvas canvas, MapPosition position, float distance, float bearing, float crosshairSize)
+        private void DrawPOIText(SKCanvas canvas, MapPosition position, double distance, float bearing, float crosshairSize)
         {
             int distanceMeters = (int)Math.Round(distance / 100);
             double milliradians = MetersToMilliradians(distanceMeters);
@@ -1654,18 +1779,18 @@ namespace squad_dma
             return 800;
         }
 
-        private float CalculateBearing(Vector3 playerPos, Vector3 poiPos)
+        private float CalculateBearing(Vector3D playerPos, Vector3D poiPos)
         {
-            float deltaX = poiPos.X - playerPos.X;
-            float deltaY = playerPos.Y - poiPos.Y;
+            double deltaX = poiPos.X - playerPos.X;
+            double deltaY = playerPos.Y - poiPos.Y;
 
-            float radians = (float)Math.Atan2(deltaY, deltaX);
-            float degrees = radians * (180f / (float)Math.PI);
-            degrees = 90f - degrees;
+            double radians = Math.Atan2(deltaY, deltaX);
+            double degrees = radians * (180.0 / Math.PI);
+            degrees = 90.0 - degrees;
 
-            if (degrees < 0) degrees += 360f;
+            if (degrees < 0) degrees += 360.0;
 
-            return degrees;
+            return (float)degrees;
         }
 
         private void DrawToolTips(SKCanvas canvas)
@@ -1682,14 +1807,30 @@ namespace squad_dma
             {
                 if (_closestPlayerToMouse is not null)
                 {
-                    var localPlayerPos = localPlayer.Position + AbsoluteLocation;
-                    var hoveredPlayerPos = _closestPlayerToMouse.Position + AbsoluteLocation;
-                    var distance = Vector3.Distance(localPlayerPos, hoveredPlayerPos);
+                    var localPlayerPos = new Vector3D(
+                        localPlayer.Position.X + AbsoluteLocation.X,
+                        localPlayer.Position.Y + AbsoluteLocation.Y,
+                        localPlayer.Position.Z + AbsoluteLocation.Z
+                    );
+                    var hoveredPlayerPos = new Vector3D(
+                        _closestPlayerToMouse.Position.X + AbsoluteLocation.X,
+                        _closestPlayerToMouse.Position.Y + AbsoluteLocation.Y,
+                        _closestPlayerToMouse.Position.Z + AbsoluteLocation.Z
+                    );
+                    
+                    var dx = localPlayerPos.X - hoveredPlayerPos.X;
+                    var dy = localPlayerPos.Y - hoveredPlayerPos.Y;
+                    var dz = localPlayerPos.Z - hoveredPlayerPos.Z;
+                    var distance = Math.Sqrt(dx * dx + dy * dy + dz * dz);
 
                     var distanceText = $"{(int)Math.Round(distance / 100)}m";
 
-                    var playerZoomedPos = (_closestPlayerToMouse
-                        .Position + AbsoluteLocation)
+                    var playerPos = new Vector3D(
+                        _closestPlayerToMouse.Position.X + AbsoluteLocation.X,
+                        _closestPlayerToMouse.Position.Y + AbsoluteLocation.Y,
+                        _closestPlayerToMouse.Position.Z + AbsoluteLocation.Z
+                    );
+                    var playerZoomedPos = playerPos
                         .ToMapPos(_selectedMap)
                         .ToZoomedPos(mapParams);
 
@@ -1703,7 +1844,11 @@ namespace squad_dma
             var localPlayer = this.LocalPlayer;
             if (localPlayer is not null)
             {
-                var position = localPlayer.Position + AbsoluteLocation;
+                var position = new Vector3D(
+                    localPlayer.Position.X + AbsoluteLocation.X,
+                    localPlayer.Position.Y + AbsoluteLocation.Y,
+                    localPlayer.Position.Z + AbsoluteLocation.Z
+                );
                 AddPointOfInterest(position, "POI 1");
 
                 _mapCanvas.Invalidate();
@@ -1732,7 +1877,7 @@ namespace squad_dma
             _closestPlayerToMouse = null;
         }
 
-        private T FindClosestObject<T>(IEnumerable<T> objects, Vector2 position, Func<T, Vector2> positionSelector, float threshold)
+        private T FindClosestObject<T>(IEnumerable<T> objects, Vector2D position, Func<T, Vector2D> positionSelector, float threshold)
             where T : class
         {
             if (objects is null || !objects.Any())
@@ -1740,14 +1885,34 @@ namespace squad_dma
 
             var closestObject = objects.Aggregate(
                 (x1, x2) =>
-                    x2 == null || Vector2.Distance(positionSelector(x1), position)
-                    < Vector2.Distance(positionSelector(x2), position)
-                        ? x1
-                        : x2
+                {
+                    if (x2 == null) return x1;
+                    
+                    var pos1 = positionSelector(x1);
+                    var pos2 = positionSelector(x2);
+                    
+                    var dx1 = pos1.X - position.X;
+                    var dy1 = pos1.Y - position.Y;
+                    var dist1 = Math.Sqrt(dx1 * dx1 + dy1 * dy1);
+                    
+                    var dx2 = pos2.X - position.X;
+                    var dy2 = pos2.Y - position.Y;
+                    var dist2 = Math.Sqrt(dx2 * dx2 + dy2 * dy2);
+                    
+                    return dist1 < dist2 ? x1 : x2;
+                }
             );
 
-            if (closestObject is not null && Vector2.Distance(positionSelector(closestObject), position) < threshold)
-                return closestObject;
+            if (closestObject is not null)
+            {
+                var closestPos = positionSelector(closestObject);
+                var dx = closestPos.X - position.X;
+                var dy = closestPos.Y - position.Y;
+                var distance = Math.Sqrt(dx * dx + dy * dy);
+                
+                if (distance < threshold)
+                    return closestObject;
+            }
 
             return null;
         }
@@ -1756,8 +1921,8 @@ namespace squad_dma
         {
             if (!_isDragging)
             {
-                float dx = _targetPanPosition.X - _mapPanPosition.X;
-                float dy = _targetPanPosition.Y - _mapPanPosition.Y;
+                float dx = (float)(_targetPanPosition.X - _mapPanPosition.X);
+                float dy = (float)(_targetPanPosition.Y - _mapPanPosition.Y);
                 
                 if (Math.Abs(dx) < 0.1f && Math.Abs(dy) < 0.1f)
                 {
@@ -1765,8 +1930,8 @@ namespace squad_dma
                     return;
                 }
                 
-                _mapPanPosition.X += dx * PAN_SMOOTHNESS;
-                _mapPanPosition.Y += dy * PAN_SMOOTHNESS;
+                _mapPanPosition.X += (float)(dx * PAN_SMOOTHNESS);
+                _mapPanPosition.Y += (float)(dy * PAN_SMOOTHNESS);
                 _mapCanvas.Invalidate();
             }
         }
@@ -1779,8 +1944,8 @@ namespace squad_dma
             if (_isFreeMapToggled)
             {
                 float zoomFactor = oldZoom / _config.DefaultZoom;
-                _mapPanPosition.X = _targetPanPosition.X - (_targetPanPosition.X - _mapPanPosition.X) * zoomFactor;
-                _mapPanPosition.Y = _targetPanPosition.Y - (_targetPanPosition.Y - _mapPanPosition.Y) * zoomFactor;
+                _mapPanPosition.X = (float)(_targetPanPosition.X - (_targetPanPosition.X - _mapPanPosition.X) * zoomFactor);
+                _mapPanPosition.Y = (float)(_targetPanPosition.Y - (_targetPanPosition.Y - _mapPanPosition.Y) * zoomFactor);
             }
             
             _mapCanvas.Invalidate();
@@ -1795,8 +1960,8 @@ namespace squad_dma
             if (_isFreeMapToggled)
             {
                 float zoomFactor = oldZoom / _config.DefaultZoom;
-                _mapPanPosition.X = _targetPanPosition.X - (_targetPanPosition.X - _mapPanPosition.X) * zoomFactor;
-                _mapPanPosition.Y = _targetPanPosition.Y - (_targetPanPosition.Y - _mapPanPosition.Y) * zoomFactor;
+                _mapPanPosition.X = (float)(_targetPanPosition.X - (_targetPanPosition.X - _mapPanPosition.X) * zoomFactor);
+                _mapPanPosition.Y = (float)(_targetPanPosition.Y - (_targetPanPosition.Y - _mapPanPosition.Y) * zoomFactor);
             }
             
             _mapCanvas.Invalidate();
@@ -1816,8 +1981,13 @@ namespace squad_dma
                 var localPlayer = this.LocalPlayer;
                 if (localPlayer is not null)
                 {
-                    var localPlayerMapPos = (localPlayer.Position + AbsoluteLocation).ToMapPos(_selectedMap);
-                    _targetPanPosition = new SKPoint(localPlayerMapPos.X, localPlayerMapPos.Y);
+                    var localPlayerPos = new Vector3D(
+                        localPlayer.Position.X + AbsoluteLocation.X,
+                        localPlayer.Position.Y + AbsoluteLocation.Y,
+                        localPlayer.Position.Z + AbsoluteLocation.Z
+                    );
+                    var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
+                    _targetPanPosition = new SKPoint((float)localPlayerMapPos.X, (float)localPlayerMapPos.Y);
                     _mapPanPosition.X = localPlayerMapPos.X;
                     _mapPanPosition.Y = localPlayerMapPos.Y;
                     _mapPanPosition.Height = localPlayerMapPos.Height;
@@ -1834,8 +2004,13 @@ namespace squad_dma
                 var localPlayer = this.LocalPlayer;
                 if (localPlayer is not null)
                 {
-                    var localPlayerMapPos = (localPlayer.Position + AbsoluteLocation).ToMapPos(_selectedMap);
-                    _targetPanPosition = new SKPoint(localPlayerMapPos.X, localPlayerMapPos.Y);
+                    var localPlayerPos = new Vector3D(
+                        localPlayer.Position.X + AbsoluteLocation.X,
+                        localPlayer.Position.Y + AbsoluteLocation.Y,
+                        localPlayer.Position.Z + AbsoluteLocation.Z
+                    );
+                    var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
+                    _targetPanPosition = new SKPoint((float)localPlayerMapPos.X, (float)localPlayerMapPos.Y);
                     _mapPanPosition.X = localPlayerMapPos.X;
                     _mapPanPosition.Y = localPlayerMapPos.Y;
                     _mapPanPosition.Height = localPlayerMapPos.Height;
@@ -1893,9 +2068,7 @@ namespace squad_dma
 
                 var worldX = (mouseX - _selectedMap.ConfigFile.X) / _selectedMap.ConfigFile.Scale;
                 var worldY = (mouseY - _selectedMap.ConfigFile.Y) / _selectedMap.ConfigFile.Scale;
-                var worldZ = (LocalPlayer.Position + AbsoluteLocation).Z;
-
-                var worldPos = new Vector3(worldX, worldY, worldZ) - AbsoluteLocation;
+                var worldPos = new Vector3D(worldX, worldY, LocalPlayer.Position.Z);
 
                 _pointsOfInterest.Add(new PointOfInterest(worldPos, "POI"));
                 _mapCanvas.Invalidate();
@@ -1909,10 +2082,10 @@ namespace squad_dma
 
         public class PointOfInterest
         {
-            public Vector3 Position { get; }
+            public Vector3D Position { get; }
             public string Name { get; }
 
-            public PointOfInterest(Vector3 position, string name)
+            public PointOfInterest(Vector3D position, string name)
             {
                 Position = position;
                 Name = name;

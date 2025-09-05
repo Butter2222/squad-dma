@@ -14,6 +14,40 @@ namespace squad_dma
         private static Dictionary<Team, SKPaint> teamEntityPaints = [];
         private static Dictionary<Team, SKPaint> teamTextPaints = [];
 
+        #region Vector Conversion Extensions
+        /// <summary>
+        /// Convert System.Numerics.Vector3 to Vector3D
+        /// </summary>
+        public static Vector3D ToVector3D(this Vector3 vector)
+        {
+            return new Vector3D(vector.X, vector.Y, vector.Z);
+        }
+
+        /// <summary>
+        /// Convert Vector3D to System.Numerics.Vector3
+        /// </summary>
+        public static Vector3 ToVector3(this Vector3D vector)
+        {
+            return new Vector3((float)vector.X, (float)vector.Y, (float)vector.Z);
+        }
+
+        /// <summary>
+        /// Convert System.Numerics.Vector2 to Vector2D
+        /// </summary>
+        public static Vector2D ToVector2D(this Vector2 vector)
+        {
+            return new Vector2D(vector.X, vector.Y);
+        }
+
+        /// <summary>
+        /// Convert Vector2D to System.Numerics.Vector2
+        /// </summary>
+        public static Vector2 ToVector2(this Vector2D vector)
+        {
+            return new Vector2((float)vector.X, (float)vector.Y);
+        }
+        #endregion
+
         #region Generic Extensions
         /// <summary>
         /// Restarts a timer from 0. (Timer will be started if not already running)
@@ -27,9 +61,9 @@ namespace squad_dma
         /// <summary>
         /// Converts 'Degrees' to 'Radians'.
         /// </summary>
-        public static double ToRadians(this float degrees)
+        public static double ToRadians(this double degrees)
         {
-            return (Math.PI / 180) * degrees;
+            return (Math.PI / 180.0) * degrees;
         }
         #endregion
 
@@ -37,13 +71,19 @@ namespace squad_dma
         /// <summary>
         /// Convert game position to 'Bitmap' Map Position coordinates.
         /// </summary>
-        public static MapPosition ToMapPos(this System.Numerics.Vector3 vector, Map map)
+        public static MapPosition ToMapPos(this Vector3D vector, Map map)
         {
+            if (map?.ConfigFile == null)
+                return new MapPosition();
+
+            double worldX = vector.X - Memory.AbsoluteLocation.X;
+            double worldY = vector.Y - Memory.AbsoluteLocation.Y;
+
             return new MapPosition()
             {
-                X = map.ConfigFile.X + (vector.X * map.ConfigFile.Scale),
-                Y = map.ConfigFile.Y + (vector.Y * map.ConfigFile.Scale), // Invert 'Y' unity 0,0 bottom left, C# top left
-                Height = vector.Z // Keep as float, calculation done later
+                X = map.ConfigFile.X + (worldX * map.ConfigFile.Scale),
+                Y = map.ConfigFile.Y + (worldY * map.ConfigFile.Scale),
+                Height = vector.Z
             };
         }
 
@@ -52,12 +92,15 @@ namespace squad_dma
         /// </summary>
         public static MapPosition ToZoomedPos(this MapPosition location, MapParameters mapParams)
         {
+            double finalX = (location.X - mapParams.Bounds.Left) * mapParams.XScale;
+            double finalY = (location.Y - mapParams.Bounds.Top) * mapParams.YScale;
+            
             return new MapPosition()
             {
                 UIScale = mapParams.UIScale,
                 TechScale = mapParams.TechScale,
-                X = (location.X - mapParams.Bounds.Left) * mapParams.XScale,
-                Y = (location.Y - mapParams.Bounds.Top) * mapParams.YScale,
+                X = finalX,
+                Y = finalY,
                 Height = location.Height
             };
         }
@@ -111,12 +154,14 @@ namespace squad_dma
 
             try
             {
-                float distance = Vector3.Distance(actor.Position, targetPlayer.Position);
+                Vector3 actorPos = actor.Position.ToVector3();
+                Vector3 targetPos = targetPlayer.Position.ToVector3();
+                float distance = Vector3.Distance(actorPos, targetPos);
                 
                 if (distance > 300 * 100)
                     return false;
 
-                Vector3 directionToTarget = targetPlayer.Position - actor.Position;
+                Vector3 directionToTarget = targetPos - actorPos;
                 directionToTarget = Vector3.Normalize(directionToTarget);
 
                 float radians = (float)actor.Rotation.X.ToRadians();

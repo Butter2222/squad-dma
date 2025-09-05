@@ -25,8 +25,8 @@ namespace squad_dma
         public float TechScale;
         public int MapLayerIndex;
         public SKRect Bounds;
-        public float XScale;
-        public float YScale;
+        public double XScale;
+        public double YScale;
     }
 
     public class MapConfig
@@ -41,13 +41,13 @@ namespace squad_dma
         public List<string> MapID { get; set; } // List of possible map IDs
 
         [JsonPropertyName("x")]
-        public float X { get; set; }
+        public double X { get; set; }
 
         [JsonPropertyName("y")]
-        public float Y { get; set; }
+        public double Y { get; set; }
 
         [JsonPropertyName("scale")]
-        public float Scale { get; set; }
+        public double Scale { get; set; }
 
         [JsonPropertyName("mapLayers")]
         public List<MapLayer> MapLayers { get; set; }
@@ -78,28 +78,32 @@ namespace squad_dma
     {
         public MapPosition() { }
         public float UIScale = 0;
-        public float TechScale = 0;  // Added tech marker scale
-        public float X = 0;
-        public float Y = 0;
-        public float Height = 0;
+        public float TechScale = 0;
+        public double X = 0;
+        public double Y = 0;
+        public double Height = 0;
 
         private static SKPaint _projectileOutlinePaint;
         private static SKPaint _projectileFillPaint;
 
         public SKPoint GetPoint(float xOff = 0, float yOff = 0)
         {
-            return new SKPoint(X + xOff, Y + yOff);
+            double finalX = X + xOff;
+            double finalY = Y + yOff;
+            return new SKPoint((float)finalX, (float)finalY);
         }
 
         private SKPoint GetAimlineEndpoint(double radians, float aimlineLength)
         {
-            aimlineLength *= UIScale;
-            return new SKPoint((float)(this.X + Math.Cos(radians) * aimlineLength), (float)(this.Y + Math.Sin(radians) * aimlineLength));
+            double scaledLength = aimlineLength * UIScale;
+            double finalX = this.X + Math.Cos(radians) * scaledLength;
+            double finalY = this.Y + Math.Sin(radians) * scaledLength;
+            return new SKPoint((float)finalX, (float)finalY);
         }
 
         public void DrawPlayerMarker(SKCanvas canvas, UActor player, int aimlineLength, SKColor? color = null)
         {
-            var radians = player.Rotation.X.ToRadians();
+            var radians = (double)player.Rotation.X.ToRadians();
             SKPaint paint = player.GetActorPaint();
 
             if (color.HasValue)
@@ -191,8 +195,8 @@ namespace squad_dma
             SKPoint center = this.GetPoint();
 
             float rotation = Names.DoNotRotate.Contains(actor.ActorType) ? 0 
-                           : Names.RotateBy45Degrees.Contains(actor.ActorType) ? actor.Rotation.X + 45 
-                           : actor.Rotation.X + 90;
+                           : Names.RotateBy45Degrees.Contains(actor.ActorType) ? (float)(actor.Rotation.X + 45) 
+                           : (float)(actor.Rotation.X + 90);
 
             SKMatrix matrix = SKMatrix.CreateTranslation(center.X, center.Y);
             matrix = SKMatrix.Concat(matrix, SKMatrix.CreateRotationDegrees(rotation));
@@ -272,8 +276,8 @@ namespace squad_dma
 
             var height = lines.Length * textSpacing;
 
-            var left = X + padding;
-            var top = Y - padding;
+            var left = (float)X + padding;
+            var top = (float)Y - padding;
             var right = left + maxWidth + padding * 2;
             var bottom = top + height + padding * 2;
 
