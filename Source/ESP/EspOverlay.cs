@@ -390,7 +390,7 @@ namespace squad_dma
                 return;
 
             vehicleBrush.Color = isUnclaimed ? new RawColor4(1.0f, 1.0f, 0.0f, 1.0f) :
-                                isEnemy ? new RawColor4(1.0f, 0.5f, 0.5f, 1.0f) :
+                                isEnemy ? new RawColor4(1.0f, 1.0f, 0.0f, 1.0f) :
                                 new RawColor4(0.0f, 1.0f, 0.0f, 1.0f);
 
             float boxSize = 500f / (distance + 1f);

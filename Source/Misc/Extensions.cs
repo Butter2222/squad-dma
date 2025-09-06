@@ -130,6 +130,7 @@ namespace squad_dma
                 ActorType.Projectile => SKColors.Orange,
                 ActorType.ProjectileAA => SKColors.Orange,
                 ActorType.ProjectileSmall => SKPaints.SmallProjectile,
+                _ when Names.Vehicles.Contains(actor.ActorType) => SKPaints.Vehicle,
                 _ => SKPaints.DefaultTextColor // Default
             };
 

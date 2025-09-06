@@ -48,6 +48,7 @@
         public const uint RelativeLocation = 0x128;
         public const uint RelativeRotation = 0x140;
         public const uint RelativeScale3D = 0x158;
+        public const uint ComponentToWorld = 0x1E0;
     }
 
     public struct UPrimitiveComponent

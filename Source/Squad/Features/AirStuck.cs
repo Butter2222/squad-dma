@@ -48,7 +48,7 @@ namespace squad_dma.Source.Squad.Features
         
         protected override bool ShouldApplyModifications()
         {
-            return Program.Config.SetAirStuck;
+            return Program.Config.AirStuckEnabled && Program.Config.SetAirStuck;
         }
         
         protected override void LoadOriginalValues()

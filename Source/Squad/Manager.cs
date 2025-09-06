@@ -274,82 +274,86 @@ namespace squad_dma.Source.Squad
         /// <param name="playerState">Current player state</param>
         private void ApplyFeaturesBasedOnState(PlayerState playerState)
         {
+            // Always call StateAwareFeature instances so they can handle their own state transitions
+            ApplyStateAwareFeatures();
+            
             switch (playerState)
             {
                 case PlayerState.MainMenu:
-                    // No features should be applied in main menu
+                    // No additional features for main menu
                     break;
                     
                 case PlayerState.CommandMenu:
                     // Limited features for command menu state
-                    // Maybe only allow some UI-related features
                     break;
                     
                 case PlayerState.Alive:
-                    // Apply all combat and movement features when alive
+                    // Apply legacy features that need manual state management
                     ApplyAliveStateFeatures();
                     break;
                     
                 case PlayerState.Dead:
-                    // Apply limited features when dead (no weapon features)
+                    // Apply limited legacy features when dead
                     ApplyDeadStateFeatures();
                     break;
                     
                 case PlayerState.Unknown:
                 default:
-                    // Fallback to original behavior for unknown states
-                    ApplyAllFeatures();
+                    // Apply legacy features for unknown states
+                    ApplyAliveStateFeatures();
                     break;
             }
         }
         
         /// <summary>
-        /// Apply features when player is alive
+        /// Apply StateAwareFeature instances - called regardless of player state
+        /// </summary>
+        private void ApplyStateAwareFeatures()
+        {
+            // StateAwareFeature instances handle their own state management and config checking
+            if (_config.DisableSuppression)
+                _suppression.Apply();
+                
+            if (_config.NoRecoil)
+                _noRecoil.Apply();
+                
+            if (_config.NoSpread)
+                _noSpread.Apply();
+                
+            if (_config.NoSway)
+                _noSway.Apply();
+                
+            if (_config.SetSpeedHack)
+                _speedHack.Apply();
+                
+            if (_config.SetAirStuck)
+                _airStuck.Apply();
+                
+            if (_config.DisableCollision)
+                _collision.Apply();
+        }
+        
+        /// <summary>
+        /// Apply legacy features when player is alive
         /// </summary>
         private void ApplyAliveStateFeatures()
         {
-            // State-aware features (handle their own state management)
-            if (_config.DisableSuppression && _suppression.IsEnabled)
-                _suppression.Apply();
-
+            // Legacy features that need manual state management
             if (_config.SetInteractionDistances && _interactionDistances.IsEnabled)
                 _interactionDistances.Apply();
                 
-            if (_config.NoRecoil && _noRecoil.IsEnabled)
-                _noRecoil.Apply();
-                
-            if (_config.NoSpread && _noSpread.IsEnabled)
-                _noSpread.Apply();
-                
-            if (_config.NoSway && _noSway.IsEnabled)
-                _noSway.Apply();
-                
-            if (_config.SetSpeedHack && _speedHack.IsEnabled)
-                _speedHack.Apply();
-                
-            if (_config.SetAirStuck && _airStuck.IsEnabled)
-                _airStuck.Apply();
-                
-            if (_config.DisableCollision && _collision.IsEnabled)
-                _collision.Apply();
-
-            // Legacy features (still need manual state management)
             if (_config.AllowShootingInMainBase && _shootingInMainBase.IsEnabled)
                 _shootingInMainBase.Apply();
         }
         
         /// <summary>
-        /// Apply features when player is dead
+        /// Apply legacy features when player is dead
         /// </summary>
         private void ApplyDeadStateFeatures()
         {
-            // Only apply non-combat features when dead
+            // Only apply non-combat legacy features when dead
             if (_config.SetInteractionDistances && _interactionDistances.IsEnabled)
                 _interactionDistances.Apply();
-                
-            // Maybe allow speed hack for faster respawn movement
-            if (_config.SetSpeedHack && _speedHack.IsEnabled)
-                _speedHack.Apply();
         }
         
         /// <summary>

@@ -342,11 +342,11 @@ namespace squad_dma
             chkSpeedHack.Checked = _config.SetSpeedHack;
             chkSpeedHack.CheckedChanged += ChkSetTimeDilation_CheckedChanged;
 
-            chkAirStuck.Checked = _config.SetAirStuck;
+            chkAirStuck.Checked = _config.AirStuckEnabled;
             chkAirStuck.CheckedChanged += ChkAirStuck_CheckedChanged;
 
             chkDisableCollision.Checked = _config.DisableCollision;
-            chkDisableCollision.Enabled = _config.SetAirStuck;
+            chkDisableCollision.Enabled = _config.AirStuckEnabled;
             chkDisableCollision.CheckedChanged += ChkDisableCollision_CheckedChanged;
 
             chkQuickZoom.Checked = _config.QuickZoom;
@@ -828,7 +828,7 @@ namespace squad_dma
             chkAllowShootingInMainBase.CheckedChanged += ChkAllowShootingInMainBase_CheckedChanged;
             chkSpeedHack.Checked = _config.SetSpeedHack;
             chkSpeedHack.CheckedChanged += ChkSetTimeDilation_CheckedChanged;
-            chkAirStuck.Checked = _config.SetAirStuck;
+            chkAirStuck.Checked = _config.AirStuckEnabled;
             chkAirStuck.CheckedChanged += ChkAirStuck_CheckedChanged;
             chkNoCameraShake.Checked = _config.NoCameraShake;
             chkNoCameraShake.CheckedChanged += ChkNoCameraShake_CheckedChanged;
@@ -1494,8 +1494,8 @@ namespace squad_dma
                         var dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
                         if (dist > 50 * 100)
                         {
-                            lines = new string[1] { $"{(int)Math.Round(dist / 100)}m" };
-                            actorZoomedPos.DrawActorText(canvas, actor, lines);
+                            string distanceText = $"{(int)Math.Round(dist / 100)}m";
+                            actorZoomedPos.DrawVehicleDistance(canvas, actor, distanceText);
                         }
                     }
                     actorZoomedPos.DrawTechMarker(canvas, actor);
@@ -2235,8 +2235,14 @@ namespace squad_dma
 
         private void ChkAirStuck_CheckedChanged(object sender, EventArgs e)
         {
+            // Update the AirStuckEnabled config property (checkbox state)
+            _config.AirStuckEnabled = chkAirStuck.Checked;
+            Config.SaveConfig(_config);
+            
+            // Enable/disable collision checkbox based on AirStuck checkbox
             chkDisableCollision.Enabled = chkAirStuck.Checked;
             
+            // If checkbox is unchecked, also disable the active feature
             if (!chkAirStuck.Checked && _config.SetAirStuck)
             {
                 _config.SetAirStuck = false;

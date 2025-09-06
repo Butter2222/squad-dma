@@ -85,12 +85,57 @@ namespace squad_dma
 
         private static SKPaint _projectileOutlinePaint;
         private static SKPaint _projectileFillPaint;
+        
+        // Cached SKPaint objects for tech markers
+        private static SKPaint _techMarkerPaint;
+        private static SKPaint _techMarkerFriendlyPaint;
+        private static SKPaint _techMarkerOutlinePaint;
+        private static SKPaint _techMarkerFriendlyOutlinePaint;
+        private static bool _paintsInitialized = false;
 
         public SKPoint GetPoint(float xOff = 0, float yOff = 0)
         {
             double finalX = X + xOff;
             double finalY = Y + yOff;
             return new SKPoint((float)finalX, (float)finalY);
+        }
+
+        private static void InitializeTechMarkerPaints()
+        {
+            if (_paintsInitialized)
+                return;
+
+            _techMarkerPaint = new SKPaint
+            {
+                IsAntialias = true,
+                FilterQuality = SKFilterQuality.High
+            };
+
+            _techMarkerFriendlyPaint = new SKPaint
+            {
+                IsAntialias = true,
+                FilterQuality = SKFilterQuality.High,
+                ColorFilter = SKColorFilter.CreateBlendMode(SKPaints.Friendly, SKBlendMode.Modulate)
+            };
+
+            // Simple, tight outline paints
+            _techMarkerOutlinePaint = new SKPaint
+            {
+                IsAntialias = true,
+                FilterQuality = SKFilterQuality.High,
+                Color = SKColors.Black,
+                ImageFilter = SKImageFilter.CreateDropShadow(0, 0, 0.5f, 0.5f, SKColors.Black)
+            };
+
+            _techMarkerFriendlyOutlinePaint = new SKPaint
+            {
+                IsAntialias = true,
+                FilterQuality = SKFilterQuality.High,
+                Color = SKColors.White,
+                ImageFilter = SKImageFilter.CreateDropShadow(0, 0, 0.5f, 0.5f, SKColors.White)
+            };
+
+            _paintsInitialized = true;
         }
 
         private SKPoint GetAimlineEndpoint(double radians, float aimlineLength)
@@ -184,6 +229,9 @@ namespace squad_dma
             if (!Names.BitMaps.TryGetValue(actor.ActorType, out SKBitmap icon))
                 return;
 
+            // Initialize cached paints if not already done
+            InitializeTechMarkerPaints();
+
             float scale = 0.2f * TechScale;
             if (actor.ActorType == ActorType.Mine)
                 scale /= 1.5f;
@@ -202,31 +250,32 @@ namespace squad_dma
             matrix = SKMatrix.Concat(matrix, SKMatrix.CreateRotationDegrees(rotation));
             matrix = SKMatrix.Concat(matrix, SKMatrix.CreateTranslation(-iconWidth / 2, -iconHeight / 2));
 
-            SKPaint paint = new SKPaint
-            {
-                IsAntialias = true,
-                FilterQuality = SKFilterQuality.High
-            };
+            canvas.Save();
+            canvas.SetMatrix(matrix);
 
+            // Simple two-pass rendering: outline first, then main icon
             if (Names.Vehicles.Contains(actor.ActorType) || Names.Deployables.Contains(actor.ActorType))
             {
                 if (actor.IsFriendly())
                 {
-                    paint.ColorFilter = SKColorFilter.CreateBlendMode(SKPaints.Friendly, SKBlendMode.Modulate);
+                    // Friendly: white outline, then blue-tinted icon
+                    canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerFriendlyOutlinePaint);
+                    canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerFriendlyPaint);
                 }
                 else
                 {
-                    canvas.Save();
-                    canvas.SetMatrix(matrix);
-                    canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), paint);
-                    canvas.Restore();
-                    return;
+                    // Enemy: black outline, then original icon
+                    canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerOutlinePaint);
+                    canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerPaint);
                 }
             }
+            else
+            {
+                // Other actor types: simple black outline
+                canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerOutlinePaint);
+                canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerPaint);
+            }
 
-            canvas.Save();
-            canvas.SetMatrix(matrix);
-            canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), paint);
             canvas.Restore();
         }
 
@@ -257,6 +306,99 @@ namespace squad_dma
                 canvas.DrawText(line, textPosition, outlinePaint);
                 canvas.DrawText(line, textPosition, textPaint);
                 textPosition.Y += 12 * UIScale * 1.3f;
+            }
+        }
+
+        public void DrawVehicleDistance(SKCanvas canvas, UActor actor, string distanceText)
+        {
+            if (string.IsNullOrEmpty(distanceText) || actor.IsFriendly())
+                return;
+
+            SKPaint textPaint = SKPaints.TextBase.Clone();
+            textPaint.Color = actor.GetTextPaint().Color;
+            textPaint.TextSize = 13 * UIScale * 1.1f;
+            textPaint.TextAlign = SKTextAlign.Left;
+            textPaint.Typeface = CustomFonts.SKFontFamilyRegular; 
+            textPaint.SubpixelText = true; 
+
+            SKPaint outlinePaint = SKPaints.TextOutline.Clone();
+            outlinePaint.TextSize = 13 * UIScale * 1.1f;
+            outlinePaint.StrokeWidth = 2.8f * UIScale; 
+            outlinePaint.TextAlign = SKTextAlign.Left;
+            outlinePaint.Typeface = CustomFonts.SKFontFamilyRegular; 
+            outlinePaint.SubpixelText = true; 
+
+            SKPoint iconPosition = this.GetPoint(0, 0);
+            
+            float techMarkerSize = 0.2f * TechScale;
+            if (Names.BitMaps.TryGetValue(actor.ActorType, out SKBitmap icon))
+            {
+                float iconWidth = icon.Width * techMarkerSize;
+                float iconHeight = icon.Height * techMarkerSize;
+                
+                // Position at top-right of the tech marker with small offset
+                SKPoint textPosition = new SKPoint(
+                    iconPosition.X + (iconWidth * 0.5f) + (5 * UIScale), // Right edge + larger offset
+                    iconPosition.Y - (iconHeight * 0.5f) + (14 * UIScale * 1.3f) - (4 * UIScale) // Top edge + text height, moved up more
+                );
+
+                canvas.DrawText(distanceText, textPosition, outlinePaint);
+                canvas.DrawText(distanceText, textPosition, textPaint);
+            }
+            else
+            {
+                // Fallback positioning if no icon found
+                SKPoint textPosition = new SKPoint(
+                    iconPosition.X + (15 * UIScale),
+                    iconPosition.Y - (8 * UIScale)
+                );
+
+                canvas.DrawText(distanceText, textPosition, outlinePaint);
+                canvas.DrawText(distanceText, textPosition, textPaint);
+            }
+        }
+
+        public void DrawVehicleDistanceIndicator(SKCanvas canvas, UActor actor, string distanceText)
+        {
+            if (string.IsNullOrEmpty(distanceText))
+                return;
+
+            // Only show for enemy vehicles
+            if (actor.IsFriendly())
+                return;
+
+            SKPoint iconPosition = this.GetPoint(0, 0);
+            
+            float offsetX = 8 * UIScale;
+            float offsetY = -12 * UIScale;
+            SKPoint textPosition = new SKPoint(
+                iconPosition.X + offsetX,
+                iconPosition.Y + offsetY
+            );
+
+            using (var textPaint = new SKPaint
+            {
+                Color = SKColors.White,
+                TextSize = 13 * UIScale,
+                TextAlign = SKTextAlign.Left,
+                IsAntialias = true,
+                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright),
+                FilterQuality = SKFilterQuality.High
+            })
+            using (var outlinePaint = new SKPaint
+            {
+                Color = SKColors.Black,
+                TextSize = 13 * UIScale,
+                TextAlign = SKTextAlign.Left,
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = 3 * UIScale,
+                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright),
+                FilterQuality = SKFilterQuality.High
+            })
+            {
+                canvas.DrawText(distanceText, textPosition.X, textPosition.Y, outlinePaint);
+                canvas.DrawText(distanceText, textPosition.X, textPosition.Y, textPaint);
             }
         }
 

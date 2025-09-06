@@ -139,115 +139,86 @@ namespace squad_dma.Source.Squad.Debug
 
             try
             {
-                ulong playerState = Memory.ReadPtr(_playerController + Offsets.Controller.PlayerState);
-                if (playerState == 0)
+                var actorBaseWithName = _actors.GetActorBaseWithName();
+                if (actorBaseWithName.Count > 0)
                 {
-                    Program.Log("Failed to get player state");
-                    return;
-                }
+                    var names = Memory.GetNamesById([.. actorBaseWithName.Values.Distinct()]);
+                    var actorList = new List<(uint id, string name, ActorType? type, bool isKnown)>();
+                    var knownActors = new List<(uint id, string name, ActorType type)>();
+                    var unknownActors = new List<(uint id, string name)>();
 
-                int localTeamId = Memory.ReadValue<int>(playerState + PlayerStateTeamIdOffset);
-                
-                var vehiclesByTeam = new Dictionary<int, List<(string name, ActorType type)>>();
-                var unclaimedVehicles = new List<(string name, ActorType type)>();
-                var totalVehiclesFound = 0;
-                
-                var processedActors = new HashSet<string>(); // Track actors we've already categorized
+                    Program.Log("\n=== Complete Actor List (Excluding Players) ===");
 
-                foreach (var actor in _actors.Actors)
-                {
-                    try
+                    foreach (var nameEntry in names)
                     {
-                        var actorName = actor.Value.Name;
-                        var actorBase = actor.Value.Base;
-
-                        if (actorName.Contains("BP_Soldier"))
-                            continue;
-
-                        if (Names.TechNames.TryGetValue(actorName, out var actorType) && 
-                            squad_dma.Names.Vehicles.Contains(actorType))
+                        // Filter out only players (BP_Soldier)
+                        if (!nameEntry.Value.StartsWith("BP_Soldier"))
                         {
-                            totalVehiclesFound++;
-                            processedActors.Add(actorName); // Mark as processed
+                            // Try to get actor type from TechNames
+                            ActorType? actorType = null;
+                            bool isKnown = false;
                             
-                            int teamId = -1;
-                            ulong claimedBySquad = Memory.ReadPtr(actorBase + VehicleClaimedBySquadOffset);
-                            if (claimedBySquad != 0)
+                            if (Names.TechNames.TryGetValue(nameEntry.Value, out var type))
                             {
-                                teamId = Memory.ReadValue<int>(claimedBySquad + SquadStateTeamIdOffset);
-                            }
-
-                            if (teamId == -1)
-                            {
-                                unclaimedVehicles.Add((actorName, actorType));
+                                actorType = type;
+                                isKnown = true;
+                                knownActors.Add((nameEntry.Key, nameEntry.Value, type));
                             }
                             else
                             {
-                                if (!vehiclesByTeam.ContainsKey(teamId))
-                                {
-                                    vehiclesByTeam[teamId] = new List<(string name, ActorType type)>();
-                                }
-                                vehiclesByTeam[teamId].Add((actorName, actorType));
+                                unknownActors.Add((nameEntry.Key, nameEntry.Value));
                             }
+
+                            actorList.Add((nameEntry.Key, nameEntry.Value, actorType, isKnown));
                         }
                     }
-                    catch (Exception ex)
+
+                    Program.Log($"Total Actors Found: {actorList.Count}");
+                    Program.Log($"Known Actors: {knownActors.Count}");
+                    Program.Log($"Unknown Actors: {unknownActors.Count}\n");
+
+                    // Display all actors with status indicators
+                    var sortedActors = actorList.OrderBy(a => a.name).ToList();
+
+                    Program.Log("=== ALL ACTORS ===");
+                    foreach (var actor in sortedActors)
                     {
-                        Program.Log($"Error processing vehicle {actor.Value.Name}: {ex.Message}");
+                        var typeInfo = actor.type.HasValue ? $" ({actor.type})" : "";
+                        var status = actor.isKnown ? "[KNOWN]" : "[UNKNOWN]";
+                        Program.Log($"{actor.id} {actor.name}{typeInfo} {status}");
                     }
+
+                    // Highlight unknown actors separately
+                    if (unknownActors.Any())
+                    {
+                        Program.Log("\n=== UNKNOWN ACTORS (Missing from Dictionary) ===");
+                        Program.Log("These actors are not in our TechNames dictionary and may need to be added:");
+                        
+                        var sortedUnknown = unknownActors.OrderBy(a => a.name).ToList();
+                        foreach (var actor in sortedUnknown)
+                        {
+                            Program.Log($"  {actor.id} {actor.name}");
+                        }
+                        
+                        Program.Log($"\nTotal Unknown Actors: {unknownActors.Count}");
+                        Program.Log("Consider adding these to the Names.TechNames dictionary if they are vehicles/deployables.");
+                    }
+                    else
+                    {
+                        Program.Log("\n=== ALL ACTORS ARE KNOWN ===");
+                        Program.Log("All actors found are already in our TechNames dictionary!");
+                    }
+
+                    Program.Log($"\nTotal: {actorList.Count} actors (excluding players)");
                 }
-
-                // Collect all remaining actors that weren't categorized as known vehicles
-                var remainingActors = new List<string>();
-                foreach (var actor in _actors.Actors)
+                else
                 {
-                    var actorName = actor.Value.Name;
-                    if (!actorName.Contains("BP_Soldier") && 
-                        !actorName.Contains("BP_PlayerStart") && 
-                        !Names.TechNames.ContainsKey(actorName))  // Only include actors that aren't in our TechNames dictionary
-                    {
-                        remainingActors.Add(actorName);
-                    }
-                }
-
-                Program.Log("\n=== Vehicle Information ===");
-                Program.Log($"Local Team ID: {localTeamId}");
-                Program.Log($"Total Vehicles Found: {totalVehiclesFound}\n");
-
-                foreach (var team in vehiclesByTeam.OrderBy(t => t.Key))
-                {
-                    Program.Log($"Team {team.Key} ({team.Value.Count}):");
-                    foreach (var vehicle in team.Value)
-                    {
-                        Program.Log($"  {vehicle.name} ({vehicle.type})");
-                    }
-                    Program.Log("");
-                }
-
-                if (unclaimedVehicles.Any())
-                {
-                    Program.Log($"Unclaimed Vehicles ({unclaimedVehicles.Count}):");
-                    foreach (var vehicle in unclaimedVehicles)
-                    {
-                        Program.Log($"  {vehicle.name} ({vehicle.type})");
-                    }
-                    Program.Log("");
-                }
-
-                // Export all remaining actors
-                if (remainingActors.Any())
-                {
-                    Program.Log($"Remaining Actors ({remainingActors.Count}):");
-                    foreach (var actor in remainingActors.OrderBy(a => a))
-                    {
-                        Program.Log($"  {actor}");
-                    }
-                    Program.Log("");
+                    Program.Log("No entries found.");
                 }
             }
             catch (Exception ex)
             {
-                Program.Log($"Error in ListVehiclesInfo: {ex.Message}");
+                Program.Log($"Error in ListVehicles: {ex.Message}");
             }
         }
     }

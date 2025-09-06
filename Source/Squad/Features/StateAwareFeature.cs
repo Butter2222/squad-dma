@@ -72,6 +72,14 @@ namespace squad_dma.Source.Squad.Features
                     return;
                 }
                 
+                // Player is alive - reset flags to allow reapplication
+                if (_lastKnownState != PlayerState.Alive)
+                {
+                    Logger.Debug($"[{_featureName}] Player became alive, resetting flags for reapplication");
+                    _originalsLoaded = false;
+                    _isApplied = false;
+                }
+                
                 // Validate player and required actors
                 if (!ValidateGameState())
                 {

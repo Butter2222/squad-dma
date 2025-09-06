@@ -260,15 +260,15 @@ namespace squad_dma
                         teamInfoRound.AddEntry<int>(i, 6, pawnPlayerState, null, Offsets.ASQPlayerState.TeamID);
                         teamInfoRound.AddEntry<int>(i, 7, controllerPlayerState, null, Offsets.ASQPlayerState.TeamID);
 
-                        /*// Add mesh and bone tracking for ESP
-                        var meshPtr = playerInstanceInfoRound.AddEntry<ulong>(i, 8, actorAddr + Offsets.ASQSoldier.Mesh);
-                        //meshRound.AddEntry<FTransform>(i, 12, meshPtr, null, Offsets.USceneComponent.ComponentToWorld);
-                        var boneArrayPtr = meshRound.AddEntry<ulong>(i, 9, meshPtr, null, 0x4B0);
+                        // Add mesh and bone tracking for ESP
+                       // var meshPtr = playerInstanceInfoRound.AddEntry<ulong>(i, 8, actorAddr + Offsets.ASQSoldier.Mesh);
+                       // meshRound.AddEntry<FTransform>(i, 9, meshPtr, null, Offsets.USceneComponent.ComponentToWorld);
+                        //var boneArrayPtr = meshRound.AddEntry<ulong>(i, 10, meshPtr, null, 0x5B8);
 
-                        for (int j = 0; j < _boneIds.Length; j++)
-                        {
-                            boneInfoRound.AddEntry<FTransform>(i, 10 + j, boneArrayPtr, null, (uint)(_boneIds[j] * 0x30));
-                        }*/
+                       // for (int j = 0; j < _boneIds.Length; j++)
+                       // {
+                       //     boneInfoRound.AddEntry<FTransform>(i, 11 + j, boneArrayPtr, null, (uint)(_boneIds[j] * 0x30));
+                       // }
                     }
                     else if (Names.Deployables.Contains(actorType))
                     {

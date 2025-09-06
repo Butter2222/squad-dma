@@ -116,6 +116,9 @@ namespace squad_dma
         [JsonPropertyName("setAirStuck")]
         public bool SetAirStuck { get; set; } = false;
 
+        [JsonPropertyName("airStuckEnabled")]
+        public bool AirStuckEnabled { get; set; } = false;
+
         [JsonPropertyName("disableCollision")]
         public bool DisableCollision { get; set; } = false;
 

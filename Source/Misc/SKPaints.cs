@@ -10,8 +10,9 @@ namespace squad_dma
         public static readonly SKColor Unknown = SKColors.Purple;
         public static readonly SKColor Squad = SKColors.Green;
         public static readonly SKColor SmallProjectile = SKColors.Magenta; 
+        public static readonly SKColor Vehicle = SKColors.White;
 
-        public static readonly SKColor DefaultTextColor = SKColors.Magenta;
+        public static readonly SKColor DefaultTextColor = SKColors.White;
 
         #endregion
 

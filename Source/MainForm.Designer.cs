@@ -515,9 +515,9 @@ namespace squad_dma
             chkRapidFire.AutoSize = true;
             chkRapidFire.Location = new Point(210, 45);
             chkRapidFire.Name = "chkRapidFire";
-            chkRapidFire.Size = new Size(78, 19);
+            chkRapidFire.Size = new Size(125, 19);
             chkRapidFire.TabIndex = 7;
-            chkRapidFire.Text = "Rapid Fire";
+            chkRapidFire.Text = "Rapid Fire ( Crash )";
             chkRapidFire.UseVisualStyleBackColor = true;
             // 
             // chkInfiniteAmmo
@@ -525,9 +525,9 @@ namespace squad_dma
             chkInfiniteAmmo.AutoSize = true;
             chkInfiniteAmmo.Location = new Point(210, 20);
             chkInfiniteAmmo.Name = "chkInfiniteAmmo";
-            chkInfiniteAmmo.Size = new Size(103, 19);
+            chkInfiniteAmmo.Size = new Size(150, 19);
             chkInfiniteAmmo.TabIndex = 8;
-            chkInfiniteAmmo.Text = "Infinite Ammo";
+            chkInfiniteAmmo.Text = "Infinite Ammo ( Crash )";
             chkInfiniteAmmo.UseVisualStyleBackColor = true;
             // 
             // chkQuickSwap
@@ -545,9 +545,9 @@ namespace squad_dma
             chkForceFullAuto.AutoSize = true;
             chkForceFullAuto.Location = new Point(210, 70);
             chkForceFullAuto.Name = "chkForceFullAuto";
-            chkForceFullAuto.Size = new Size(106, 19);
+            chkForceFullAuto.Size = new Size(153, 19);
             chkForceFullAuto.TabIndex = 10;
-            chkForceFullAuto.Text = "Force Full Auto";
+            chkForceFullAuto.Text = "Force Full Auto ( Crash )";
             chkForceFullAuto.UseVisualStyleBackColor = true;
             chkForceFullAuto.CheckedChanged += ChkForceFullAuto_CheckedChanged;
             // 
@@ -558,7 +558,7 @@ namespace squad_dma
             chkNoRecoil.Name = "chkNoRecoil";
             chkNoRecoil.Size = new Size(124, 19);
             chkNoRecoil.TabIndex = 11;
-            chkNoRecoil.Text = "No Recoil ( Crash )";
+            chkNoRecoil.Text = "No Recoil ( Broke )";
             chkNoRecoil.UseVisualStyleBackColor = true;
             chkNoRecoil.CheckedChanged += ChkNoRecoil_CheckedChanged;
             // 
@@ -567,9 +567,9 @@ namespace squad_dma
             chkNoSpread.AutoSize = true;
             chkNoSpread.Location = new Point(210, 120);
             chkNoSpread.Name = "chkNoSpread";
-            chkNoSpread.Size = new Size(81, 19);
+            chkNoSpread.Size = new Size(131, 19);
             chkNoSpread.TabIndex = 12;
-            chkNoSpread.Text = "No Spread";
+            chkNoSpread.Text = "No Spread ( Broke ) ";
             chkNoSpread.UseVisualStyleBackColor = true;
             chkNoSpread.CheckedChanged += ChkNoSpread_CheckedChanged;
             // 
@@ -578,9 +578,9 @@ namespace squad_dma
             chkNoSway.AutoSize = true;
             chkNoSway.Location = new Point(210, 145);
             chkNoSway.Name = "chkNoSway";
-            chkNoSway.Size = new Size(72, 19);
+            chkNoSway.Size = new Size(122, 19);
             chkNoSway.TabIndex = 13;
-            chkNoSway.Text = "No Sway";
+            chkNoSway.Text = "No Sway ( Broke ) ";
             chkNoSway.UseVisualStyleBackColor = true;
             chkNoSway.CheckedChanged += ChkNoSway_CheckedChanged;
             // 
@@ -600,9 +600,9 @@ namespace squad_dma
             chkInstantGrenade.AutoSize = true;
             chkInstantGrenade.Location = new Point(210, 195);
             chkInstantGrenade.Name = "chkInstantGrenade";
-            chkInstantGrenade.Size = new Size(109, 19);
+            chkInstantGrenade.Size = new Size(156, 19);
             chkInstantGrenade.TabIndex = 15;
-            chkInstantGrenade.Text = "Instant Grenade";
+            chkInstantGrenade.Text = "Instant Grenade ( Crash )";
             chkInstantGrenade.UseVisualStyleBackColor = true;
             // 
             // grpKeybinds
@@ -1065,7 +1065,6 @@ namespace squad_dma
             ticketsPanel.Name = "ticketsPanel";
             ticketsPanel.Size = new Size(285, 30);
             ticketsPanel.TabIndex = 12;
-            // 
             // 
             // grpMapSetup
             // 

@@ -67,6 +67,14 @@ namespace squad_dma.Source.Squad.Features
                     return;
                 }
                 
+                // Player is alive - reset flags to allow reapplication
+                if (_lastKnownState != PlayerState.Alive)
+                {
+                    Logger.Debug($"[{NAME}] Player became alive, resetting flags for reapplication");
+                    _originalsLoaded = false;
+                    _isApplied = false;
+                }
+                
                 // Validate player and soldier actor
                 if (!IsLocalPlayerValid())
                 {
@@ -130,10 +138,10 @@ namespace squad_dma.Source.Squad.Features
                 if (!_isApplied)
                 {
                     Memory.WriteValue<float>(soldierActor + ASQSoldier.UseInteractDistance, 5000.0f);
-                    Memory.WriteValue<float>(soldierActor + ASQSoldier.InteractableRadiusMultiplier, 100.0f);
+                    Memory.WriteValue<float>(soldierActor + ASQSoldier.InteractableRadiusMultiplier, 200.0f);
                     
                     _isApplied = true;
-                    Logger.Debug($"[{NAME}] Applied interaction distance modifications (extended values: 5000.0f, 100.0f)");
+                    Logger.Debug($"[{NAME}] Applied interaction distance modifications (extended values: 5000.0f, 200.0f)");
                 }
             }
             catch (Exception ex)
