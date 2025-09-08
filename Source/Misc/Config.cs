@@ -73,7 +73,7 @@ namespace squad_dma
         public bool EspShowHealth { get; set; } = false;
 
         [JsonPropertyName("espShowBox")]
-        public bool EspShowBox { get; set; } = false;
+        public bool EspShowBox { get; set; } = true;
 
         [JsonPropertyName("espShowNames")]
         public bool EspShowNames { get; set; } = false;
@@ -89,6 +89,18 @@ namespace squad_dma
 
         [JsonPropertyName("espShowAllies")]
         public bool EspShowAllies { get; set; } = false;
+
+        [JsonPropertyName("aimviewPanelX")]
+        public int AimviewPanelX { get; set; } = -1; // -1 means use default position
+
+        [JsonPropertyName("aimviewPanelY")]
+        public int AimviewPanelY { get; set; } = -1; // -1 means use default position
+
+        [JsonPropertyName("aimviewPanelWidth")]
+        public int AimviewPanelWidth { get; set; } = 640; // Default mini 2560x1440 width
+
+        [JsonPropertyName("aimviewPanelHeight")]
+        public int AimviewPanelHeight { get; set; } = 360; // Default mini 2560x1440 height
 
         [JsonPropertyName("firstScopeMagnification")]
         public float FirstScopeMagnification { get; set; } = 4.0f;
@@ -346,11 +358,13 @@ namespace squad_dma
             ESPFontSize = 10f;
             EspShowDistance = true;
             EspShowHealth = false;
-            EspShowBox = false;
+            EspShowBox = true;
             EspMaxDistance = 1000f;
             EspTextColor = DefaultPaintColors["EspText"];
             EspBones = true;
             EspShowAllies = false;
+            AimviewPanelX = -1;
+            AimviewPanelY = -1;
             FirstScopeMagnification = 4.0f;
             SecondScopeMagnification = 6.0f;
             ThirdScopeMagnification = 12.0f;

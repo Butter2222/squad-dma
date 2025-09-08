@@ -10,16 +10,6 @@ namespace squad_dma.Source.Squad.Debug
         private readonly RegistredActors _actors;
         private bool _vehiclesLogged;
 
-        // Vehicle offsets from memory layout
-        private const int VehicleHealthOffset = 0x868;
-        private const int VehicleMaxHealthOffset = 0x86c;
-        private const int VehicleTypeOffset = 0x6f8;
-        private const int VehicleClaimedBySquadOffset = 0x530;
-        private const int VehicleRootComponentOffset = 0x138; // From Actor class
-        private const int SceneComponentLocationOffset = 0x11C; // From USceneComponent class
-        private const int PlayerStateSoldierOffset = 0x768; // From ASQPlayerState class
-        private const int PlayerStateTeamIdOffset = 0x400; // From ASQPlayerState class
-        private const int SquadStateTeamIdOffset = 0x2AC; // From ASQSquadState class
 
         public DebugVehicles(ulong playerController, bool inGame, RegistredActors actors)
         {
@@ -27,23 +17,6 @@ namespace squad_dma.Source.Squad.Debug
             _inGame = inGame;
             _actors = actors;
             _vehiclesLogged = false;
-        }
-
-        public void SetInstantSeatSwitch()  // Not Working in online
-        {
-            if (!_inGame || _playerController == 0) return;
-
-            try
-            {
-                ulong playerState = Memory.ReadPtr(_playerController + Offsets.Controller.PlayerState);
-                ulong currentSeatPtr = Memory.ReadPtr(playerState + 0x750);
-
-                if (currentSeatPtr == 0) return;
-
-                ulong seatConfigPtr = currentSeatPtr + 0x1f8;
-                Memory.WriteValue<float>(seatConfigPtr + 0x64, 1.0f);
-            }
-            catch { /* Silently fail */ }
         }
 
         public void LogVehicles(bool force = false)
@@ -87,7 +60,7 @@ namespace squad_dma.Source.Squad.Debug
                 }
 
                 // Get local team
-                int localTeamId = Memory.ReadValue<int>(playerState + PlayerStateTeamIdOffset);
+                int localTeamId = Memory.ReadValue<int>(playerState + Offsets.ASQPlayerState.TeamID);
                 Program.Log($"Local Team ID: {localTeamId}");
 
                 // Get all actors and filter for vehicles
@@ -108,10 +81,10 @@ namespace squad_dma.Source.Squad.Debug
 
                         // Read vehicle team ID
                         int teamId = -1;
-                        ulong claimedBySquad = Memory.ReadPtr(vehicleBase + VehicleClaimedBySquadOffset);
+                        ulong claimedBySquad = Memory.ReadPtr(vehicleBase + Offsets.SQVehicle.ClaimedBySquad);
                         if (claimedBySquad != 0)
                         {
-                            teamId = Memory.ReadValue<int>(claimedBySquad + SquadStateTeamIdOffset);
+                            teamId = Memory.ReadValue<int>(claimedBySquad + Offsets.ASQSquadState.TeamId);
                         }
 
                         bool isEnemy = teamId != -1 && teamId != localTeamId;

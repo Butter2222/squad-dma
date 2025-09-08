@@ -275,6 +275,7 @@
         public const uint Health = 0x9A0;
         public const uint MaxHealth = 0x9A4;
         public const uint ClaimedBySquad = 0x660;
+        public const uint VehicleType = 0x7D0; // Added from DebugVehicles
     }
 
     public struct SQDeployable

@@ -117,8 +117,27 @@ namespace squad_dma.Source.Squad.Features
         }
         
         /// <summary>
-        /// Get reference to collision system for external management
+        /// Called when player dies while AirStuck is active - disables the feature to prevent auto-reactivation
         /// </summary>
+        protected override void OnPlayerDeath()
+        {
+            try
+            {
+                Logger.Info($"[{_featureName}] Player died while feature was active - disabling to prevent auto-reactivation on respawn");
+                
+                // Disable the feature in config so it won't reactivate automatically when player respawns
+                if (Config.TryLoadConfig(out var config))
+                {
+                    config.SetAirStuck = false;
+                    Config.SaveConfig(config);
+                    Logger.Debug($"[{_featureName}] Disabled SetAirStuck in config due to player death");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[{_featureName}] Error handling player death: {ex.Message}");
+            }
+        }
         
         /// <summary>
         /// Force disable AirStuck - emergency recovery from stuck state

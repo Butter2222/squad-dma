@@ -26,6 +26,7 @@ namespace squad_dma
         private System.Windows.Forms.Timer _panTimer;
         private GameStatus _previousGameStatus = GameStatus.NotFound;
         private EspOverlay _espOverlay;
+        private AimviewPanel _aimviewPanel;
 
         private bool _isFreeMapToggled;
         private bool _isDragging;
@@ -143,6 +144,35 @@ namespace squad_dma
             };
             tabRadar.Controls.Add(_mapCanvas);
             chkMapFree.Parent = _mapCanvas;
+            
+            // Initialize Aimview Panel
+            InitializeAimviewPanel();
+        }
+        
+        private void InitializeAimviewPanel()
+        {
+            _aimviewPanel = new AimviewPanel
+            {
+                Size = new Size(640, 360) // Mini 2560x1440 size
+            };
+            
+            // Set position from config or use default
+            if (_config.AimviewPanelX >= 0 && _config.AimviewPanelY >= 0)
+            {
+                // Use saved position, but ensure it's within bounds
+                int x = Math.Max(0, Math.Min(_config.AimviewPanelX, tabRadar.Width - _aimviewPanel.Width));
+                int y = Math.Max(0, Math.Min(_config.AimviewPanelY, tabRadar.Height - _aimviewPanel.Height));
+                _aimviewPanel.Location = new Point(x, y);
+            }
+            else
+            {
+                // Default position: bottom-right corner
+                _aimviewPanel.Location = new Point(tabRadar.Width - 650, tabRadar.Height - 370);
+            }
+            
+            // Add to tabRadar (on top of map canvas)
+            tabRadar.Controls.Add(_aimviewPanel);
+            _aimviewPanel.BringToFront();
         }
 
         private void InitializeTimers()
@@ -227,6 +257,12 @@ namespace squad_dma
             {
                 _espOverlay.Close();
                 _espOverlay = null;
+            }
+
+            if (_aimviewPanel != null && !_aimviewPanel.IsDisposed)
+            {
+                _aimviewPanel.Dispose();
+                _aimviewPanel = null;
             }
 
             CleanupLoadedBitmaps();
@@ -463,6 +499,18 @@ namespace squad_dma
                 return;
             }
             base.OnMouseWheel(e);
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            // Aimview panel positioning is handled by dragging
+        }
+
+        protected override void OnLocationChanged(EventArgs e)
+        {
+            base.OnLocationChanged(e);
+            // Aimview panel positioning is handled by dragging
         }
 
         private void HandleMapZoom(MouseEventArgs e)
@@ -2412,6 +2460,7 @@ namespace squad_dma
         {
             _config.EspBones = chkEnableBones.Checked;
             Config.SaveConfig(_config);
+            _aimviewPanel?.RefreshSettings();
         }
 
         private void TrkEspMaxDistance_Scroll(object sender, EventArgs e)
@@ -2425,24 +2474,28 @@ namespace squad_dma
         {
             _config.EspShowAllies = chkShowAllies.Checked;
             Config.SaveConfig(_config);
+            _aimviewPanel?.RefreshSettings();
         }
 
         private void ChkEspShowNames_CheckedChanged(object sender, EventArgs e)
         {
             _config.EspShowNames = chkEspShowNames.Checked;
             Config.SaveConfig(_config);
+            _aimviewPanel?.RefreshSettings();
         }
 
         private void ChkEspShowDistance_CheckedChanged(object sender, EventArgs e)
         {
             _config.EspShowDistance = chkEspShowDistance.Checked;
             Config.SaveConfig(_config);
+            _aimviewPanel?.RefreshSettings();
         }
 
         private void ChkEspShowHealth_CheckedChanged(object sender, EventArgs e)
         {
             _config.EspShowHealth = chkEspShowHealth.Checked;
             Config.SaveConfig(_config);
+            _aimviewPanel?.RefreshSettings();
         }
 
         private void TxtEspFontSize_TextChanged(object sender, EventArgs e)
@@ -2466,6 +2519,7 @@ namespace squad_dma
                 color.A = a;
                 _config.EspTextColor = color;
                 Config.SaveConfig(_config);
+                _aimviewPanel?.RefreshSettings();
             }
             else
             {
@@ -2481,6 +2535,7 @@ namespace squad_dma
                 color.R = r;
                 _config.EspTextColor = color;
                 Config.SaveConfig(_config);
+                _aimviewPanel?.RefreshSettings();
             }
             else
             {
@@ -2496,6 +2551,7 @@ namespace squad_dma
                 color.G = g;
                 _config.EspTextColor = color;
                 Config.SaveConfig(_config);
+                _aimviewPanel?.RefreshSettings();
             }
             else
             {
@@ -2511,6 +2567,7 @@ namespace squad_dma
                 color.B = b;
                 _config.EspTextColor = color;
                 Config.SaveConfig(_config);
+                _aimviewPanel?.RefreshSettings();
             }
             else
             {

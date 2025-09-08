@@ -31,6 +31,7 @@ namespace squad_dma
         private SolidColorBrush vehicleBrush;
         private SolidColorBrush boneBrush;
         private SolidColorBrush healthBrush;
+        private SolidColorBrush friendlyBrush;
         private SharpDX.DirectWrite.TextFormat textFormat;
         private bool running = true;
         private Game Game => Memory._game;
@@ -136,6 +137,8 @@ namespace squad_dma
             vehicleBrush = new SolidColorBrush(renderTarget, new RawColor4(1.0f, 0.0f, 0.0f, 1.0f));
             boneBrush = brush;
             healthBrush = new SolidColorBrush(renderTarget, new RawColor4(0.0f, 1.0f, 0.0f, 1.0f));
+            // Friendly/ally brush using SKPaints.Friendly color (light blue)
+            friendlyBrush = new SolidColorBrush(renderTarget, new RawColor4(0f / 255f, 187f / 255f, 254f / 255f, 1.0f));
             textFormat = new SharpDX.DirectWrite.TextFormat(new SharpDX.DirectWrite.Factory(), "Verdana", Program.Config.ESPFontSize)
             {
                 TextAlignment = SharpDX.DirectWrite.TextAlignment.Center,
@@ -321,7 +324,10 @@ namespace squad_dma
                         continue;
 
                     if (Program.Config.EspShowBox)
-                        renderTarget.DrawRectangle(boxRect, boneBrush);
+                    {
+                        var boxBrush = actor.IsFriendly() ? friendlyBrush : boneBrush;
+                        renderTarget.DrawRectangle(boxRect, boxBrush);
+                    }
 
                     float boxCenterX = (boxRect.Left + boxRect.Right) / 2f;
                     float boxWidth = boxRect.Right - boxRect.Left;
@@ -335,8 +341,8 @@ namespace squad_dma
                             boxCenterX - rectWidth / 2f, boxRect.Top - textHeight - 5f,
                             boxCenterX + rectWidth / 2f, boxRect.Top - 5f
                         );
-                        brush.Color = playerColor;
-                        renderTarget.DrawText(nameText, textFormat, nameRect, brush);
+                        var textBrush = actor.IsFriendly() ? friendlyBrush : brush;
+                        renderTarget.DrawText(nameText, textFormat, nameRect, textBrush);
                     }
 
                     if (Program.Config.EspShowDistance)
@@ -348,14 +354,15 @@ namespace squad_dma
                             boxCenterX - rectWidth / 2f, boxRect.Bottom + 5f,
                             boxCenterX + rectWidth / 2f, boxRect.Bottom + textHeight + 5f
                         );
-                        renderTarget.DrawText(distanceText, textFormat, distanceRect, brush);
+                        var distBrush = actor.IsFriendly() ? friendlyBrush : brush;
+                        renderTarget.DrawText(distanceText, textFormat, distanceRect, distBrush);
                     }
 
                     if (Program.Config.EspShowHealth && actor.Health >= 0)
                         DrawHealthBar(boxRect, actor.Health);
 
                     if (Program.Config.EspBones && actor.BoneScreenPositions != null)
-                        DrawBoneLines(actor.BoneScreenPositions);
+                        DrawBoneLines(actor, actor.BoneScreenPositions);
                 }
                 else if (IsVehicle(actor))
                 {
@@ -414,7 +421,7 @@ namespace squad_dma
             renderTarget.DrawText(vehicleText, textFormat, textRect, vehicleBrush);
         }
 
-        void DrawBoneLines(Vector2[] screenPositions)
+        void DrawBoneLines(UActor actor, Vector2[] screenPositions)
         {
             if (screenPositions == null || screenPositions.Length == 0)
                 return;
@@ -435,10 +442,11 @@ namespace squad_dma
                     screenPositions[startIndex] == Vector2.Zero || screenPositions[endIndex] == Vector2.Zero)
                     continue;
 
+                var lineBrush = actor.IsFriendly() ? friendlyBrush : boneBrush;
                 renderTarget.DrawLine(
                     screenPositions[startIndex].ToRawVector2(),
                     screenPositions[endIndex].ToRawVector2(),
-                    boneBrush
+                    lineBrush
                 );
             }
         }
@@ -493,6 +501,7 @@ namespace squad_dma
             vehicleBrush.Dispose();
             boneBrush.Dispose();
             healthBrush.Dispose();
+            friendlyBrush.Dispose();
             textFormat.Dispose();
             renderTarget.Dispose();
             base.OnClosed(e);

@@ -93,7 +93,6 @@ namespace squad_dma
         
         public PlayerState GetPlayerState() => _currentPlayerState;
         
-        public void SetInstantSeatSwitch() => _debugVehicles?.SetInstantSeatSwitch();
         public void LogVehicles(bool force = false) => _debugVehicles?.LogVehicles(force);
         public void VehicleTeam() => _debugVehicles?.VehicleTeam();
         public void LogTeamInfo() => _debugTeam?.LogTeamInfo();

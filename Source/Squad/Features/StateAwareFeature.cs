@@ -66,6 +66,9 @@ namespace squad_dma.Source.Squad.Features
                     {
                         Logger.Debug($"[{_featureName}] Player state changed from {_lastKnownState} to {currentState}, restoring original values");
                         RestoreOriginalValues();
+                        
+                        // Allow features to handle death-based config disabling
+                        OnPlayerDeath();
                     }
                     
                     _lastKnownState = currentState;
@@ -144,6 +147,14 @@ namespace squad_dma.Source.Squad.Features
         /// Restore original values - called when player dies or feature is disabled
         /// </summary>
         protected abstract void RestoreOriginalValues();
+        
+        /// <summary>
+        /// Called when player dies while feature is active - override to handle death-based config disabling
+        /// </summary>
+        protected virtual void OnPlayerDeath()
+        {
+            // Default implementation does nothing - features can override to disable themselves
+        }
         
         /// <summary>
         /// Helper method to safely apply modifications with spam protection
