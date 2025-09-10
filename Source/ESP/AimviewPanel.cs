@@ -6,6 +6,7 @@ using System.Numerics;
 using SharpDX.DirectWrite;
 using System.Diagnostics;
 using System;
+using System.Linq;
 using System.Reflection;
 
 namespace squad_dma
@@ -36,8 +37,8 @@ namespace squad_dma
         private int _collapsedHeight = 24;
         private int _minWidth = 480;   // Mini 1080p width (1920/4 = 480)
         private int _minHeight = 270;  // Mini 1080p height (1080/4 = 270)
-        private int _maxWidth = 860;   // Mini 3440x1440 width (3440/4 = 860)
-        private int _maxHeight = 360;  // Mini 3440x1440 height (1440/4 = 360)
+        private int _maxWidth = 1280;  // Increased max width for larger displays
+        private int _maxHeight = 720;  // Increased max height for larger displays
 
         // UI Controls
         private Panel _headerPanel;
@@ -112,6 +113,48 @@ namespace squad_dma
             ActorType.TrackedAPCArtillery, ActorType.TrackedIFV, ActorType.TrackedJeep, ActorType.TrackedLogistics,
             ActorType.TransportHelicopter, ActorType.TruckAntiAir, ActorType.TruckArtillery, ActorType.TruckLogistics,
             ActorType.TruckTransport, ActorType.TruckTransportArmed
+        };
+
+        // Vehicle size categories for realistic box sizing (matching ESP overlay)
+        private enum VehicleSize { Small, Medium, Large, ExtraLarge }
+        
+        private static readonly Dictionary<ActorType, VehicleSize> VehicleSizes = new Dictionary<ActorType, VehicleSize>
+        {
+            // Motorcycle
+            { ActorType.Motorcycle, VehicleSize.Small },
+            
+            // Medium vehicles (jeeps, light trucks, boats)
+            { ActorType.JeepTransport, VehicleSize.Medium },
+            { ActorType.JeepLogistics, VehicleSize.Medium },
+            { ActorType.JeepTurret, VehicleSize.Medium },
+            { ActorType.JeepArtillery, VehicleSize.Medium },
+            { ActorType.JeepAntitank, VehicleSize.Medium },
+            { ActorType.JeepAntiAir, VehicleSize.Medium },
+            { ActorType.JeepRWSTurret, VehicleSize.Medium },
+            { ActorType.Boat, VehicleSize.Medium },
+            { ActorType.BoatLogistics, VehicleSize.Medium },
+            { ActorType.TrackedJeep, VehicleSize.Medium },
+            { ActorType.LoachCAS, VehicleSize.Medium },
+            { ActorType.LoachScout, VehicleSize.Medium },
+            
+            // Large vehicles (trucks, APCs, IFVs)
+            { ActorType.TruckTransport, VehicleSize.Large },
+            { ActorType.TruckLogistics, VehicleSize.Large },
+            { ActorType.TruckTransportArmed, VehicleSize.Large },
+            { ActorType.TruckArtillery, VehicleSize.Large },
+            { ActorType.TruckAntiAir, VehicleSize.Large },
+            { ActorType.APC, VehicleSize.Large },
+            { ActorType.TrackedAPC, VehicleSize.Large },
+            { ActorType.TrackedAPCArtillery, VehicleSize.Large },
+            { ActorType.IFV, VehicleSize.Large },
+            { ActorType.TrackedIFV, VehicleSize.Large },
+            { ActorType.TrackedLogistics, VehicleSize.Large },
+            { ActorType.TransportHelicopter, VehicleSize.Large },
+            
+            // Extra Large vehicles (tanks, heavy armor)
+            { ActorType.Tank, VehicleSize.ExtraLarge },
+            { ActorType.TankMGS, VehicleSize.ExtraLarge },
+            { ActorType.AttackHelicopter, VehicleSize.ExtraLarge }
         };
 
         public AimviewPanel()
@@ -364,8 +407,10 @@ namespace squad_dma
                 {
                     try
                     {
-                        // Validate size before attempting resize
-                        if (_contentPanel.Width <= _maxWidth && _contentPanel.Height <= _maxHeight)
+                        // Validate size before attempting resize - ensure positive dimensions and within limits
+                        if (_contentPanel.Width > 0 && _contentPanel.Height > 0 && 
+                            _contentPanel.Width <= _maxWidth && _contentPanel.Height <= _maxHeight &&
+                            _contentPanel.Width <= 4096 && _contentPanel.Height <= 4096) // Additional GPU limits
                         {
                             renderTarget.Resize(new Size2(_contentPanel.Width, _contentPanel.Height));
                         }
@@ -373,11 +418,24 @@ namespace squad_dma
                     catch (SharpDX.SharpDXException)
                     {
                         // If resize fails, recreate the render target
+                        DisposeRenderTarget();
                         InitializeDirect2D();
                     }
                     catch (System.AccessViolationException)
                     {
                         // Critical error - dispose and recreate everything
+                        DisposeRenderTarget();
+                        InitializeDirect2D();
+                    }
+                    catch (System.Runtime.InteropServices.SEHException)
+                    {
+                        // External component (Direct2D) failure - dispose and recreate
+                        DisposeRenderTarget();
+                        InitializeDirect2D();
+                    }
+                    catch (Exception)
+                    {
+                        // Any other unexpected error - dispose and recreate
                         DisposeRenderTarget();
                         InitializeDirect2D();
                     }
@@ -514,8 +572,10 @@ namespace squad_dma
                 {
                     try
                     {
-                        // Validate size before attempting resize
-                        if (_contentPanel.Width <= _maxWidth && _contentPanel.Height <= _maxHeight)
+                        // Validate size before attempting resize - ensure positive dimensions and within limits
+                        if (_contentPanel.Width > 0 && _contentPanel.Height > 0 && 
+                            _contentPanel.Width <= _maxWidth && _contentPanel.Height <= _maxHeight &&
+                            _contentPanel.Width <= 4096 && _contentPanel.Height <= 4096) // Additional GPU limits
                         {
                             renderTarget.Resize(new Size2(_contentPanel.Width, _contentPanel.Height));
                         }
@@ -523,11 +583,24 @@ namespace squad_dma
                     catch (SharpDX.SharpDXException)
                     {
                         // If resize fails, recreate the render target
+                        DisposeRenderTarget();
                         InitializeDirect2D();
                     }
                     catch (System.AccessViolationException)
                     {
                         // Critical error - dispose and recreate everything
+                        DisposeRenderTarget();
+                        InitializeDirect2D();
+                    }
+                    catch (System.Runtime.InteropServices.SEHException)
+                    {
+                        // External component (Direct2D) failure - dispose and recreate
+                        DisposeRenderTarget();
+                        InitializeDirect2D();
+                    }
+                    catch (Exception)
+                    {
+                        // Any other unexpected error - dispose and recreate
                         DisposeRenderTarget();
                         InitializeDirect2D();
                     }
@@ -585,10 +658,32 @@ namespace squad_dma
             {
                 try
                 {
-                    renderTarget.Resize(new Size2(_contentPanel.Width, _contentPanel.Height));
+                    // Validate size before attempting resize
+                    if (_contentPanel.Width > 0 && _contentPanel.Height > 0 && 
+                        _contentPanel.Width <= _maxWidth && _contentPanel.Height <= _maxHeight &&
+                        _contentPanel.Width <= 4096 && _contentPanel.Height <= 4096)
+                    {
+                        renderTarget.Resize(new Size2(_contentPanel.Width, _contentPanel.Height));
+                    }
                 }
                 catch (SharpDX.SharpDXException)
                 {
+                    DisposeRenderTarget();
+                    InitializeDirect2D();
+                }
+                catch (System.AccessViolationException)
+                {
+                    DisposeRenderTarget();
+                    InitializeDirect2D();
+                }
+                catch (System.Runtime.InteropServices.SEHException)
+                {
+                    DisposeRenderTarget();
+                    InitializeDirect2D();
+                }
+                catch (Exception)
+                {
+                    DisposeRenderTarget();
                     InitializeDirect2D();
                 }
             }
@@ -824,9 +919,7 @@ namespace squad_dma
                 if (actor == localPlayer)
                     continue;
 
-                // Skip vehicles in aimview
-                if (VehicleTypes.Contains(actor.ActorType))
-                    continue;
+                // Process vehicles in aimview (removed skip condition)
 
                 if (actor.ActorType == ActorType.Player && !actor.IsAlive)
                     continue;
@@ -838,12 +931,17 @@ namespace squad_dma
                 
                 // Apply distance limits based on actor type
                 bool isPlayer = actor.ActorType == ActorType.Player;
-                float maxDistance = isPlayer ? Program.Config.EspMaxDistance : Program.Config.EspMaxDistance + 1000f; // Vehicles visible at longer range
+                bool isVehicle = VehicleTypes.Contains(actor.ActorType);
+                float maxDistance = isPlayer ? Program.Config.EspMaxDistance : Program.Config.EspVehicleMaxDistance;
                 if (distance > maxDistance)
                     continue;
 
                 // Skip allies if not showing them
                 if (!Program.Config.EspShowAllies && actor.IsFriendly())
+                    continue;
+
+                // Skip vehicles if not showing them
+                if (isVehicle && !Program.Config.EspShowVehicles)
                     continue;
 
                 // World to screen conversion
@@ -871,21 +969,79 @@ namespace squad_dma
                 visibleActors.Add((actor, panelPos, distance));
             }
 
-            // Draw all visible actors (players only, vehicles filtered out)
-            foreach (var (actor, panelPos, distance) in visibleActors)
+            // Separate players and vehicles, then by friendly status
+            // IMPORTANT: visibleActors already contains only actors that are visible in the aimview
+            // This means opacity is calculated based on what you're actually looking at,
+            // not all enemies globally. The closest enemy IN YOUR VIEW gets full opacity.
+            var enemyPlayers = visibleActors.Where(x => x.actor.ActorType == ActorType.Player && !x.actor.IsFriendly()).OrderBy(x => x.distance).ToList();
+            var allyPlayers = visibleActors.Where(x => x.actor.ActorType == ActorType.Player && x.actor.IsFriendly()).ToList();
+            var enemyVehicles = visibleActors.Where(x => VehicleTypes.Contains(x.actor.ActorType) && !x.actor.IsFriendly()).OrderBy(x => x.distance).ToList();
+            var allyVehicles = visibleActors.Where(x => VehicleTypes.Contains(x.actor.ActorType) && x.actor.IsFriendly()).ToList();
+
+            // Draw enemy players with FOV-based distance opacity
+            // Only enemies visible in the aimview are considered for opacity calculation
+            for (int i = 0; i < enemyPlayers.Count; i++)
             {
-                if (actor.ActorType == ActorType.Player)
+                var (actor, panelPos, distance) = enemyPlayers[i];
+                float opacity = CalculateFieldOfViewOpacity(i, enemyPlayers.Count, distance);
+                
+                if (Program.Config.EspShowBox)
+                    CalculatePlayerBox(actor, panelPos, distance, opacity);
+                if (Program.Config.EspBones)
+                    DrawBoneLines(actor, panelPos, opacity);
+            }
+
+            // Draw ally players with full opacity (no distance fading)
+            foreach (var (actor, panelPos, distance) in allyPlayers)
+            {
+                if (Program.Config.EspShowBox)
+                    CalculatePlayerBox(actor, panelPos, distance, 1.0f);
+                if (Program.Config.EspBones)
+                    DrawBoneLines(actor, panelPos, 1.0f);
+            }
+
+            // Draw enemy vehicles with FOV-based distance opacity
+            // Only vehicles visible in the aimview are considered for opacity calculation
+            for (int i = 0; i < enemyVehicles.Count; i++)
+            {
+                var (actor, panelPos, distance) = enemyVehicles[i];
+                float opacity = CalculateFieldOfViewOpacity(i, enemyVehicles.Count, distance);
+                
+                if (Program.Config.EspShowBox)
+                    DrawVehicleBox(actor, panelPos, distance, opacity);
+            }
+
+            // Draw ally vehicles with full opacity (no distance fading) - only if Show Allies is enabled
+            if (Program.Config.EspShowAllies)
+            {
+                foreach (var (actor, panelPos, distance) in allyVehicles)
                 {
                     if (Program.Config.EspShowBox)
-                        CalculatePlayerBox(actor, panelPos, distance);
-                    if (Program.Config.EspBones)
-                        DrawBoneLines(actor, panelPos);
+                        DrawVehicleBox(actor, panelPos, distance, 1.0f);
                 }
-                // Note: Vehicles are filtered out in the processing loop above
             }
         }
 
-        private void CalculatePlayerBox(UActor actor, Vector2 panelPos, float distance)
+        private float CalculateFieldOfViewOpacity(int visibleEnemyIndex, int totalVisibleEnemies, float distance)
+        {
+            // Closest enemy WITHIN THE AIMVIEW (index 0) gets full opacity
+            // This is different from global closest - it's the closest enemy you're actually looking at
+            if (visibleEnemyIndex == 0)
+                return 1.0f;
+            
+            // Calculate opacity based on visible enemy ranking (only enemies in your field of view)
+            // Each subsequent visible enemy gets progressively more transparent
+            float rankOpacity = Math.Max(0.2f, 1.0f - (visibleEnemyIndex * 0.12f));
+            
+            // Additional distance-based opacity reduction for very far enemies
+            // Enemies beyond 100m get additional transparency
+            float distanceOpacity = distance <= 100f ? 1.0f : Math.Max(0.3f, 1.0f - ((distance - 100f) / 300f));
+            
+            // Combine both factors, ensuring reasonable minimum visibility
+            return Math.Max(0.2f, rankOpacity * distanceOpacity);
+        }
+
+        private void CalculatePlayerBox(UActor actor, Vector2 panelPos, float distance, float opacity = 1.0f)
         {
             // Use a simple fixed-size box based on distance for now
             // This prevents coordinate conversion issues
@@ -900,12 +1056,26 @@ namespace squad_dma
                 panelPos.Y + boxHeight / 2f
             );
 
-            // Draw slim box outline with appropriate color
-            var boxBrush = actor.IsFriendly() ? friendlyBrush : brush;
+            // Create brush with distance-based opacity
+            SolidColorBrush boxBrush;
+            if (actor.IsFriendly())
+            {
+                boxBrush = friendlyBrush; // Allies always full opacity
+            }
+            else
+            {
+                // Create dynamic brush for enemies with opacity
+                boxBrush = new SolidColorBrush(renderTarget, new RawColor4(
+                    Program.Config.EspTextColor.R / 255f,
+                    Program.Config.EspTextColor.G / 255f,
+                    Program.Config.EspTextColor.B / 255f,
+                    opacity));
+            }
+            
             renderTarget.DrawRectangle(rect, boxBrush, 1.0f);
 
             // Draw health bar
-            DrawHealthBar(actor, rect);
+            DrawHealthBar(actor, rect, opacity);
 
             // Draw player info text (name and/or distance)
             var textParts = new List<string>();
@@ -923,13 +1093,19 @@ namespace squad_dma
             if (textParts.Count > 0)
             {
                 var text = string.Join(" ", textParts);
-                var textBrush = actor.IsFriendly() ? friendlyBrush : brush;
+                var textBrush = actor.IsFriendly() ? friendlyBrush : boxBrush;
                 renderTarget.DrawText(text, textFormat, 
                     new RawRectangleF(rect.Left, rect.Bottom + 2, rect.Left + 200, rect.Bottom + 20), textBrush);
             }
+            
+            // Dispose dynamic brush for enemies to prevent memory leaks
+            if (!actor.IsFriendly())
+            {
+                boxBrush.Dispose();
+            }
         }
 
-        private void DrawHealthBar(UActor actor, RawRectangleF rect)
+        private void DrawHealthBar(UActor actor, RawRectangleF rect, float opacity = 1.0f)
         {
             if (!Program.Config.EspShowHealth || actor.Health <= 0)
                 return;
@@ -945,10 +1121,10 @@ namespace squad_dma
                 rect.Top - 1
             );
 
-            // Color based on health percentage
-            var healthColor = healthPercent > 0.6f ? new RawColor4(0.2f, 0.8f, 0.2f, 1.0f) : // Green
-                             healthPercent > 0.3f ? new RawColor4(0.9f, 0.7f, 0.1f, 1.0f) : // Yellow
-                                                   new RawColor4(0.9f, 0.2f, 0.2f, 1.0f);   // Red
+            // Color based on health percentage with opacity
+            var healthColor = healthPercent > 0.6f ? new RawColor4(0.2f, 0.8f, 0.2f, opacity) : // Green
+                             healthPercent > 0.3f ? new RawColor4(0.9f, 0.7f, 0.1f, opacity) : // Yellow
+                                                   new RawColor4(0.9f, 0.2f, 0.2f, opacity);   // Red
 
             using (var healthBrushTemp = new SolidColorBrush(renderTarget, healthColor))
             {
@@ -956,7 +1132,7 @@ namespace squad_dma
             }
         }
 
-        private void DrawBoneLines(UActor actor, Vector2 panelPos)
+        private void DrawBoneLines(UActor actor, Vector2 panelPos, float opacity = 1.0f)
         {
             // Minimal center dot indicator
             float dotSize = 1.5f;
@@ -966,32 +1142,117 @@ namespace squad_dma
                 panelPos.X + dotSize, 
                 panelPos.Y + dotSize);
             
-            var dotBrush = actor.IsFriendly() ? friendlyBrush : boneBrush;
+            // Create brush with distance-based opacity for bones
+            SolidColorBrush dotBrush;
+            if (actor.IsFriendly())
+            {
+                dotBrush = friendlyBrush; // Allies always full opacity
+            }
+            else
+            {
+                // Create dynamic brush for enemies with opacity
+                dotBrush = new SolidColorBrush(renderTarget, new RawColor4(
+                    Program.Config.EspTextColor.R / 255f,
+                    Program.Config.EspTextColor.G / 255f,
+                    Program.Config.EspTextColor.B / 255f,
+                    opacity));
+            }
+            
             renderTarget.FillRectangle(dotRect, dotBrush);
+            
+            // Dispose dynamic brush for enemies to prevent memory leaks
+            if (!actor.IsFriendly())
+            {
+                dotBrush.Dispose();
+            }
         }
 
 
-        private void DrawVehicleBox(UActor actor, Vector2 panelPos, float distance)
+        private void DrawVehicleBox(UActor actor, Vector2 panelPos, float distance, float opacity = 1.0f)
         {
-            var vehicleName = ActorTypeNames.ContainsKey(actor.ActorType) ? ActorTypeNames[actor.ActorType] : actor.ActorType.ToString();
-            var text = $"{vehicleName} ({distance:F0}m)";
-
-            // Slim vehicle box with appropriate color
-            var rect = new RawRectangleF(panelPos.X - 25, panelPos.Y - 12, panelPos.X + 25, panelPos.Y + 12);
-            var vehBrush = actor.IsFriendly() ? friendlyBrush : vehicleBrush;
-            renderTarget.DrawRectangle(rect, vehBrush, 1.0f);
+            // Vehicle-type-based sizing with reduced base size (consistent with ESP overlay)
+            float baseSize = 480f; // Reduced by 60% (1200 * 0.4)
+            float minSize = 50f;    // Minimum size to ensure visibility in aimview
+            float maxSize = 2000f;  // Maximum size for very large vehicles
             
-            // Small text below vehicle
-            using (var smallTextFormat = new SharpDX.DirectWrite.TextFormat(new SharpDX.DirectWrite.Factory(), "Segoe UI", 8.0f))
+            // Get vehicle-specific size multiplier
+            float sizeMultiplier = GetVehicleSizeMultiplier(actor.ActorType);
+            float vehicleBaseSize = baseSize * sizeMultiplier;
+            
+            // Distance-based scaling with better curve
+            float distanceScale = Math.Max(1f, distance / 10f); // Scale factor based on distance
+            float boxSize = Math.Max(minSize, Math.Min(maxSize, vehicleBaseSize / distanceScale));
+            
+            // Aspect ratio similar to 1204x754 (approximately 1.6:1)
+            float boxWidth = boxSize * 1.6f;  // Width based on 1204x754 aspect ratio
+            float boxHeight = boxSize * 1.0f; // Height maintains the calculated box size
+
+            var rect = new RawRectangleF(
+                panelPos.X - boxWidth / 2f,
+                panelPos.Y - boxHeight / 2f,
+                panelPos.X + boxWidth / 2f,
+                panelPos.Y + boxHeight / 2f
+            );
+
+            // Create brush with distance-based opacity and consistent color differentiation
+            SolidColorBrush vehBrush;
+            if (actor.IsFriendly())
             {
-                renderTarget.DrawText(text, smallTextFormat, 
-                    new RawRectangleF(rect.Left, rect.Bottom + 1, rect.Left + 150, rect.Bottom + 15), vehBrush);
+                // Light blue for friendly vehicles with opacity
+                vehBrush = new SolidColorBrush(renderTarget, new RawColor4(0.4f, 0.7f, 1.0f, opacity));
             }
+            else
+            {
+                // Create dynamic brush for enemy vehicles with opacity
+                // Consistent with ESP overlay: yellow for both enemy and unclaimed
+                bool isUnclaimed = actor.TeamID == -1;
+                var vehicleColor = new RawColor4(1.0f, 1.0f, 0.0f, opacity);  // Yellow for both enemy and unclaimed
+                vehBrush = new SolidColorBrush(renderTarget, vehicleColor);
+            }
+            
+            renderTarget.DrawRectangle(rect, vehBrush, 1.0f);
+
+            // Draw vehicle info text if enabled
+            var textParts = new List<string>();
+            
+            // Always show vehicle name
+            var vehicleName = ActorTypeNames.ContainsKey(actor.ActorType) ? ActorTypeNames[actor.ActorType] : actor.ActorType.ToString();
+            textParts.Add(vehicleName);
+            
+            if (Program.Config.EspShowDistance)
+            {
+                textParts.Add($"{distance:F0}m");
+            }
+            
+            if (textParts.Count > 0)
+            {
+                var text = string.Join(" ", textParts);
+                renderTarget.DrawText(text, textFormat, 
+                    new RawRectangleF(rect.Left, rect.Bottom + 2, rect.Left + 200, rect.Bottom + 20), vehBrush);
+            }
+            
+            // Dispose dynamic brush to prevent memory leaks (AFTER using it)
+            vehBrush.Dispose();
         }
 
         private bool IsVehicle(ActorType type)
         {
             return VehicleTypes.Contains(type);
+        }
+
+        private float GetVehicleSizeMultiplier(ActorType vehicleType)
+        {
+            if (!VehicleSizes.TryGetValue(vehicleType, out VehicleSize size))
+                return 1.0f; // Default size for unknown vehicles
+            
+            return size switch
+            {
+                VehicleSize.Small => 0.7f,        // 70% of base size (motorcycles)
+                VehicleSize.Medium => 1.0f,       // 100% of base size (jeeps, boats)
+                VehicleSize.Large => 1.4f,        // 140% of base size (trucks, APCs)
+                VehicleSize.ExtraLarge => 1.8f,   // 180% of base size (tanks)
+                _ => 1.0f
+            };
         }
 
         /// <summary>
@@ -1061,7 +1322,8 @@ namespace squad_dma
             
             if (renderTarget != null && _contentPanel != null && 
                 _contentPanel.Width > 0 && _contentPanel.Height > 0 &&
-                _contentPanel.Width <= _maxWidth && _contentPanel.Height <= _maxHeight)
+                _contentPanel.Width <= _maxWidth && _contentPanel.Height <= _maxHeight &&
+                _contentPanel.Width <= 4096 && _contentPanel.Height <= 4096)
             {
                 try
                 {
@@ -1076,6 +1338,18 @@ namespace squad_dma
                 catch (System.AccessViolationException)
                 {
                     // Critical error - dispose and recreate everything
+                    DisposeRenderTarget();
+                    InitializeDirect2D();
+                }
+                catch (System.Runtime.InteropServices.SEHException)
+                {
+                    // External component (Direct2D) failure - dispose and recreate
+                    DisposeRenderTarget();
+                    InitializeDirect2D();
+                }
+                catch (Exception)
+                {
+                    // Any other unexpected error - dispose and recreate
                     DisposeRenderTarget();
                     InitializeDirect2D();
                 }

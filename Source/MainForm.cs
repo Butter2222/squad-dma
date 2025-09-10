@@ -145,34 +145,23 @@ namespace squad_dma
             tabRadar.Controls.Add(_mapCanvas);
             chkMapFree.Parent = _mapCanvas;
             
-            // Initialize Aimview Panel
-            InitializeAimviewPanel();
+            // Initialize Aimview Panel if enabled
+            if (_config.EnableAimview)
+            {
+                InitializeAimviewPanel();
+            }
         }
         
         private void InitializeAimviewPanel()
         {
-            _aimviewPanel = new AimviewPanel
-            {
-                Size = new Size(640, 360) // Mini 2560x1440 size
-            };
-            
-            // Set position from config or use default
-            if (_config.AimviewPanelX >= 0 && _config.AimviewPanelY >= 0)
-            {
-                // Use saved position, but ensure it's within bounds
-                int x = Math.Max(0, Math.Min(_config.AimviewPanelX, tabRadar.Width - _aimviewPanel.Width));
-                int y = Math.Max(0, Math.Min(_config.AimviewPanelY, tabRadar.Height - _aimviewPanel.Height));
-                _aimviewPanel.Location = new Point(x, y);
-            }
-            else
-            {
-                // Default position: bottom-right corner
-                _aimviewPanel.Location = new Point(tabRadar.Width - 650, tabRadar.Height - 370);
-            }
+            _aimviewPanel = new AimviewPanel();
             
             // Add to tabRadar (on top of map canvas)
             tabRadar.Controls.Add(_aimviewPanel);
             _aimviewPanel.BringToFront();
+            
+            // Apply saved position and size after adding to parent
+            _aimviewPanel.ApplySavedLocationAndSize();
         }
 
         private void InitializeTimers()
@@ -216,6 +205,7 @@ namespace squad_dma
             chkQuickZoom.CheckedChanged += ChkQuickZoom_CheckedChanged;
             chkRapidFire.CheckedChanged += ChkRapidFire_CheckedChanged;
             chkShowEnemyDistance.CheckedChanged += ChkShowEnemyDistance_CheckedChanged;
+            chkEnableAimview.CheckedChanged += ChkEnableAimview_CheckedChanged;
             chkInfiniteAmmo.CheckedChanged += ChkInfiniteAmmo_CheckedChanged;
             chkQuickSwap.CheckedChanged += ChkQuickSwap_CheckedChanged;
             chkForceFullAuto.CheckedChanged += ChkForceFullAuto_CheckedChanged;
@@ -224,15 +214,13 @@ namespace squad_dma
             chkEnableEsp.CheckedChanged += ChkEnableEsp_CheckedChanged;
             chkEnableBones.CheckedChanged += ChkEnableBones_CheckedChanged;
             trkEspMaxDistance.Scroll += TrkEspMaxDistance_Scroll;
+            trkEspVehicleMaxDistance.Scroll += TrkEspVehicleMaxDistance_Scroll;
+            chkEspShowVehicles.CheckedChanged += ChkEspShowVehicles_CheckedChanged;
             chkShowAllies.CheckedChanged += ChkShowAllies_CheckedChanged;
             chkEspShowNames.CheckedChanged += ChkEspShowNames_CheckedChanged;
             chkEspShowDistance.CheckedChanged += ChkEspShowDistance_CheckedChanged;
             chkEspShowHealth.CheckedChanged += ChkEspShowHealth_CheckedChanged;
             txtEspFontSize.TextChanged += TxtEspFontSize_TextChanged;
-            txtEspColorA.TextChanged += TxtEspColorA_TextChanged;
-            txtEspColorR.TextChanged += TxtEspColorR_TextChanged;
-            txtEspColorG.TextChanged += TxtEspColorG_TextChanged;
-            txtEspColorB.TextChanged += TxtEspColorB_TextChanged;
             txtFirstScopeMag.TextChanged += TxtFirstScopeMag_TextChanged;
             txtSecondScopeMag.TextChanged += TxtSecondScopeMag_TextChanged;
             txtThirdScopeMag.TextChanged += TxtThirdScopeMag_TextChanged;
@@ -393,6 +381,9 @@ namespace squad_dma
 
             chkShowEnemyDistance.Checked = _config.ShowEnemyDistance;
             chkShowEnemyDistance.CheckedChanged += ChkShowEnemyDistance_CheckedChanged;
+
+            chkEnableAimview.Checked = _config.EnableAimview;
+            chkEnableAimview.CheckedChanged += ChkEnableAimview_CheckedChanged;
 
             chkInfiniteAmmo.Checked = _config.InfiniteAmmo;
             chkInfiniteAmmo.CheckedChanged += ChkInfiniteAmmo_CheckedChanged;
@@ -839,6 +830,8 @@ namespace squad_dma
             #region UI Config
             chkShowEnemyDistance.Checked = _config.ShowEnemyDistance;
             chkShowEnemyDistance.CheckedChanged += ChkShowEnemyDistance_CheckedChanged;
+            chkEnableAimview.Checked = _config.EnableAimview;
+            chkEnableAimview.CheckedChanged += ChkEnableAimview_CheckedChanged;
             chkHighAlert.Checked = _config.HighAlert;
             chkHighAlert.CheckedChanged += chkHighAlert_CheckedChanged;
 
@@ -850,16 +843,15 @@ namespace squad_dma
             chkEnableEsp.Checked = _config.EnableEsp;
             chkEnableBones.Checked = _config.EspBones;
             trkEspMaxDistance.Value = (int)_config.EspMaxDistance;
-            lblEspMaxDistance.Text = $"Max Distance: {_config.EspMaxDistance}m";
+            lblEspMaxDistance.Text = $"Player Max Distance: {_config.EspMaxDistance}m";
+            trkEspVehicleMaxDistance.Value = (int)_config.EspVehicleMaxDistance;
+            lblEspVehicleMaxDistance.Text = $"Vehicle Max Distance: {_config.EspVehicleMaxDistance}m";
+            chkEspShowVehicles.Checked = _config.EspShowVehicles;
             chkShowAllies.Checked = _config.EspShowAllies;
             chkEspShowNames.Checked = _config.EspShowNames;
             chkEspShowDistance.Checked = _config.EspShowDistance;
             chkEspShowHealth.Checked = _config.EspShowHealth;
             txtEspFontSize.Text = _config.ESPFontSize.ToString();
-            txtEspColorA.Text = _config.EspTextColor.A.ToString();
-            txtEspColorR.Text = _config.EspTextColor.R.ToString();
-            txtEspColorG.Text = _config.EspTextColor.G.ToString();
-            txtEspColorB.Text = _config.EspTextColor.B.ToString();
             txtFirstScopeMag.Text = _config.FirstScopeMagnification.ToString("F1");
             txtSecondScopeMag.Text = _config.SecondScopeMagnification.ToString("F1");
             txtThirdScopeMag.Text = _config.ThirdScopeMagnification.ToString("F1");
@@ -2211,6 +2203,31 @@ namespace squad_dma
             Config.SaveConfig(_config);
         }
 
+        private void ChkEnableAimview_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.EnableAimview = chkEnableAimview.Checked;
+            Config.SaveConfig(_config);
+
+            if (_config.EnableAimview)
+            {
+                if (_aimviewPanel == null || _aimviewPanel.IsDisposed)
+                {
+                    InitializeAimviewPanel();
+                }
+                else
+                {
+                    _aimviewPanel.Visible = true;
+                }
+            }
+            else
+            {
+                if (_aimviewPanel != null && !_aimviewPanel.IsDisposed)
+                {
+                    _aimviewPanel.Visible = false;
+                }
+            }
+        }
+
         private void chkHighAlert_CheckedChanged(object sender, EventArgs e)
         {
             _config.HighAlert = chkHighAlert.Checked;
@@ -2466,8 +2483,22 @@ namespace squad_dma
         private void TrkEspMaxDistance_Scroll(object sender, EventArgs e)
         {
             _config.EspMaxDistance = trkEspMaxDistance.Value;
-            lblEspMaxDistance.Text = $"Max Distance: {trkEspMaxDistance.Value}m";
+            lblEspMaxDistance.Text = $"Player Max Distance: {trkEspMaxDistance.Value}m";
             Config.SaveConfig(_config);
+        }
+
+        private void TrkEspVehicleMaxDistance_Scroll(object sender, EventArgs e)
+        {
+            _config.EspVehicleMaxDistance = trkEspVehicleMaxDistance.Value;
+            lblEspVehicleMaxDistance.Text = $"Vehicle Max Distance: {trkEspVehicleMaxDistance.Value}m";
+            Config.SaveConfig(_config);
+        }
+
+        private void ChkEspShowVehicles_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.EspShowVehicles = chkEspShowVehicles.Checked;
+            Config.SaveConfig(_config);
+            _aimviewPanel?.RefreshSettings();
         }
 
         private void ChkShowAllies_CheckedChanged(object sender, EventArgs e)
@@ -2511,69 +2542,6 @@ namespace squad_dma
             }
         }
 
-        private void TxtEspColorA_TextChanged(object sender, EventArgs e)
-        {
-            if (byte.TryParse(txtEspColorA.Text, out byte a) && a >= 0 && a <= 255)
-            {
-                var color = _config.EspTextColor;
-                color.A = a;
-                _config.EspTextColor = color;
-                Config.SaveConfig(_config);
-                _aimviewPanel?.RefreshSettings();
-            }
-            else
-            {
-                txtEspColorA.Text = _config.EspTextColor.A.ToString();
-            }
-        }
-
-        private void TxtEspColorR_TextChanged(object sender, EventArgs e)
-        {
-            if (byte.TryParse(txtEspColorR.Text, out byte r) && r >= 0 && r <= 255)
-            {
-                var color = _config.EspTextColor;
-                color.R = r;
-                _config.EspTextColor = color;
-                Config.SaveConfig(_config);
-                _aimviewPanel?.RefreshSettings();
-            }
-            else
-            {
-                txtEspColorR.Text = _config.EspTextColor.R.ToString();
-            }
-        }
-
-        private void TxtEspColorG_TextChanged(object sender, EventArgs e)
-        {
-            if (byte.TryParse(txtEspColorG.Text, out byte g) && g >= 0 && g <= 255)
-            {
-                var color = _config.EspTextColor;
-                color.G = g;
-                _config.EspTextColor = color;
-                Config.SaveConfig(_config);
-                _aimviewPanel?.RefreshSettings();
-            }
-            else
-            {
-                txtEspColorG.Text = _config.EspTextColor.G.ToString();
-            }
-        }
-
-        private void TxtEspColorB_TextChanged(object sender, EventArgs e)
-        {
-            if (byte.TryParse(txtEspColorB.Text, out byte b) && b >= 0 && b <= 255)
-            {
-                var color = _config.EspTextColor;
-                color.B = b;
-                _config.EspTextColor = color;
-                Config.SaveConfig(_config);
-                _aimviewPanel?.RefreshSettings();
-            }
-            else
-            {
-                txtEspColorB.Text = _config.EspTextColor.B.ToString();
-            }
-        }
 
         private void TxtFirstScopeMag_TextChanged(object sender, EventArgs e)
         {

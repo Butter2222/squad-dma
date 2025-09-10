@@ -63,7 +63,7 @@ namespace squad_dma.Source.Squad
             UpdateCachedPointers();
         }
         
-        public Manager(ulong playerController, bool inGame, RegistredActors actors, Game game = null)
+        public Manager(ulong playerController, bool inGame, RegisteredActors actors, Game game = null)
         {
             _playerController = playerController;
             _inGame = inGame;

@@ -15,7 +15,7 @@ namespace squad_dma
         #region Fields
         private readonly ulong _squadBase;
         private volatile bool _inGame = false;
-        private RegistredActors _actors;
+        private RegisteredActors _actors;
         private UActor _localUPlayer;
         private ulong _gameWorld;
         private ulong _gameInstance;
@@ -226,7 +226,7 @@ namespace squad_dma
             TryExecute(() => 
             {
                 var persistentLevel = Memory.ReadPtr(_gameWorld + Offsets.World.PersistentLevel);
-                _actors = new RegistredActors(persistentLevel);
+                _actors = new RegisteredActors(persistentLevel);
             });
   
         private bool GetLocalPlayer() => 

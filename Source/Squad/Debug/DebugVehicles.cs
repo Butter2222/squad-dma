@@ -7,11 +7,11 @@ namespace squad_dma.Source.Squad.Debug
     {
         private readonly ulong _playerController;
         private readonly bool _inGame;
-        private readonly RegistredActors _actors;
+        private readonly RegisteredActors _actors;
         private bool _vehiclesLogged;
 
 
-        public DebugVehicles(ulong playerController, bool inGame, RegistredActors actors)
+        public DebugVehicles(ulong playerController, bool inGame, RegisteredActors actors)
         {
             _playerController = playerController;
             _inGame = inGame;

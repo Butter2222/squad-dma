@@ -138,7 +138,7 @@ namespace squad_dma.Source.Squad.Features
                 if (!_isApplied)
                 {
                     Memory.WriteValue<float>(soldierActor + ASQSoldier.UseInteractDistance, 5000.0f);
-                    Memory.WriteValue<float>(soldierActor + ASQSoldier.InteractableRadiusMultiplier, 200.0f);
+                    Memory.WriteValue<float>(soldierActor + ASQSoldier.InteractableRadiusMultiplier, 1000.0f);
                     
                     _isApplied = true;
                     Logger.Debug($"[{NAME}] Applied interaction distance modifications (extended values: 5000.0f, 200.0f)");

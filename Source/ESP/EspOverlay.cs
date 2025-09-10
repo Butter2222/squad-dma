@@ -101,6 +101,48 @@ namespace squad_dma
             ActorType.TruckLogistics, ActorType.TruckTransport, ActorType.TruckTransportArmed
         };
 
+        // Vehicle size categories for realistic box sizing
+        private enum VehicleSize { Small, Medium, Large, ExtraLarge }
+        
+        private static readonly Dictionary<ActorType, VehicleSize> VehicleSizes = new Dictionary<ActorType, VehicleSize>
+        {
+            // Motorcycle
+            { ActorType.Motorcycle, VehicleSize.Small },
+            
+            // Medium vehicles (jeeps, light trucks, boats)
+            { ActorType.JeepTransport, VehicleSize.Medium },
+            { ActorType.JeepLogistics, VehicleSize.Medium },
+            { ActorType.JeepTurret, VehicleSize.Medium },
+            { ActorType.JeepArtillery, VehicleSize.Medium },
+            { ActorType.JeepAntitank, VehicleSize.Medium },
+            { ActorType.JeepAntiAir, VehicleSize.Medium },
+            { ActorType.JeepRWSTurret, VehicleSize.Medium },
+            { ActorType.Boat, VehicleSize.Medium },
+            { ActorType.BoatLogistics, VehicleSize.Medium },
+            { ActorType.TrackedJeep, VehicleSize.Medium },
+            { ActorType.LoachCAS, VehicleSize.Medium },
+            { ActorType.LoachScout, VehicleSize.Medium },
+            
+            // Large vehicles (trucks, APCs, IFVs)
+            { ActorType.TruckTransport, VehicleSize.Large },
+            { ActorType.TruckLogistics, VehicleSize.Large },
+            { ActorType.TruckTransportArmed, VehicleSize.Large },
+            { ActorType.TruckArtillery, VehicleSize.Large },
+            { ActorType.TruckAntiAir, VehicleSize.Large },
+            { ActorType.APC, VehicleSize.Large },
+            { ActorType.TrackedAPC, VehicleSize.Large },
+            { ActorType.TrackedAPCArtillery, VehicleSize.Large },
+            { ActorType.IFV, VehicleSize.Large },
+            { ActorType.TrackedIFV, VehicleSize.Large },
+            { ActorType.TrackedLogistics, VehicleSize.Large },
+            { ActorType.TransportHelicopter, VehicleSize.Large },
+            
+            // Extra Large vehicles (tanks, heavy armor)
+            { ActorType.Tank, VehicleSize.ExtraLarge },
+            { ActorType.TankMGS, VehicleSize.ExtraLarge },
+            { ActorType.AttackHelicopter, VehicleSize.ExtraLarge }
+        };
+
         public EspOverlay()
         {
             FormBorderStyle = FormBorderStyle.None;
@@ -268,8 +310,9 @@ namespace squad_dma
 
             Vector3D camPos = viewInfo.Location;
             float maxDistance = Program.Config.EspMaxDistance;
-            float vehicleMaxDistance = maxDistance + 1000f;
+            float vehicleMaxDistance = Program.Config.EspVehicleMaxDistance;
             bool showAllies = Program.Config.EspShowAllies;
+            bool showVehicles = Program.Config.EspShowVehicles;
             var playerColor = brush.Color;
 
             var visibleActors = new List<(UActor actor, Vector2 screenPos, float distance)>();
@@ -297,6 +340,10 @@ namespace squad_dma
                     continue;
 
                 if (!showAllies && actor.IsFriendly())
+                    continue;
+
+                // Skip vehicles if not showing them
+                if (!isPlayer && !showVehicles)
                     continue;
 
                 var wtsStart = Stopwatch.StartNew();
@@ -387,6 +434,21 @@ namespace squad_dma
             return isVehicle;
         }
 
+        private float GetVehicleSizeMultiplier(ActorType vehicleType)
+        {
+            if (!VehicleSizes.TryGetValue(vehicleType, out VehicleSize size))
+                return 1.0f; // Default size for unknown vehicles
+            
+            return size switch
+            {
+                VehicleSize.Small => 0.7f,        // 70% of base size (motorcycles)
+                VehicleSize.Medium => 1.0f,       // 100% of base size (jeeps, boats)
+                VehicleSize.Large => 1.4f,        // 140% of base size (trucks, APCs)
+                VehicleSize.ExtraLarge => 1.8f,   // 180% of base size (tanks)
+                _ => 1.0f
+            };
+        }
+
         private void DrawVehicleBox(UActor actor, Vector2 screenPos, float distance)
         {
             bool isEnemy = actor.TeamID != -1 && actor.TeamID != Memory.LocalPlayer.TeamID;
@@ -396,22 +458,37 @@ namespace squad_dma
             if (!Program.Config.EspShowAllies && !isEnemy)
                 return;
 
-            vehicleBrush.Color = isUnclaimed ? new RawColor4(1.0f, 1.0f, 0.0f, 1.0f) :
-                                isEnemy ? new RawColor4(1.0f, 1.0f, 0.0f, 1.0f) :
-                                new RawColor4(0.0f, 1.0f, 0.0f, 1.0f);
+            // Better color differentiation for vehicles
+            vehicleBrush.Color = isUnclaimed ? new RawColor4(1.0f, 1.0f, 0.0f, 1.0f) :  // Yellow for unclaimed
+                                isEnemy ? new RawColor4(1.0f, 1.0f, 0.0f, 1.0f) :        // Yellow for enemy
+                                new RawColor4(0.4f, 0.7f, 1.0f, 1.0f);                   // Light blue for friendly
 
-            float boxSize = 500f / (distance + 1f);
-            float halfSize = boxSize / 2f;
+            // Vehicle-type-based sizing with reduced base size
+            float baseSize = 480f; // Reduced by 60% (1200 * 0.4)
+            float minSize = 50f;    // Minimum size to ensure visibility
+            float maxSize = 2000f;  // Maximum size for very large vehicles
+            
+            // Get vehicle-specific size multiplier
+            float sizeMultiplier = GetVehicleSizeMultiplier(actor.ActorType);
+            float vehicleBaseSize = baseSize * sizeMultiplier;
+            
+            // Distance-based scaling with better curve
+            float distanceScale = Math.Max(1f, distance / 10f); // Scale factor based on distance
+            float boxSize = Math.Max(minSize, Math.Min(maxSize, vehicleBaseSize / distanceScale));
+            
+            // Aspect ratio similar to 1204x754 (approximately 1.6:1)
+            float boxWidth = boxSize * 1.6f;  // Width based on 1204x754 aspect ratio
+            float boxHeight = boxSize * 1.0f; // Height maintains the calculated box size
+            
             RawRectangleF vehicleRect = new RawRectangleF(
-                screenPos.X - halfSize, screenPos.Y - halfSize,
-                screenPos.X + halfSize, screenPos.Y + halfSize
+                screenPos.X - boxWidth / 2f, screenPos.Y - boxHeight / 2f,
+                screenPos.X + boxWidth / 2f, screenPos.Y + boxHeight / 2f
             );
 
             renderTarget.DrawRectangle(vehicleRect, vehicleBrush);
 
             string vehicleText = GetEspText(actor, distance);
             var (textWidth, textHeight) = GetTextMetrics(vehicleText);
-            float boxWidth = vehicleRect.Right - vehicleRect.Left;
             float rectWidth = Math.Max(boxWidth, textWidth);
             float boxCenterX = (vehicleRect.Left + vehicleRect.Right) / 2f;
             RawRectangleF textRect = new RawRectangleF(

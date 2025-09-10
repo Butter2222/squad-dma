@@ -6,7 +6,7 @@ using System.Numerics;
 
 namespace squad_dma
 {
-    public class RegistredActors
+    public class RegisteredActors
     {
         private readonly ulong _persistentLevel;
         private ulong _actorsArray;
@@ -65,7 +65,7 @@ namespace squad_dma
         /// <summary>
         /// RegisteredPlayers List Constructor.
         /// </summary>
-        public RegistredActors(ulong persistentLevelAddr)
+        public RegisteredActors(ulong persistentLevelAddr)
         {
             this._persistentLevel = persistentLevelAddr;
             this.Actors = new(this._actors);
@@ -260,15 +260,8 @@ namespace squad_dma
                         teamInfoRound.AddEntry<int>(i, 6, pawnPlayerState, null, Offsets.ASQPlayerState.TeamID);
                         teamInfoRound.AddEntry<int>(i, 7, controllerPlayerState, null, Offsets.ASQPlayerState.TeamID);
 
-                        // Add mesh and bone tracking for ESP
-                       // var meshPtr = playerInstanceInfoRound.AddEntry<ulong>(i, 8, actorAddr + Offsets.ASQSoldier.Mesh);
-                       // meshRound.AddEntry<FTransform>(i, 9, meshPtr, null, Offsets.USceneComponent.ComponentToWorld);
-                        //var boneArrayPtr = meshRound.AddEntry<ulong>(i, 10, meshPtr, null, 0x5B8);
-
-                       // for (int j = 0; j < _boneIds.Length; j++)
-                       // {
-                       //     boneInfoRound.AddEntry<FTransform>(i, 11 + j, boneArrayPtr, null, (uint)(_boneIds[j] * 0x30));
-                       // }
+                        // ESP bone tracking - Uncomment these lines to enable ESP
+                        // SetupESPEntries(playerInstanceInfoRound, meshRound, boneInfoRound, i, actorAddr);
                     }
                     else if (Names.Deployables.Contains(actorType))
                     {
@@ -394,76 +387,11 @@ namespace squad_dma
                             }
                         }
 
-                        // Update mesh and bone information for ESP
-                        if (results.TryGetValue(8, out var meshResult) && meshResult.TryGetResult<ulong>(out var meshAddr))
-                        {
-                            actor.Mesh = meshAddr;
-                            if (meshAddr == 0)
-                            {
-                                actor.BoneScreenPositions = new Vector2[_boneIds.Length];
-                                Array.Clear(actor.BoneScreenPositions, 0, actor.BoneScreenPositions.Length);
-                                continue;
-                            }
-
-                            // ComponentToWorld is commented out, so skip it for now
-                            actor.ComponentToWorld = new FTransform(); // Default transform
-
-                            if (results.TryGetValue(9, out var boneArrayResult) && boneArrayResult.TryGetResult<ulong>(out var boneArrayPtr))
-                            {
-                                if (boneArrayPtr == 0)
-                                {
-                                    actor.BoneScreenPositions = new Vector2[_boneIds.Length];
-                                    Array.Clear(actor.BoneScreenPositions, 0, actor.BoneScreenPositions.Length);
-                                    continue;
-                                }
-
-                                actor.BoneTransforms.Clear();
-                                var viewInfo = new MinimalViewInfo
-                                {
-                                    Location = Memory._game.LocalPlayer.Position,
-                                    Rotation = Memory._game.LocalPlayer.Rotation3D,
-                                    FOV = Memory._game.CurrentFOV
-                                };
-                                actor.BoneScreenPositions = new Vector2[_boneIds.Length];
-
-                                bool anyBoneSuccess = false;
-                                for (int j = 0; j < _boneIds.Length; j++)
-                                {
-                                    if (results.TryGetValue(10 + j, out var boneResult) &&
-                                        boneResult.TryGetResult<FTransform>(out var boneTransform))
-                                    {
-                                        actor.BoneTransforms[_boneIds[j]] = boneTransform;
-                                        Vector3 boneWorldPos = TransformToWorld(boneTransform, actor.ComponentToWorld);
-                                        Vector3D boneWorldPos3D = boneWorldPos.ToVector3D();
-                                        actor.BoneScreenPositions[j] = Camera.WorldToScreen(viewInfo, boneWorldPos3D);
-                                        if (actor.BoneScreenPositions[j] != Vector2.Zero)
-                                        {
-                                            anyBoneSuccess = true;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        actor.BoneScreenPositions[j] = Vector2.Zero;
-                                    }
-                                }
-
-                                if (!anyBoneSuccess)
-                                {
-                                    Array.Clear(actor.BoneScreenPositions, 0, actor.BoneScreenPositions.Length);
-                                }
-                            }
-                            else
-                            {
-                                actor.BoneScreenPositions = new Vector2[_boneIds.Length];
-                                Array.Clear(actor.BoneScreenPositions, 0, actor.BoneScreenPositions.Length);
-                            }
-                        }
-                        else
-                        {
-                            actor.Mesh = 0;
-                            actor.BoneScreenPositions = new Vector2[_boneIds.Length];
-                            Array.Clear(actor.BoneScreenPositions, 0, actor.BoneScreenPositions.Length);
-                        }
+                        // ESP bone tracking - Uncomment to enable
+                        // UpdatePlayerESPData(actor, results);
+                        
+                        // Initialize empty bone data when ESP is disabled
+                        InitializeEmptyESPData(actor);
                     }
                     else if (Names.Deployables.Contains(actor.ActorType))
                     {
@@ -531,6 +459,7 @@ namespace squad_dma
                     _squadCache = _squadCache.Where(kv => _actors.ContainsKey(kv.Key))
                                            .ToDictionary(kv => kv.Key, kv => kv.Value);
                 }
+
             }
             catch (GameEnded)
             {
@@ -543,6 +472,161 @@ namespace squad_dma
         }
         #endregion
 
+        #region ESP Functionality (Ready to Enable)
+        /// <summary>
+        /// Sets up ESP scatter read entries for mesh and bone data.
+        /// Call this from SetupPlayerEntries() to enable ESP.
+        /// </summary>
+        private void SetupESPEntries(ScatterReadRound playerInstanceInfoRound, ScatterReadRound meshRound, 
+            ScatterReadRound boneInfoRound, int index, ulong actorAddr)
+        {
+            // Read mesh pointer
+            var meshPtr = playerInstanceInfoRound.AddEntry<ulong>(index, 8, actorAddr + Offsets.ASQSoldier.Mesh);
+            
+            // Read component to world transform
+            meshRound.AddEntry<FTransform>(index, 9, meshPtr, null, Offsets.USceneComponent.ComponentToWorld);
+            
+            // Read bone array pointer
+            var boneArrayPtr = meshRound.AddEntry<ulong>(index, 10, meshPtr, null, 0x5B8);
+            
+            // Read individual bone transforms
+            for (int j = 0; j < _boneIds.Length; j++)
+            {
+                boneInfoRound.AddEntry<FTransform>(index, 11 + j, boneArrayPtr, null, (uint)(_boneIds[j] * 0x30));
+            }
+        }
+        
+        /// <summary>
+        /// Updates mesh and bone data for ESP visualization.
+        /// Call this from the main update loop to enable ESP.
+        /// </summary>
+        private void UpdatePlayerESPData(UActor actor, Dictionary<int, IScatterEntry> results)
+        {
+            // Initialize bone positions array if needed
+            if (actor.BoneScreenPositions == null || actor.BoneScreenPositions.Length != _boneIds.Length)
+            {
+                actor.BoneScreenPositions = new Vector2[_boneIds.Length];
+            }
+            
+            // Get mesh pointer
+            if (!results.TryGetValue(8, out var meshResult) || !meshResult.TryGetResult<ulong>(out var meshAddr) || meshAddr == 0)
+            {
+                ClearESPData(actor);
+                return;
+            }
+            
+            actor.Mesh = meshAddr;
+            
+            // Get component to world transform
+            if (results.TryGetValue(9, out var componentResult) && componentResult.TryGetResult<FTransform>(out var componentToWorld))
+            {
+                actor.ComponentToWorld = componentToWorld;
+            }
+            else
+            {
+                actor.ComponentToWorld = new FTransform(); // Default transform
+            }
+            
+            // Get bone array pointer
+            if (!results.TryGetValue(10, out var boneArrayResult) || !boneArrayResult.TryGetResult<ulong>(out var boneArrayPtr) || boneArrayPtr == 0)
+            {
+                ClearESPData(actor);
+                return;
+            }
+            
+            // Process bone transforms
+            ProcessBoneTransforms(actor, results);
+        }
+        
+        /// <summary>
+        /// Processes bone transforms and converts to screen coordinates.
+        /// </summary>
+        private void ProcessBoneTransforms(UActor actor, Dictionary<int, IScatterEntry> results)
+        {
+            var localPlayer = Memory._game?.LocalPlayer;
+            if (localPlayer == null)
+            {
+                ClearESPData(actor);
+                return;
+            }
+            
+            // Setup view info for world-to-screen conversion
+            var viewInfo = new MinimalViewInfo
+            {
+                Location = localPlayer.Position,
+                Rotation = localPlayer.Rotation3D,
+                FOV = Memory._game.CurrentFOV
+            };
+            
+            actor.BoneTransforms.Clear();
+            bool anyBoneSuccess = false;
+            
+            // Process each bone
+            for (int j = 0; j < _boneIds.Length; j++)
+            {
+                int resultKey = 11 + j;
+                
+                if (results.TryGetValue(resultKey, out var boneResult) && boneResult.TryGetResult<FTransform>(out var boneTransform))
+                {
+                    // Store bone transform
+                    actor.BoneTransforms[_boneIds[j]] = boneTransform;
+                    
+                    // Transform to world space
+                    Vector3 boneWorldPos = TransformToWorld(boneTransform, actor.ComponentToWorld);
+                    Vector3D boneWorldPos3D = new Vector3D(boneWorldPos.X, boneWorldPos.Y, boneWorldPos.Z);
+                    
+                    // Convert to screen coordinates
+                    Vector2 screenPos = Camera.WorldToScreen(viewInfo, boneWorldPos3D);
+                    actor.BoneScreenPositions[j] = screenPos;
+                    
+                    if (screenPos != Vector2.Zero)
+                    {
+                        anyBoneSuccess = true;
+                    }
+                }
+                else
+                {
+                    actor.BoneScreenPositions[j] = Vector2.Zero;
+                }
+            }
+            
+            // Clear if no bones were processed successfully
+            if (!anyBoneSuccess)
+            {
+                ClearESPData(actor);
+            }
+        }
+        
+        /// <summary>
+        /// Clears ESP data for an actor.
+        /// </summary>
+        private void ClearESPData(UActor actor)
+        {
+            actor.Mesh = 0;
+            if (actor.BoneScreenPositions != null)
+            {
+                Array.Clear(actor.BoneScreenPositions, 0, actor.BoneScreenPositions.Length);
+            }
+            actor.BoneTransforms.Clear();
+        }
+        
+        /// <summary>
+        /// Initializes empty ESP data when ESP is disabled.
+        /// </summary>
+        private void InitializeEmptyESPData(UActor actor)
+        {
+            if (actor.BoneScreenPositions == null || actor.BoneScreenPositions.Length != _boneIds.Length)
+            {
+                actor.BoneScreenPositions = new Vector2[_boneIds.Length];
+            }
+            Array.Clear(actor.BoneScreenPositions, 0, actor.BoneScreenPositions.Length);
+            actor.Mesh = 0;
+            actor.BoneTransforms.Clear();
+        }
+
+        #endregion
+
+        #region Helper Methods
         private Vector3 TransformToWorld(FTransform boneTransform, FTransform componentToWorld)
         {
             boneTransform.Scale3D = new Vector3(1, 1, 1);
@@ -552,5 +636,6 @@ namespace squad_dma
             Matrix4x4 finalMatrix = boneMatrix * worldMatrix;
             return new Vector3(finalMatrix.M41, finalMatrix.M42, finalMatrix.M43);
         }
+        #endregion
     }
 }

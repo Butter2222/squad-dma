@@ -35,6 +35,7 @@ namespace squad_dma
             colDialog = new ColorDialog();
             toolTip = new ToolTip(components);
             chkShowEnemyDistance = new CheckBox();
+            chkEnableAimview = new CheckBox();
             btnDumpNames = new Button();
             trkUIScale = new TrackBar();
             trkAimLength = new TrackBar();
@@ -103,16 +104,11 @@ namespace squad_dma
             chkEspShowHealth = new CheckBox();
             lblEspMaxDistance = new Label();
             trkEspMaxDistance = new TrackBar();
+            lblEspVehicleMaxDistance = new Label();
+            trkEspVehicleMaxDistance = new TrackBar();
+            chkEspShowVehicles = new CheckBox();
             lblEspFontSize = new Label();
             txtEspFontSize = new TextBox();
-            lblEspColorA = new Label();
-            txtEspColorA = new TextBox();
-            lblEspColorR = new Label();
-            txtEspColorR = new TextBox();
-            lblEspColorG = new Label();
-            txtEspColorG = new TextBox();
-            lblEspColorB = new Label();
-            txtEspColorB = new TextBox();
             lblFirstScopeMag = new Label();
             txtFirstScopeMag = new TextBox();
             lblSecondScopeMag = new Label();
@@ -136,6 +132,7 @@ namespace squad_dma
             grpKeybinds.SuspendLayout();
             grpEsp.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)trkEspMaxDistance).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)trkEspVehicleMaxDistance).BeginInit();
             tabRadar.SuspendLayout();
             grpMapSetup.SuspendLayout();
             tabControl.SuspendLayout();
@@ -156,6 +153,18 @@ namespace squad_dma
             chkShowEnemyDistance.Text = "Show Enemy Distance";
             toolTip.SetToolTip(chkShowEnemyDistance, "Toggle display of enemy distance on the radar");
             chkShowEnemyDistance.UseVisualStyleBackColor = true;
+            // 
+            // chkEnableAimview
+            // 
+            chkEnableAimview.AutoSize = true;
+            chkEnableAimview.Font = new Font("Segoe UI", 9F);
+            chkEnableAimview.Location = new Point(265, 75);
+            chkEnableAimview.Name = "chkEnableAimview";
+            chkEnableAimview.Size = new Size(106, 19);
+            chkEnableAimview.TabIndex = 16;
+            chkEnableAimview.Text = "Enable Aimview";
+            toolTip.SetToolTip(chkEnableAimview, "Toggle visibility of the aimview panel overlay");
+            chkEnableAimview.UseVisualStyleBackColor = true;
             // 
             // btnDumpNames
             // 
@@ -358,6 +367,7 @@ namespace squad_dma
             grpUserInterface.Controls.Add(lblTechMarkerScale);
             grpUserInterface.Controls.Add(trkTechMarkerScale);
             grpUserInterface.Controls.Add(chkShowEnemyDistance);
+            grpUserInterface.Controls.Add(chkEnableAimview);
             grpUserInterface.Controls.Add(chkHighAlert);
             grpUserInterface.Location = new Point(8, 6);
             grpUserInterface.Name = "grpUserInterface";
@@ -826,16 +836,11 @@ namespace squad_dma
             grpEsp.Controls.Add(chkEspShowHealth);
             grpEsp.Controls.Add(lblEspMaxDistance);
             grpEsp.Controls.Add(trkEspMaxDistance);
+            grpEsp.Controls.Add(lblEspVehicleMaxDistance);
+            grpEsp.Controls.Add(trkEspVehicleMaxDistance);
+            grpEsp.Controls.Add(chkEspShowVehicles);
             grpEsp.Controls.Add(lblEspFontSize);
             grpEsp.Controls.Add(txtEspFontSize);
-            grpEsp.Controls.Add(lblEspColorA);
-            grpEsp.Controls.Add(txtEspColorA);
-            grpEsp.Controls.Add(lblEspColorR);
-            grpEsp.Controls.Add(txtEspColorR);
-            grpEsp.Controls.Add(lblEspColorG);
-            grpEsp.Controls.Add(txtEspColorG);
-            grpEsp.Controls.Add(lblEspColorB);
-            grpEsp.Controls.Add(txtEspColorB);
             grpEsp.Controls.Add(lblFirstScopeMag);
             grpEsp.Controls.Add(txtFirstScopeMag);
             grpEsp.Controls.Add(lblSecondScopeMag);
@@ -861,7 +866,7 @@ namespace squad_dma
             // 
             // chkEnableBones
             // 
-            chkEnableBones.Location = new Point(15, 50);
+            chkEnableBones.Location = new Point(15, 55);
             chkEnableBones.Name = "chkEnableBones";
             chkEnableBones.Size = new Size(101, 24);
             chkEnableBones.TabIndex = 1;
@@ -870,7 +875,7 @@ namespace squad_dma
             // 
             // chkShowAllies
             // 
-            chkShowAllies.Location = new Point(15, 75);
+            chkShowAllies.Location = new Point(15, 85);
             chkShowAllies.Name = "chkShowAllies";
             chkShowAllies.Size = new Size(101, 24);
             chkShowAllies.TabIndex = 2;
@@ -879,7 +884,7 @@ namespace squad_dma
             // 
             // chkEspShowNames
             // 
-            chkEspShowNames.Location = new Point(15, 100);
+            chkEspShowNames.Location = new Point(150, 25);
             chkEspShowNames.Name = "chkEspShowNames";
             chkEspShowNames.Size = new Size(101, 24);
             chkEspShowNames.TabIndex = 3;
@@ -888,7 +893,7 @@ namespace squad_dma
             // 
             // chkEspShowDistance
             // 
-            chkEspShowDistance.Location = new Point(15, 125);
+            chkEspShowDistance.Location = new Point(150, 55);
             chkEspShowDistance.Name = "chkEspShowDistance";
             chkEspShowDistance.Size = new Size(113, 24);
             chkEspShowDistance.TabIndex = 4;
@@ -897,7 +902,7 @@ namespace squad_dma
             // 
             // chkEspShowHealth
             // 
-            chkEspShowHealth.Location = new Point(15, 150);
+            chkEspShowHealth.Location = new Point(150, 85);
             chkEspShowHealth.Name = "chkEspShowHealth";
             chkEspShowHealth.Size = new Size(101, 24);
             chkEspShowHealth.TabIndex = 5;
@@ -906,26 +911,54 @@ namespace squad_dma
             // 
             // lblEspMaxDistance
             // 
-            lblEspMaxDistance.Location = new Point(15, 205);
+            lblEspMaxDistance.Location = new Point(15, 155);
             lblEspMaxDistance.Name = "lblEspMaxDistance";
-            lblEspMaxDistance.Size = new Size(150, 23);
+            lblEspMaxDistance.Size = new Size(180, 23);
             lblEspMaxDistance.TabIndex = 6;
-            lblEspMaxDistance.Text = "Max Distance: 100m";
+            lblEspMaxDistance.Text = "Player Max Distance: 100m";
             // 
             // trkEspMaxDistance
             // 
-            trkEspMaxDistance.Location = new Point(15, 230);
+            trkEspMaxDistance.Location = new Point(15, 180);
             trkEspMaxDistance.Maximum = 1000;
             trkEspMaxDistance.Minimum = 10;
             trkEspMaxDistance.Name = "trkEspMaxDistance";
-            trkEspMaxDistance.Size = new Size(551, 45);
+            trkEspMaxDistance.Size = new Size(550, 45);
             trkEspMaxDistance.TabIndex = 7;
             trkEspMaxDistance.TickFrequency = 50;
             trkEspMaxDistance.Value = 100;
             // 
+            // lblEspVehicleMaxDistance
+            // 
+            lblEspVehicleMaxDistance.Location = new Point(15, 235);
+            lblEspVehicleMaxDistance.Name = "lblEspVehicleMaxDistance";
+            lblEspVehicleMaxDistance.Size = new Size(180, 23);
+            lblEspVehicleMaxDistance.TabIndex = 8;
+            lblEspVehicleMaxDistance.Text = "Vehicle Max Distance: 200m";
+            // 
+            // trkEspVehicleMaxDistance
+            // 
+            trkEspVehicleMaxDistance.Location = new Point(15, 260);
+            trkEspVehicleMaxDistance.Maximum = 3000;
+            trkEspVehicleMaxDistance.Minimum = 100;
+            trkEspVehicleMaxDistance.Name = "trkEspVehicleMaxDistance";
+            trkEspVehicleMaxDistance.Size = new Size(550, 45);
+            trkEspVehicleMaxDistance.TabIndex = 9;
+            trkEspVehicleMaxDistance.TickFrequency = 100;
+            trkEspVehicleMaxDistance.Value = 2000;
+            // 
+            // chkEspShowVehicles
+            // 
+            chkEspShowVehicles.Location = new Point(150, 115);
+            chkEspShowVehicles.Name = "chkEspShowVehicles";
+            chkEspShowVehicles.Size = new Size(113, 24);
+            chkEspShowVehicles.TabIndex = 10;
+            chkEspShowVehicles.Text = "Show Vehicles";
+            chkEspShowVehicles.UseVisualStyleBackColor = true;
+            // 
             // lblEspFontSize
             // 
-            lblEspFontSize.Location = new Point(140, 25);
+            lblEspFontSize.Location = new Point(300, 25);
             lblEspFontSize.Name = "lblEspFontSize";
             lblEspFontSize.Size = new Size(74, 24);
             lblEspFontSize.TabIndex = 8;
@@ -933,74 +966,15 @@ namespace squad_dma
             // 
             // txtEspFontSize
             // 
-            txtEspFontSize.Location = new Point(220, 25);
+            txtEspFontSize.Location = new Point(380, 25);
             txtEspFontSize.Name = "txtEspFontSize";
-            txtEspFontSize.Size = new Size(100, 23);
+            txtEspFontSize.Size = new Size(75, 23);
             txtEspFontSize.TabIndex = 9;
             // 
-            // lblEspColorA
-            // 
-            lblEspColorA.Location = new Point(140, 50);
-            lblEspColorA.Name = "lblEspColorA";
-            lblEspColorA.Size = new Size(74, 24);
-            lblEspColorA.TabIndex = 10;
-            lblEspColorA.Text = "Alpha:";
-            // 
-            // txtEspColorA
-            // 
-            txtEspColorA.Location = new Point(220, 50);
-            txtEspColorA.Name = "txtEspColorA";
-            txtEspColorA.Size = new Size(100, 23);
-            txtEspColorA.TabIndex = 11;
-            // 
-            // lblEspColorR
-            // 
-            lblEspColorR.Location = new Point(140, 75);
-            lblEspColorR.Name = "lblEspColorR";
-            lblEspColorR.Size = new Size(74, 23);
-            lblEspColorR.TabIndex = 12;
-            lblEspColorR.Text = "Red:";
-            // 
-            // txtEspColorR
-            // 
-            txtEspColorR.Location = new Point(220, 75);
-            txtEspColorR.Name = "txtEspColorR";
-            txtEspColorR.Size = new Size(100, 23);
-            txtEspColorR.TabIndex = 13;
-            // 
-            // lblEspColorG
-            // 
-            lblEspColorG.Location = new Point(140, 100);
-            lblEspColorG.Name = "lblEspColorG";
-            lblEspColorG.Size = new Size(74, 23);
-            lblEspColorG.TabIndex = 14;
-            lblEspColorG.Text = "Green:";
-            // 
-            // txtEspColorG
-            // 
-            txtEspColorG.Location = new Point(220, 100);
-            txtEspColorG.Name = "txtEspColorG";
-            txtEspColorG.Size = new Size(100, 23);
-            txtEspColorG.TabIndex = 15;
-            // 
-            // lblEspColorB
-            // 
-            lblEspColorB.Location = new Point(140, 125);
-            lblEspColorB.Name = "lblEspColorB";
-            lblEspColorB.Size = new Size(75, 23);
-            lblEspColorB.TabIndex = 16;
-            lblEspColorB.Text = "Blue:";
-            // 
-            // txtEspColorB
-            // 
-            txtEspColorB.Location = new Point(220, 125);
-            txtEspColorB.Name = "txtEspColorB";
-            txtEspColorB.Size = new Size(100, 23);
-            txtEspColorB.TabIndex = 17;
             // 
             // lblFirstScopeMag
             // 
-            lblFirstScopeMag.Location = new Point(330, 25);
+            lblFirstScopeMag.Location = new Point(300, 55);
             lblFirstScopeMag.Name = "lblFirstScopeMag";
             lblFirstScopeMag.Size = new Size(74, 23);
             lblFirstScopeMag.TabIndex = 18;
@@ -1008,14 +982,14 @@ namespace squad_dma
             // 
             // txtFirstScopeMag
             // 
-            txtFirstScopeMag.Location = new Point(410, 25);
+            txtFirstScopeMag.Location = new Point(380, 55);
             txtFirstScopeMag.Name = "txtFirstScopeMag";
             txtFirstScopeMag.Size = new Size(75, 23);
             txtFirstScopeMag.TabIndex = 19;
             // 
             // lblSecondScopeMag
             // 
-            lblSecondScopeMag.Location = new Point(330, 50);
+            lblSecondScopeMag.Location = new Point(300, 85);
             lblSecondScopeMag.Name = "lblSecondScopeMag";
             lblSecondScopeMag.Size = new Size(74, 23);
             lblSecondScopeMag.TabIndex = 20;
@@ -1023,14 +997,14 @@ namespace squad_dma
             // 
             // txtSecondScopeMag
             // 
-            txtSecondScopeMag.Location = new Point(410, 50);
+            txtSecondScopeMag.Location = new Point(380, 85);
             txtSecondScopeMag.Name = "txtSecondScopeMag";
             txtSecondScopeMag.Size = new Size(75, 23);
             txtSecondScopeMag.TabIndex = 21;
             // 
             // lblThirdScopeMag
             // 
-            lblThirdScopeMag.Location = new Point(330, 75);
+            lblThirdScopeMag.Location = new Point(300, 115);
             lblThirdScopeMag.Name = "lblThirdScopeMag";
             lblThirdScopeMag.Size = new Size(74, 23);
             lblThirdScopeMag.TabIndex = 22;
@@ -1038,7 +1012,7 @@ namespace squad_dma
             // 
             // txtThirdScopeMag
             // 
-            txtThirdScopeMag.Location = new Point(410, 75);
+            txtThirdScopeMag.Location = new Point(380, 115);
             txtThirdScopeMag.Name = "txtThirdScopeMag";
             txtThirdScopeMag.Size = new Size(75, 23);
             txtThirdScopeMag.TabIndex = 23;
@@ -1149,6 +1123,7 @@ namespace squad_dma
             grpEsp.ResumeLayout(false);
             grpEsp.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)trkEspMaxDistance).EndInit();
+            ((System.ComponentModel.ISupportInitialize)trkEspVehicleMaxDistance).EndInit();
             tabRadar.ResumeLayout(false);
             tabRadar.PerformLayout();
             grpMapSetup.ResumeLayout(false);
@@ -1167,6 +1142,7 @@ namespace squad_dma
         private Label lblUIScale;
         private TrackBar trkUIScale;
         private CheckBox chkShowEnemyDistance;
+        private CheckBox chkEnableAimview;
         private Button btnDumpNames;
         private GroupBox grpRadar;
         private Button btnRestartRadar;
@@ -1230,20 +1206,15 @@ namespace squad_dma
         private CheckBox chkEnableBones;
         private TrackBar trkEspMaxDistance;
         private Label lblEspMaxDistance;
+        private TrackBar trkEspVehicleMaxDistance;
+        private Label lblEspVehicleMaxDistance;
+        private CheckBox chkEspShowVehicles;
         private CheckBox chkShowAllies;
         private CheckBox chkEspShowNames;
         private CheckBox chkEspShowDistance;
         private CheckBox chkEspShowHealth;
         private TextBox txtEspFontSize;
         private Label lblEspFontSize;
-        private TextBox txtEspColorA;
-        private Label lblEspColorA;
-        private TextBox txtEspColorR;
-        private Label lblEspColorR;
-        private TextBox txtEspColorG;
-        private Label lblEspColorG;
-        private TextBox txtEspColorB;
-        private Label lblEspColorB;
         private Label lblFirstScopeMag;
         private TextBox txtFirstScopeMag;
         private Label lblSecondScopeMag;

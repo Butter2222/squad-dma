@@ -43,6 +43,9 @@ namespace squad_dma
         [JsonPropertyName("showEnemyDistance")]
         public bool ShowEnemyDistance { get; set; } = true;
 
+        [JsonPropertyName("enableAimview")]
+        public bool EnableAimview { get; set; } = true;
+
         [JsonPropertyName("highAlert")]
         public bool HighAlert { get; set; } = true;
 
@@ -80,6 +83,12 @@ namespace squad_dma
 
         [JsonPropertyName("espMaxDistance")]
         public float EspMaxDistance { get; set; } = 1000f;
+
+        [JsonPropertyName("espVehicleMaxDistance")]
+        public float EspVehicleMaxDistance { get; set; } = 2000f;
+
+        [JsonPropertyName("espShowVehicles")]
+        public bool EspShowVehicles { get; set; } = true;
 
         [JsonPropertyName("espTextColor")]
         public PaintColor.Colors EspTextColor { get; set; }
@@ -343,6 +352,7 @@ namespace squad_dma
         {
             HighAlert = true;
             ShowEnemyDistance = true;
+            EnableAimview = true;
             DefaultZoom = 100;
             EnemyCount = false;
             Font = 0;
@@ -360,6 +370,8 @@ namespace squad_dma
             EspShowHealth = false;
             EspShowBox = true;
             EspMaxDistance = 1000f;
+            EspVehicleMaxDistance = 2000f;
+            EspShowVehicles = true;
             EspTextColor = DefaultPaintColors["EspText"];
             EspBones = true;
             EspShowAllies = false;
