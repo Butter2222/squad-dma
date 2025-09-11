@@ -109,6 +109,7 @@ namespace squad_dma
         {
             SKColor color = actor.IsInMySquad() ? SKPaints.Squad
                           : actor.IsFriendly() ? SKPaints.Friendly
+                          : actor.ActorType == ActorType.Player ? SKPaints.EnemyPlayer
                           : SKPaints.Enemy;
 
             if (teamEntityPaints.TryGetValue(actor.Team, out SKPaint cachedPaint))
@@ -126,11 +127,11 @@ namespace squad_dma
         {
             SKColor textColor = actor.ActorType switch
             {
-                ActorType.Player => actor.IsFriendly() ? SKColors.Blue : SKColors.Red,
+                ActorType.Player => actor.IsFriendly() ? SKColors.Blue : SKPaints.EnemyPlayer,
                 ActorType.Projectile => SKColors.Orange,
                 ActorType.ProjectileAA => SKColors.Orange,
                 ActorType.ProjectileSmall => SKPaints.SmallProjectile,
-                _ when Names.Vehicles.Contains(actor.ActorType) => SKPaints.Vehicle,
+                _ when Names.Vehicles.Contains(actor.ActorType) => actor.IsFriendly() ? SKPaints.Vehicle : actor.IsEnemy() ? SKPaints.EnemyVehicle : SKPaints.Vehicle,
                 _ => SKPaints.DefaultTextColor // Default
             };
 

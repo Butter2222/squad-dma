@@ -7,6 +7,8 @@ namespace squad_dma
         #region Team Colors
         public static readonly SKColor Friendly = new SKColor(0, 187, 254);
         public static readonly SKColor Enemy = SKColors.Red;
+        public static readonly SKColor EnemyPlayer = new SKColor(255, 107, 107); // #ff6b6b - Light red for enemy players
+        public static readonly SKColor EnemyVehicle = new SKColor(255, 107, 107); // #ff6b6b - Light red for enemy vehicles
         public static readonly SKColor Unknown = SKColors.Purple;
         public static readonly SKColor Squad = SKColors.Green;
         public static readonly SKColor SmallProjectile = SKColors.Magenta; 

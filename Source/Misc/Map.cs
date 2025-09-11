@@ -89,8 +89,10 @@ namespace squad_dma
         // Cached SKPaint objects for tech markers
         private static SKPaint _techMarkerPaint;
         private static SKPaint _techMarkerFriendlyPaint;
+        private static SKPaint _techMarkerEnemyPaint;
         private static SKPaint _techMarkerOutlinePaint;
         private static SKPaint _techMarkerFriendlyOutlinePaint;
+        private static SKPaint _techMarkerEnemyOutlinePaint;
         private static bool _paintsInitialized = false;
 
         public SKPoint GetPoint(float xOff = 0, float yOff = 0)
@@ -118,6 +120,13 @@ namespace squad_dma
                 ColorFilter = SKColorFilter.CreateBlendMode(SKPaints.Friendly, SKBlendMode.Modulate)
             };
 
+            _techMarkerEnemyPaint = new SKPaint
+            {
+                IsAntialias = true,
+                FilterQuality = SKFilterQuality.High,
+                ColorFilter = SKColorFilter.CreateBlendMode(SKPaints.EnemyVehicle, SKBlendMode.Modulate)
+            };
+
             // Simple, tight outline paints
             _techMarkerOutlinePaint = new SKPaint
             {
@@ -133,6 +142,14 @@ namespace squad_dma
                 FilterQuality = SKFilterQuality.High,
                 Color = SKColors.White,
                 ImageFilter = SKImageFilter.CreateDropShadow(0, 0, 0.5f, 0.5f, SKColors.White)
+            };
+
+            _techMarkerEnemyOutlinePaint = new SKPaint
+            {
+                IsAntialias = true,
+                FilterQuality = SKFilterQuality.High,
+                Color = SKColors.Black,
+                ImageFilter = SKImageFilter.CreateDropShadow(0, 0, 0.5f, 0.5f, SKColors.Black)
             };
 
             _paintsInitialized = true;
@@ -262,9 +279,15 @@ namespace squad_dma
                     canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerFriendlyOutlinePaint);
                     canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerFriendlyPaint);
                 }
+                else if (actor.IsEnemy())
+                {
+                    // Enemy: black outline, then red-tinted icon
+                    canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerEnemyOutlinePaint);
+                    canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerEnemyPaint);
+                }
                 else
                 {
-                    // Enemy: black outline, then original icon
+                    // Unclaimed/neutral: black outline, then original icon
                     canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerOutlinePaint);
                     canvas.DrawBitmap(icon, SKRect.Create(iconWidth, iconHeight), _techMarkerPaint);
                 }
@@ -285,7 +308,15 @@ namespace squad_dma
                 return;
 
             SKPaint textPaint = SKPaints.TextBase.Clone();
-            textPaint.Color = actor.GetTextPaint().Color;
+            // Enemy players: #ff6b6b, Enemy vehicles: WHITE, Everything else: white
+            if (actor.ActorType == ActorType.Player && actor.IsEnemy())
+            {
+                textPaint.Color = SKPaints.EnemyPlayer; // #ff6b6b for enemy player distance text
+            }
+            else
+            {
+                textPaint.Color = SKColors.White; // White for enemy vehicles and everything else
+            }
             textPaint.TextSize = 12 * UIScale * 1.3f;
 
             SKPaint outlinePaint = SKPaints.TextOutline.Clone();
@@ -315,7 +346,7 @@ namespace squad_dma
                 return;
 
             SKPaint textPaint = SKPaints.TextBase.Clone();
-            textPaint.Color = actor.GetTextPaint().Color;
+            textPaint.Color = SKColors.White; // Force WHITE for enemy vehicle distance text
             textPaint.TextSize = 13 * UIScale * 1.1f;
             textPaint.TextAlign = SKTextAlign.Left;
             textPaint.Typeface = CustomFonts.SKFontFamilyRegular; 
