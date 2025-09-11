@@ -119,6 +119,7 @@ namespace squad_dma
             InitializeEventHandlers();
             LoadInitialData();
             InitializeKeybinds();
+            InitializeColorsTab();
         }
 
         private void InitializeDarkMode()
@@ -231,6 +232,13 @@ namespace squad_dma
             LoadConfig();
             LoadMaps();
             _fpsWatch.Start();
+        }
+
+        private void InitializeColorsTab()
+        {
+            // Create and add the color configuration panel to the Colors tab
+            var colorPanel = CreateColorConfigurationPanel();
+            tabColors.Controls.Add(colorPanel);
         }
         #endregion
 
@@ -799,6 +807,267 @@ namespace squad_dma
             SKPaints.TextOutline.TextSize = _config.FontSize * _uiScale;
         }
 
+        private void LoadRadarColors()
+        {
+            SKPaints.LoadColorsFromConfig(_config.RadarColors);
+            // Refresh tech marker paints to apply new colors immediately
+            MapPosition.RefreshTechMarkerPaints();
+        }
+
+        #region Color Configuration Methods
+        /// <summary>
+        /// Opens color picker for a specific radar color setting
+        /// </summary>
+        private void OpenColorPicker(string colorName, ColorConfig currentColor, Action<ColorConfig> onColorChanged)
+        {
+            using (var colorDialog = new ColorDialog())
+            {
+                colorDialog.Color = currentColor.ToDrawingColor();
+                colorDialog.FullOpen = true;
+                
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    var newColor = new ColorConfig(
+                        colorDialog.Color.R,
+                        colorDialog.Color.G,
+                        colorDialog.Color.B
+                    );
+                    
+                    onColorChanged(newColor);
+                    LoadRadarColors(); // Reload colors into SKPaints
+                    _mapCanvas.Invalidate(); // Refresh the map
+                    Config.SaveConfig(_config); // Save configuration
+                }
+            }
+        }
+
+        /// <summary>
+        /// Creates a color picker button for the specified color setting
+        /// </summary>
+        private Button CreateColorButton(string text, ColorConfig color, Action<ColorConfig> onColorChanged)
+        {
+            var button = new Button
+            {
+                Text = text,
+                Size = new Size(120, 30),
+                BackColor = color.ToDrawingColor(),
+                ForeColor = GetContrastColor(color.ToDrawingColor()),
+                UseVisualStyleBackColor = false,
+                FlatStyle = FlatStyle.Flat
+            };
+
+            button.Click += (s, e) => OpenColorPicker(text, color, (newColor) =>
+            {
+                onColorChanged(newColor);
+                button.BackColor = newColor.ToDrawingColor();
+                button.ForeColor = GetContrastColor(newColor.ToDrawingColor());
+            });
+
+            return button;
+        }
+
+        /// <summary>
+        /// Gets contrasting text color (black or white) for the given background color
+        /// </summary>
+        private System.Drawing.Color GetContrastColor(System.Drawing.Color backgroundColor)
+        {
+            // Calculate luminance to determine if we should use black or white text
+            double luminance = (0.299 * backgroundColor.R + 0.587 * backgroundColor.G + 0.114 * backgroundColor.B) / 255;
+            return luminance > 0.5 ? System.Drawing.Color.Black : System.Drawing.Color.White;
+        }
+
+        /// <summary>
+        /// Creates a unique, clean color configuration panel with "Color name - Color Selection" layout
+        /// </summary>
+        public Panel CreateColorConfigurationPanel()
+        {
+            var mainPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = System.Drawing.Color.FromArgb(32, 32, 32),
+                Padding = new Padding(30)
+            };
+
+            // Title
+            var titleLabel = new Label
+            {
+                Text = "Color Configuration",
+                Font = new Font("Segoe UI", 14, FontStyle.Regular),
+                ForeColor = System.Drawing.Color.White,
+                Location = new Point(30, 30),
+                AutoSize = true
+            };
+            mainPanel.Controls.Add(titleLabel);
+
+            // Content area
+            var contentPanel = new Panel
+            {
+                Location = new Point(30, 70),
+                Size = new Size(mainPanel.Width - 60, mainPanel.Height - 140),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+                AutoScroll = true,
+                BackColor = System.Drawing.Color.FromArgb(32, 32, 32)
+            };
+            mainPanel.Controls.Add(contentPanel);
+
+            // All color configurations
+            var colorConfigs = new (string name, ColorConfig color, Action<ColorConfig> setter)[]
+            {
+                ("Squad Members", _config.RadarColors.SquadMembers, (ColorConfig c) => _config.RadarColors.SquadMembers = c),
+                ("Friendly Players", _config.RadarColors.FriendlyPlayers, (ColorConfig c) => _config.RadarColors.FriendlyPlayers = c),
+                ("Enemy Players", _config.RadarColors.EnemyPlayers, (ColorConfig c) => _config.RadarColors.EnemyPlayers = c),
+                ("Unknown Players", _config.RadarColors.UnknownPlayers, (ColorConfig c) => _config.RadarColors.UnknownPlayers = c),
+                ("Friendly Vehicles", _config.RadarColors.FriendlyVehicles, (ColorConfig c) => _config.RadarColors.FriendlyVehicles = c),
+                ("Enemy Vehicles", _config.RadarColors.EnemyVehicles, (ColorConfig c) => _config.RadarColors.EnemyVehicles = c),
+                ("Unclaimed Vehicles", _config.RadarColors.UnclaimedVehicles, (ColorConfig c) => _config.RadarColors.UnclaimedVehicles = c),
+                ("Regular Projectiles", _config.RadarColors.RegularProjectiles, (ColorConfig c) => _config.RadarColors.RegularProjectiles = c),
+                ("AA Projectiles", _config.RadarColors.AAProjectiles, (ColorConfig c) => _config.RadarColors.AAProjectiles = c),
+                ("Small Projectiles", _config.RadarColors.SmallProjectiles, (ColorConfig c) => _config.RadarColors.SmallProjectiles = c),
+                ("Enemy Player Distance", _config.RadarColors.EnemyPlayerDistanceText, (ColorConfig c) => _config.RadarColors.EnemyPlayerDistanceText = c),
+                ("Vehicle Distance", _config.RadarColors.VehicleDistanceText, (ColorConfig c) => _config.RadarColors.VehicleDistanceText = c),
+                ("Dead Markers", _config.RadarColors.DeadMarkers, (ColorConfig c) => _config.RadarColors.DeadMarkers = c),
+                ("Admin Markers", _config.RadarColors.AdminMarkers, (ColorConfig c) => _config.RadarColors.AdminMarkers = c)
+            };
+
+            // Create color rows with unique design
+            int yPosition = 0;
+            foreach (var config in colorConfigs)
+            {
+                var colorRow = CreateColorRow(config.name, config.color, config.setter);
+                colorRow.Location = new Point(0, yPosition);
+                colorRow.Width = contentPanel.Width - 20;
+                colorRow.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+                contentPanel.Controls.Add(colorRow);
+                yPosition += 50;
+            }
+
+            // Reset button
+            var resetButton = new Button
+            {
+                Text = "Reset All Colors",
+                Size = new Size(140, 32),
+                Location = new Point(0, yPosition + 20),
+                BackColor = System.Drawing.Color.FromArgb(60, 60, 60),
+                ForeColor = System.Drawing.Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9f, FontStyle.Regular),
+                Cursor = Cursors.Hand
+            };
+
+            resetButton.FlatAppearance.BorderSize = 1;
+            resetButton.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(80, 80, 80);
+            resetButton.FlatAppearance.MouseOverBackColor = System.Drawing.Color.FromArgb(70, 70, 70);
+
+            resetButton.Click += (s, e) =>
+            {
+                if (MessageBox.Show("Reset all colors to defaults?", "Confirm Reset", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    _config.RadarColors = new RadarColors();
+                    LoadRadarColors();
+                    _mapCanvas.Invalidate();
+                    Config.SaveConfig(_config);
+                    
+                    // Refresh panel
+                    tabColors.Controls.Clear();
+                    tabColors.Controls.Add(CreateColorConfigurationPanel());
+                }
+            };
+
+            contentPanel.Controls.Add(resetButton);
+            return mainPanel;
+        }
+
+        /// <summary>
+        /// Creates a unique color row with "Color name - Color Selection" design
+        /// </summary>
+        private Panel CreateColorRow(string colorName, ColorConfig color, Action<ColorConfig> onColorChanged)
+        {
+            var rowPanel = new Panel
+            {
+                Height = 40,
+                BackColor = System.Drawing.Color.FromArgb(40, 40, 40),
+                Margin = new Padding(0, 0, 0, 10)
+            };
+
+            // Color name label
+            var nameLabel = new Label
+            {
+                Text = colorName,
+                Font = new Font("Segoe UI", 10f, FontStyle.Regular),
+                ForeColor = System.Drawing.Color.White,
+                Location = new Point(15, 10),
+                Size = new Size(200, 20),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            rowPanel.Controls.Add(nameLabel);
+
+            // Dash separator
+            var dashLabel = new Label
+            {
+                Text = "—",
+                Font = new Font("Segoe UI", 12f, FontStyle.Regular),
+                ForeColor = System.Drawing.Color.FromArgb(120, 120, 120),
+                Location = new Point(220, 8),
+                Size = new Size(20, 24),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            rowPanel.Controls.Add(dashLabel);
+
+            // Color preview box
+            var colorBox = new Panel
+            {
+                Size = new Size(30, 24),
+                Location = new Point(250, 8),
+                BackColor = color.ToDrawingColor(),
+                BorderStyle = BorderStyle.FixedSingle,
+                Cursor = Cursors.Hand
+            };
+            rowPanel.Controls.Add(colorBox);
+
+            // Color hex label
+            var hexLabel = new Label
+            {
+                Text = ColorToHex(color.ToDrawingColor()),
+                Font = new Font("Consolas", 9f, FontStyle.Regular),
+                ForeColor = System.Drawing.Color.FromArgb(180, 180, 180),
+                Location = new Point(290, 10),
+                Size = new Size(80, 20),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            rowPanel.Controls.Add(hexLabel);
+
+            // Click handlers for color selection
+            Action openColorPicker = () => OpenColorPicker(colorName, color, (newColor) =>
+            {
+                onColorChanged(newColor);
+                colorBox.BackColor = newColor.ToDrawingColor();
+                hexLabel.Text = ColorToHex(newColor.ToDrawingColor());
+                
+                // Refresh tech marker paints to apply new colors immediately
+                MapPosition.RefreshTechMarkerPaints();
+            });
+
+            rowPanel.Click += (s, e) => openColorPicker();
+            colorBox.Click += (s, e) => openColorPicker();
+            nameLabel.Click += (s, e) => openColorPicker();
+            hexLabel.Click += (s, e) => openColorPicker();
+
+            // Hover effects
+            rowPanel.MouseEnter += (s, e) => rowPanel.BackColor = System.Drawing.Color.FromArgb(50, 50, 50);
+            rowPanel.MouseLeave += (s, e) => rowPanel.BackColor = System.Drawing.Color.FromArgb(40, 40, 40);
+
+            return rowPanel;
+        }
+
+        /// <summary>
+        /// Converts a color to hex string
+        /// </summary>
+        private string ColorToHex(System.Drawing.Color color)
+        {
+            return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+        }
+        #endregion
+
         private DialogResult ShowErrorDialog(string message)
         {
             return new MaterialDialog(this, "Error", message, "OK", false, "", true).ShowDialog(this);
@@ -885,6 +1154,7 @@ namespace squad_dma
             #endregion
             InitiateFont();
             InitiateUIScaling();
+            LoadRadarColors();
         }
 
         private bool ToggleFullscreen(bool toFullscreen)
@@ -1551,7 +1821,7 @@ namespace squad_dma
         {
             int adminAimlineLength = 9999;
 
-            position.DrawPlayerMarker(canvas, admin, adminAimlineLength, SKPaints.DefaultTextColor);
+            position.DrawPlayerMarker(canvas, admin, adminAimlineLength, SKPaints.AdminMarker);
 
             string adminText = "ADMIN";
             float textSize = 12 * _uiScale;
@@ -1559,7 +1829,7 @@ namespace squad_dma
 
             using (var textFill = new SKPaint
             {
-                Color = SKPaints.DefaultTextColor,
+                Color = SKPaints.AdminMarker,
                 TextSize = textSize,
                 IsAntialias = true,
                 Typeface = SKTypeface.FromFamilyName("Arial")
@@ -1589,7 +1859,7 @@ namespace squad_dma
         {
             foreach (var pos in deadMarkers)
             {
-                DrawDead(canvas, pos, SKColors.Black, SKColors.White, 5 * _uiScale);
+                DrawDead(canvas, pos, SKColors.Black, SKPaints.DeadMarker, 5 * _uiScale);
             }
 
             foreach (var projectile in projectileAAs)

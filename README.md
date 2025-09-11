@@ -9,37 +9,15 @@ Squad DMA Radar is a radar tool for Squad that provides real-time tracking of pl
 - Super mod (Soon?)
 - MEE (Soon?)
 
-## Features
-### Radar Features
-- POI placements for mortar calculations
-- Displays all friendly and enemy players 
-- Displays all vehicles / emplacements / deployables
-- Auto selects the layer 
-- Displays a distance for any vehicle
-
-### Gameplay Features
-- Rapid Fire: Customize fire rates for any weapon  
-- Infinite Ammo: Never run out of ammunition  
-- Quick Swap: Instantly switch between weapons  
-- Extended Interactions: Interact with objects from greater distances  
-- Speed Hack: Control and boost player movement speed  
-- Suppression Control: Tweak or disable suppression effects  
-- Base Shooting: Enable weapon use within the main base  
-- Quick Zoom: Instantly zoom in on targets  
-- Air Stuck: Hover mid-air while remaining invincible and able to deal damage  
-- Collision Toggle: Modify or disable player collision  
-- Full Auto Override: Force any weapon into full-auto mode  
-- No Recoil: Eliminate weapon kickback  
-- No Sway: Remove weapon sway when aiming  
-- No Spread: Ensure perfect bullet accuracy  
-- No Camera Shake: Disable all screen shake effects  
-
-
 ## Usage
 1. Clone the repository.
 2. Ensure all necessary dependencies are in place.
 3. Compile the project.
 4. Run the application.
+
+## Pre-Compiled Builds 
+Pre-compiled builds may be provided after each commit.  
+If a build becomes outdated or does not work as expected, please take the initiative to resolve the issue on your own.
 
 ## Dependencies
 - FTD3XX.dll
@@ -50,7 +28,12 @@ Squad DMA Radar is a radar tool for Squad that provides real-time tracking of pl
 Ensure all necessary files are properly included and referenced for the application to function correctly.
 
 ## Acknowledgments
-This project builds upon the original work created by [UC Forum Thread](https://www.unknowncheats.me/forum/escape-from-tarkov/482418-2d-map-dma-radar-wip.html) and its continuation [EFT-DMA-Radar-v2](https://www.unknowncheats.me/forum/escape-from-tarkov/639021-dma-radar-v2.html) by x0m, Keegi and MasterKeef. It is basically a fork of a EFT-DMA-Radar-v2 adapted to UE4 Squad base. It has a lot of perfomance issues, as well as some bugs.
+This project builds upon the original work created by [UC Forum Thread](https://www.unknowncheats.me/forum/escape-from-tarkov/482418-2d-map-dma-radar-wip.html) and its continuation [EFT-DMA-Radar-v2](https://www.unknowncheats.me/forum/escape-from-tarkov/639021-dma-radar-v2.html) by x0m, Keegi and MasterKeef.  
+It is basically a fork of EFT-DMA-Radar-v2 adapted to UE4 Squad base. It has a lot of performance issues, as well as some bugs.  
+
+Special thanks to [seentee](https://github.com/seentee) and [Zach3rry59](https://github.com/Zach3rry59) for their contributions and support.
 
 ## Preview
 ![image](https://github.com/Butter2222/squad-dma/blob/main/preview/radar-preview.png)
+![image](https://github.com/Butter2222/squad-dma/blob/main/preview/radar-preview2.png)
+![image](https://github.com/Butter2222/squad-dma/blob/main/preview/radar-preview3.png)

@@ -51,6 +51,7 @@ namespace squad_dma
             btnApplyMapScale = new Button();
             chkHighAlert = new CheckBox();
             tabSettings = new TabPage();
+            tabColors = new TabPage();
             grpUserInterface = new GroupBox();
             lblUIScale = new Label();
             lblAimline = new Label();
@@ -126,6 +127,7 @@ namespace squad_dma
             ((System.ComponentModel.ISupportInitialize)trkAimLength).BeginInit();
             ((System.ComponentModel.ISupportInitialize)trkTechMarkerScale).BeginInit();
             tabSettings.SuspendLayout();
+            tabColors.SuspendLayout();
             grpUserInterface.SuspendLayout();
             grpRadar.SuspendLayout();
             grpLocalSoldier.SuspendLayout();
@@ -357,6 +359,16 @@ namespace squad_dma
             tabSettings.Size = new Size(1256, 653);
             tabSettings.TabIndex = 1;
             tabSettings.Text = "Settings";
+            // 
+            // tabColors
+            // 
+            tabColors.BackColor = SystemColors.Control;
+            tabColors.Location = new Point(4, 24);
+            tabColors.Name = "tabColors";
+            tabColors.Padding = new Padding(3);
+            tabColors.Size = new Size(1256, 653);
+            tabColors.TabIndex = 2;
+            tabColors.Text = "Colors";
             // 
             // grpUserInterface
             // 
@@ -1092,6 +1104,7 @@ namespace squad_dma
             // 
             tabControl.Controls.Add(tabRadar);
             tabControl.Controls.Add(tabSettings);
+            tabControl.Controls.Add(tabColors);
             tabControl.Dock = DockStyle.Fill;
             tabControl.Location = new Point(0, 0);
             tabControl.Name = "tabControl";
@@ -1112,6 +1125,7 @@ namespace squad_dma
             ((System.ComponentModel.ISupportInitialize)trkAimLength).EndInit();
             ((System.ComponentModel.ISupportInitialize)trkTechMarkerScale).EndInit();
             tabSettings.ResumeLayout(false);
+            tabColors.ResumeLayout(false);
             grpUserInterface.ResumeLayout(false);
             grpUserInterface.PerformLayout();
             grpRadar.ResumeLayout(false);
@@ -1136,6 +1150,7 @@ namespace squad_dma
         private ColorDialog colDialog;
         private ToolTip toolTip;
         private TabPage tabSettings;
+        private TabPage tabColors;
         private GroupBox grpUserInterface;
         private TrackBar trkAimLength;
         private Label lblAimline;

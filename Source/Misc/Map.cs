@@ -107,6 +107,20 @@ namespace squad_dma
             if (_paintsInitialized)
                 return;
 
+            CreateTechMarkerPaints();
+            _paintsInitialized = true;
+        }
+
+        private static void CreateTechMarkerPaints()
+        {
+            // Dispose existing paints if they exist
+            _techMarkerPaint?.Dispose();
+            _techMarkerFriendlyPaint?.Dispose();
+            _techMarkerEnemyPaint?.Dispose();
+            _techMarkerOutlinePaint?.Dispose();
+            _techMarkerFriendlyOutlinePaint?.Dispose();
+            _techMarkerEnemyOutlinePaint?.Dispose();
+
             _techMarkerPaint = new SKPaint
             {
                 IsAntialias = true,
@@ -151,8 +165,17 @@ namespace squad_dma
                 Color = SKColors.Black,
                 ImageFilter = SKImageFilter.CreateDropShadow(0, 0, 0.5f, 0.5f, SKColors.Black)
             };
+        }
 
-            _paintsInitialized = true;
+        /// <summary>
+        /// Forces reinitializing tech marker paints with updated colors
+        /// </summary>
+        public static void RefreshTechMarkerPaints()
+        {
+            if (_paintsInitialized)
+            {
+                CreateTechMarkerPaints();
+            }
         }
 
         private SKPoint GetAimlineEndpoint(double radians, float aimlineLength)
@@ -308,14 +331,14 @@ namespace squad_dma
                 return;
 
             SKPaint textPaint = SKPaints.TextBase.Clone();
-            // Enemy players: #ff6b6b, Enemy vehicles: WHITE, Everything else: white
+            // Use configurable distance text colors
             if (actor.ActorType == ActorType.Player && actor.IsEnemy())
             {
-                textPaint.Color = SKPaints.EnemyPlayer; // #ff6b6b for enemy player distance text
+                textPaint.Color = SKPaints.EnemyPlayerDistanceText;
             }
             else
             {
-                textPaint.Color = SKColors.White; // White for enemy vehicles and everything else
+                textPaint.Color = SKPaints.VehicleDistanceText;
             }
             textPaint.TextSize = 12 * UIScale * 1.3f;
 
@@ -346,7 +369,7 @@ namespace squad_dma
                 return;
 
             SKPaint textPaint = SKPaints.TextBase.Clone();
-            textPaint.Color = SKColors.White; // Force WHITE for enemy vehicle distance text
+            textPaint.Color = SKPaints.VehicleDistanceText;
             textPaint.TextSize = 13 * UIScale * 1.1f;
             textPaint.TextAlign = SKTextAlign.Left;
             textPaint.Typeface = CustomFonts.SKFontFamilyRegular; 

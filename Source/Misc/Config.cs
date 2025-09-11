@@ -121,6 +121,11 @@ namespace squad_dma
         public float ThirdScopeMagnification { get; set; } = 12.0f;
         #endregion
 
+        #region Radar Color Settings
+        [JsonPropertyName("radarColors")]
+        public RadarColors RadarColors { get; set; } = new RadarColors();
+        #endregion
+
         #region Feature States
         [JsonPropertyName("disableSuppression")]
         public bool DisableSuppression { get; set; } = false;
@@ -380,6 +385,9 @@ namespace squad_dma
             FirstScopeMagnification = 4.0f;
             SecondScopeMagnification = 6.0f;
             ThirdScopeMagnification = 12.0f;
+            
+            // Initialize radar colors with defaults
+            RadarColors = new RadarColors();
         }
 
         /// <summary>
@@ -452,6 +460,88 @@ namespace squad_dma
             }
         }
         #endregion
+    }
+
+    /// <summary>
+    /// Configuration class for radar color settings.
+    /// </summary>
+    public class RadarColors
+    {
+        [JsonPropertyName("squadMembers")]
+        public ColorConfig SquadMembers { get; set; } = new ColorConfig(0, 255, 0); // Green
+
+        [JsonPropertyName("friendlyPlayers")]
+        public ColorConfig FriendlyPlayers { get; set; } = new ColorConfig(0, 187, 254); // Light Blue
+
+        [JsonPropertyName("enemyPlayers")]
+        public ColorConfig EnemyPlayers { get; set; } = new ColorConfig(255, 107, 107); // Light Red
+
+        [JsonPropertyName("unknownPlayers")]
+        public ColorConfig UnknownPlayers { get; set; } = new ColorConfig(128, 0, 128); // Purple
+
+        [JsonPropertyName("friendlyVehicles")]
+        public ColorConfig FriendlyVehicles { get; set; } = new ColorConfig(255, 255, 255); // White
+
+        [JsonPropertyName("enemyVehicles")]
+        public ColorConfig EnemyVehicles { get; set; } = new ColorConfig(255, 107, 107); // Light Red
+
+        [JsonPropertyName("unclaimedVehicles")]
+        public ColorConfig UnclaimedVehicles { get; set; } = new ColorConfig(255, 255, 255); // White
+
+        [JsonPropertyName("regularProjectiles")]
+        public ColorConfig RegularProjectiles { get; set; } = new ColorConfig(255, 165, 0); // Orange
+
+        [JsonPropertyName("aaProjectiles")]
+        public ColorConfig AAProjectiles { get; set; } = new ColorConfig(255, 165, 0); // Orange
+
+        [JsonPropertyName("smallProjectiles")]
+        public ColorConfig SmallProjectiles { get; set; } = new ColorConfig(255, 0, 255); // Magenta
+
+        [JsonPropertyName("enemyPlayerDistanceText")]
+        public ColorConfig EnemyPlayerDistanceText { get; set; } = new ColorConfig(255, 107, 107); // Light Red
+
+        [JsonPropertyName("vehicleDistanceText")]
+        public ColorConfig VehicleDistanceText { get; set; } = new ColorConfig(255, 255, 255); // White
+
+        [JsonPropertyName("deadMarkers")]
+        public ColorConfig DeadMarkers { get; set; } = new ColorConfig(255, 255, 255); // White
+
+        [JsonPropertyName("adminMarkers")]
+        public ColorConfig AdminMarkers { get; set; } = new ColorConfig(255, 255, 255); // White
+    }
+
+    /// <summary>
+    /// Simple color configuration class with RGB values.
+    /// </summary>
+    public class ColorConfig
+    {
+        [JsonPropertyName("r")]
+        public byte R { get; set; }
+
+        [JsonPropertyName("g")]
+        public byte G { get; set; }
+
+        [JsonPropertyName("b")]
+        public byte B { get; set; }
+
+        public ColorConfig() { }
+
+        public ColorConfig(byte r, byte g, byte b)
+        {
+            R = r;
+            G = g;
+            B = b;
+        }
+
+        /// <summary>
+        /// Converts to SKColor for use in rendering.
+        /// </summary>
+        public SKColor ToSKColor() => new SKColor(R, G, B);
+
+        /// <summary>
+        /// Converts to System.Drawing.Color for use in UI controls.
+        /// </summary>
+        public System.Drawing.Color ToDrawingColor() => System.Drawing.Color.FromArgb(R, G, B);
     }
 
     /// <summary>

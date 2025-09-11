@@ -4,16 +4,53 @@ namespace squad_dma
 {
     internal static class SKPaints
     {
-        #region Team Colors
-        public static readonly SKColor Friendly = new SKColor(0, 187, 254);
-        public static readonly SKColor Enemy = SKColors.Red;
-        public static readonly SKColor EnemyPlayer = new SKColor(255, 107, 107); // #ff6b6b - Light red for enemy players
-        public static readonly SKColor EnemyVehicle = new SKColor(255, 107, 107); // #ff6b6b - Light red for enemy vehicles
-        public static readonly SKColor Unknown = SKColors.Purple;
-        public static readonly SKColor Squad = SKColors.Green;
-        public static readonly SKColor SmallProjectile = SKColors.Magenta; 
-        public static readonly SKColor Vehicle = SKColors.White;
+        #region Configurable Team Colors
+        // These colors are now loaded from configuration but have original defaults shown in comments
+        
+        // Original Default: Green (#00FF00 - RGB: 0, 255, 0)
+        public static SKColor Squad { get; set; } = SKColors.Green;
+        
+        // Original Default: Light Blue (#00BBFE - RGB: 0, 187, 254)
+        public static SKColor Friendly { get; set; } = new SKColor(0, 187, 254);
+        
+        // Original Default: Light Red (#FF6B6B - RGB: 255, 107, 107)
+        public static SKColor EnemyPlayer { get; set; } = new SKColor(255, 107, 107);
+        
+        // Original Default: Purple (#800080 - RGB: 128, 0, 128)
+        public static SKColor Unknown { get; set; } = SKColors.Purple;
+        
+        // Original Default: White (#FFFFFF - RGB: 255, 255, 255)
+        public static SKColor Vehicle { get; set; } = SKColors.White;
+        
+        // Original Default: Light Red (#FF6B6B - RGB: 255, 107, 107)
+        public static SKColor EnemyVehicle { get; set; } = new SKColor(255, 107, 107);
+        
+        // Original Default: White (#FFFFFF - RGB: 255, 255, 255)
+        public static SKColor UnclaimedVehicle { get; set; } = SKColors.White;
+        
+        // Original Default: Orange (#FFA500 - RGB: 255, 165, 0)
+        public static SKColor RegularProjectile { get; set; } = SKColors.Orange;
+        
+        // Original Default: Orange (#FFA500 - RGB: 255, 165, 0)
+        public static SKColor AAProjectile { get; set; } = SKColors.Orange;
+        
+        // Original Default: Magenta (#FF00FF - RGB: 255, 0, 255)
+        public static SKColor SmallProjectile { get; set; } = SKColors.Magenta;
+        
+        // Original Default: Light Red (#FF6B6B - RGB: 255, 107, 107)
+        public static SKColor EnemyPlayerDistanceText { get; set; } = new SKColor(255, 107, 107);
+        
+        // Original Default: White (#FFFFFF - RGB: 255, 255, 255)
+        public static SKColor VehicleDistanceText { get; set; } = SKColors.White;
+        
+        // Original Default: White (#FFFFFF - RGB: 255, 255, 255)
+        public static SKColor DeadMarker { get; set; } = SKColors.White;
+        
+        // Original Default: White (#FFFFFF - RGB: 255, 255, 255)
+        public static SKColor AdminMarker { get; set; } = SKColors.White;
 
+        // Legacy colors for compatibility
+        public static SKColor Enemy => EnemyPlayer;
         public static readonly SKColor DefaultTextColor = SKColors.White;
 
         #endregion
@@ -119,6 +156,38 @@ namespace squad_dma
             StrokeCap = SKStrokeCap.Round,
             FilterQuality = SKFilterQuality.High
         };
+        #endregion
+
+        #region Color Configuration Methods
+        /// <summary>
+        /// Loads colors from configuration settings.
+        /// </summary>
+        public static void LoadColorsFromConfig(RadarColors config)
+        {
+            Squad = config.SquadMembers.ToSKColor();
+            Friendly = config.FriendlyPlayers.ToSKColor();
+            EnemyPlayer = config.EnemyPlayers.ToSKColor();
+            Unknown = config.UnknownPlayers.ToSKColor();
+            Vehicle = config.FriendlyVehicles.ToSKColor();
+            EnemyVehicle = config.EnemyVehicles.ToSKColor();
+            UnclaimedVehicle = config.UnclaimedVehicles.ToSKColor();
+            RegularProjectile = config.RegularProjectiles.ToSKColor();
+            AAProjectile = config.AAProjectiles.ToSKColor();
+            SmallProjectile = config.SmallProjectiles.ToSKColor();
+            EnemyPlayerDistanceText = config.EnemyPlayerDistanceText.ToSKColor();
+            VehicleDistanceText = config.VehicleDistanceText.ToSKColor();
+            DeadMarker = config.DeadMarkers.ToSKColor();
+            AdminMarker = config.AdminMarkers.ToSKColor();
+        }
+
+        /// <summary>
+        /// Resets colors to default values.
+        /// </summary>
+        public static void ResetToDefaults()
+        {
+            var defaultConfig = new RadarColors();
+            LoadColorsFromConfig(defaultConfig);
+        }
         #endregion
     }
 
