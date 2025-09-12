@@ -26,6 +26,17 @@ namespace squad_dma
         }
 
         /// <summary>
+        /// Convert to Matrix4x4 with scale included (matching the working code's approach)
+        /// </summary>
+        public Matrix4x4 ToMatrixWithScale()
+        {
+            // Create the transformation matrix with scale properly applied
+            return Matrix4x4.CreateScale(Scale3D) * 
+                   Matrix4x4.CreateFromQuaternion(Rotation) * 
+                   Matrix4x4.CreateTranslation(Translation);
+        }
+
+        /// <summary>
         /// Convert to Vector3D for compatibility with the project's custom vector types
         /// </summary>
         public Vector3D ToVector3D()

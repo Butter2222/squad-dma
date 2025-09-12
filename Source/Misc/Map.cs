@@ -325,6 +325,9 @@ namespace squad_dma
             canvas.Restore();
         }
 
+        /// <summary>
+        /// Draws general text for actors (used for tooltips and other multi-line text)
+        /// </summary>
         public void DrawActorText(SKCanvas canvas, UActor actor, string[] lines)
         {
             if (lines == null || lines.Length == 0)
@@ -361,6 +364,37 @@ namespace squad_dma
                 canvas.DrawText(line, textPosition, textPaint);
                 textPosition.Y += 12 * UIScale * 1.3f;
             }
+        }
+
+        public void DrawPlayerDistance(SKCanvas canvas, UActor actor, string distanceText)
+        {
+            if (string.IsNullOrEmpty(distanceText) || actor.IsFriendly())
+                return;
+
+            SKPaint textPaint = SKPaints.TextBase.Clone();
+            textPaint.Color = SKPaints.EnemyPlayerDistanceText;
+            textPaint.TextSize = 13 * UIScale * 1.1f;
+            textPaint.TextAlign = SKTextAlign.Left;
+            textPaint.Typeface = CustomFonts.SKFontFamilyRegular; 
+            textPaint.SubpixelText = true; 
+
+            SKPaint outlinePaint = SKPaints.TextOutline.Clone();
+            outlinePaint.TextSize = 13 * UIScale * 1.1f;
+            outlinePaint.StrokeWidth = 2.8f * UIScale; 
+            outlinePaint.TextAlign = SKTextAlign.Left;
+            outlinePaint.Typeface = CustomFonts.SKFontFamilyRegular; 
+            outlinePaint.SubpixelText = true; 
+
+            SKPoint iconPosition = this.GetPoint(0, 0);
+            
+            // For players, position text to the right of the player marker
+            SKPoint textPosition = new SKPoint(
+                iconPosition.X + (15 * UIScale), // Right of player marker
+                iconPosition.Y - (8 * UIScale)   // Slightly above center
+            );
+
+            canvas.DrawText(distanceText, textPosition, outlinePaint);
+            canvas.DrawText(distanceText, textPosition, textPaint);
         }
 
         public void DrawVehicleDistance(SKCanvas canvas, UActor actor, string distanceText)

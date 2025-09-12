@@ -261,7 +261,7 @@ namespace squad_dma
                         teamInfoRound.AddEntry<int>(i, 7, controllerPlayerState, null, Offsets.ASQPlayerState.TeamID);
 
                         // ESP bone tracking - Uncomment these lines to enable ESP
-                        // SetupESPEntries(playerInstanceInfoRound, meshRound, boneInfoRound, i, actorAddr);
+                         SetupESPEntries(playerInstanceInfoRound, meshRound, boneInfoRound, i, actorAddr);
                     }
                     else if (Names.Deployables.Contains(actorType))
                     {
@@ -388,7 +388,7 @@ namespace squad_dma
                         }
 
                         // ESP bone tracking - Uncomment to enable
-                        // UpdatePlayerESPData(actor, results);
+                         UpdatePlayerESPData(actor, results);
                         
                         // Initialize empty bone data when ESP is disabled
                         InitializeEmptyESPData(actor);
@@ -480,19 +480,19 @@ namespace squad_dma
         private void SetupESPEntries(ScatterReadRound playerInstanceInfoRound, ScatterReadRound meshRound, 
             ScatterReadRound boneInfoRound, int index, ulong actorAddr)
         {
-            // Read mesh pointer
-            var meshPtr = playerInstanceInfoRound.AddEntry<ulong>(index, 8, actorAddr + Offsets.ASQSoldier.Mesh);
+            // Read mesh pointer - use key 20 to avoid collision with position/rotation keys (8-13)
+            var meshPtr = playerInstanceInfoRound.AddEntry<ulong>(index, 20, actorAddr + Offsets.ASQSoldier.Mesh);
             
-            // Read component to world transform
-            meshRound.AddEntry<FTransform>(index, 9, meshPtr, null, Offsets.USceneComponent.ComponentToWorld);
+            // Read component to world transform - use key 21
+            meshRound.AddEntry<FTransform>(index, 21, meshPtr, null, Offsets.USceneComponent.ComponentToWorld);
             
-            // Read bone array pointer
-            var boneArrayPtr = meshRound.AddEntry<ulong>(index, 10, meshPtr, null, 0x5B8);
+            // Read bone array pointer - use key 22
+            var boneArrayPtr = meshRound.AddEntry<ulong>(index, 22, meshPtr, null, 0x5B8);
             
-            // Read individual bone transforms
+            // Read individual bone transforms - start from key 50 to avoid all other keys
             for (int j = 0; j < _boneIds.Length; j++)
             {
-                boneInfoRound.AddEntry<FTransform>(index, 11 + j, boneArrayPtr, null, (uint)(_boneIds[j] * 0x30));
+                boneInfoRound.AddEntry<FTransform>(index, 50 + j, boneArrayPtr, null, (uint)(_boneIds[j] * 0x30));
             }
         }
         
@@ -508,8 +508,8 @@ namespace squad_dma
                 actor.BoneScreenPositions = new Vector2[_boneIds.Length];
             }
             
-            // Get mesh pointer
-            if (!results.TryGetValue(8, out var meshResult) || !meshResult.TryGetResult<ulong>(out var meshAddr) || meshAddr == 0)
+            // Get mesh pointer - using key 20
+            if (!results.TryGetValue(20, out var meshResult) || !meshResult.TryGetResult<ulong>(out var meshAddr) || meshAddr == 0)
             {
                 ClearESPData(actor);
                 return;
@@ -517,8 +517,8 @@ namespace squad_dma
             
             actor.Mesh = meshAddr;
             
-            // Get component to world transform
-            if (results.TryGetValue(9, out var componentResult) && componentResult.TryGetResult<FTransform>(out var componentToWorld))
+            // Get component to world transform - using key 21
+            if (results.TryGetValue(21, out var componentResult) && componentResult.TryGetResult<FTransform>(out var componentToWorld))
             {
                 actor.ComponentToWorld = componentToWorld;
             }
@@ -527,8 +527,8 @@ namespace squad_dma
                 actor.ComponentToWorld = new FTransform(); // Default transform
             }
             
-            // Get bone array pointer
-            if (!results.TryGetValue(10, out var boneArrayResult) || !boneArrayResult.TryGetResult<ulong>(out var boneArrayPtr) || boneArrayPtr == 0)
+            // Get bone array pointer - using key 22
+            if (!results.TryGetValue(22, out var boneArrayResult) || !boneArrayResult.TryGetResult<ulong>(out var boneArrayPtr) || boneArrayPtr == 0)
             {
                 ClearESPData(actor);
                 return;
@@ -561,10 +561,10 @@ namespace squad_dma
             actor.BoneTransforms.Clear();
             bool anyBoneSuccess = false;
             
-            // Process each bone
+            // Process each bone - using keys starting from 50
             for (int j = 0; j < _boneIds.Length; j++)
             {
-                int resultKey = 11 + j;
+                int resultKey = 50 + j;
                 
                 if (results.TryGetValue(resultKey, out var boneResult) && boneResult.TryGetResult<FTransform>(out var boneTransform))
                 {

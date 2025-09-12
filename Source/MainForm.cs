@@ -26,7 +26,7 @@ namespace squad_dma
         private System.Windows.Forms.Timer _panTimer;
         private GameStatus _previousGameStatus = GameStatus.NotFound;
         private EspOverlay _espOverlay;
-        private AimviewPanel _aimviewPanel;
+        private AimviewWidget _aimviewWidget;
 
         private bool _isFreeMapToggled;
         private bool _isDragging;
@@ -149,20 +149,20 @@ namespace squad_dma
             // Initialize Aimview Panel if enabled
             if (_config.EnableAimview)
             {
-                InitializeAimviewPanel();
+                InitializeAimviewWidget();
             }
         }
         
-        private void InitializeAimviewPanel()
+        private void InitializeAimviewWidget()
         {
-            _aimviewPanel = new AimviewPanel();
-            
-            // Add to tabRadar (on top of map canvas)
-            tabRadar.Controls.Add(_aimviewPanel);
-            _aimviewPanel.BringToFront();
-            
-            // Apply saved position and size after adding to parent
-            _aimviewPanel.ApplySavedLocationAndSize();
+            var savedX = Math.Max(0, Program.Config.AimviewPanelX);
+            var savedY = Math.Max(0, Program.Config.AimviewPanelY);
+            var savedWidth = Math.Max(480, Math.Min(Program.Config.AimviewPanelWidth, 1280));
+            var savedHeight = Math.Max(270, Math.Min(Program.Config.AimviewPanelHeight, 720));
+
+            var location = new SKRect(savedX, savedY, savedX + savedWidth, savedY + savedHeight);
+
+            _aimviewWidget = new AimviewWidget(_mapCanvas, this, location, false, _uiScale);
         }
 
         private void InitializeTimers()
@@ -255,11 +255,8 @@ namespace squad_dma
                 _espOverlay = null;
             }
 
-            if (_aimviewPanel != null && !_aimviewPanel.IsDisposed)
-            {
-                _aimviewPanel.Dispose();
-                _aimviewPanel = null;
-            }
+            _aimviewWidget?.Dispose();
+            _aimviewWidget = null;
 
             CleanupLoadedBitmaps();
             Config.ClearCache();
@@ -695,6 +692,9 @@ namespace squad_dma
                         DrawPOIs(canvas);
                         DrawToolTips(canvas);
                         DrawTopMost(canvas, deadMarkers, projectileAAs);
+                        
+                        // Draw aimview widget
+                        _aimviewWidget?.Draw(canvas);
                     }
                 }
                 else
@@ -786,6 +786,8 @@ namespace squad_dma
             #endregion
 
             InitiateFontSize();
+            
+            _aimviewWidget?.SetScaleFactor(_uiScale);
             
             if (_mapCanvas != null)
             {
@@ -1746,7 +1748,6 @@ namespace squad_dma
         {
             if (this.InGame && this.LocalPlayer is not null)
             {
-                string[] lines = null;
                 var height = actorZoomedPos.Height - localPlayerMapPos.Height;
 
                 if (actor.ActorType == ActorType.Player)
@@ -1766,8 +1767,8 @@ namespace squad_dma
                         var dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
                         if (dist > 50 * 100)
                         {
-                            lines = new string[1] { $"{(int)Math.Round(dist / 100)}m" };
-                            actorZoomedPos.DrawActorText(canvas, actor, lines);
+                            string distanceText = $"{(int)Math.Round(dist / 100)}m";
+                            actorZoomedPos.DrawPlayerDistance(canvas, actor, distanceText);
                         }
                     }
                 }
@@ -2058,16 +2059,64 @@ namespace squad_dma
                 $"{distanceMeters}m"
             };
 
-            SKPaint textPaint = SKPaints.TextBase.Clone();
-            textPaint.TextSize = 12 * _uiScale * 1.2f;
+            // Use same styling as vehicle distance text
+            using var textPaint = new SKPaint
+            {
+                Color = SKColors.White,
+                TextSize = 13 * _uiScale * 1.1f,
+                TextAlign = SKTextAlign.Left,
+                Typeface = CustomFonts.SKFontFamilyRegular,
+                SubpixelText = true,
+                IsAntialias = true,
+                FilterQuality = SKFilterQuality.High
+            };
 
-            SKPaint outlinePaint = SKPaints.TextOutline.Clone();
-            outlinePaint.TextSize = 12 * _uiScale * 1.2f;
-            outlinePaint.StrokeWidth = 2 * _uiScale;
+            using var outlinePaint = new SKPaint
+            {
+                Color = SKColors.Black,
+                TextSize = 13 * _uiScale * 1.1f,
+                StrokeWidth = 2.8f * _uiScale,
+                TextAlign = SKTextAlign.Left,
+                Typeface = CustomFonts.SKFontFamilyRegular,
+                SubpixelText = true,
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                FilterQuality = SKFilterQuality.High
+            };
 
-            var basePosition = position.GetPoint(crosshairSize + 6 * _uiScale, 0);
-            float verticalSpacing = 12 * _uiScale * 1.2f;
+            // Create background paint
+            using var backgroundPaint = new SKPaint
+            {
+                Color = new SKColor(40, 40, 40, 200), // Dark gray with transparency
+                IsAntialias = true
+            };
 
+            var basePosition = position.GetPoint(crosshairSize + 12 * _uiScale, 0);
+            float verticalSpacing = 13 * _uiScale * 1.1f;
+            
+            // Calculate text bounds for background
+            float maxWidth = 0;
+            float totalHeight = lines.Length * verticalSpacing;
+            
+            foreach (var line in lines)
+            {
+                SKRect textBounds = new SKRect();
+                textPaint.MeasureText(line, ref textBounds);
+                maxWidth = Math.Max(maxWidth, textBounds.Width);
+            }
+
+            // Draw background rectangle
+            float padding = 4 * _uiScale;
+            SKRect backgroundRect = new SKRect(
+                basePosition.X - padding,
+                basePosition.Y - (13 * _uiScale * 1.1f * 0.8f) - padding, // Adjust for text baseline
+                basePosition.X + maxWidth + padding,
+                basePosition.Y + totalHeight - (13 * _uiScale * 1.1f * 0.8f) + padding
+            );
+            
+            canvas.DrawRoundRect(backgroundRect, 3 * _uiScale, 3 * _uiScale, backgroundPaint);
+
+            // Draw text
             foreach (var line in lines)
             {
                 canvas.DrawText(line, basePosition.X, basePosition.Y, outlinePaint);
@@ -2480,21 +2529,15 @@ namespace squad_dma
 
             if (_config.EnableAimview)
             {
-                if (_aimviewPanel == null || _aimviewPanel.IsDisposed)
+                if (_aimviewWidget == null)
                 {
-                    InitializeAimviewPanel();
-                }
-                else
-                {
-                    _aimviewPanel.Visible = true;
+                    InitializeAimviewWidget();
                 }
             }
             else
             {
-                if (_aimviewPanel != null && !_aimviewPanel.IsDisposed)
-                {
-                    _aimviewPanel.Visible = false;
-                }
+                _aimviewWidget?.Dispose();
+                _aimviewWidget = null;
             }
         }
 
@@ -2747,7 +2790,6 @@ namespace squad_dma
         {
             _config.EspBones = chkEnableBones.Checked;
             Config.SaveConfig(_config);
-            _aimviewPanel?.RefreshSettings();
         }
 
         private void TrkEspMaxDistance_Scroll(object sender, EventArgs e)
@@ -2768,35 +2810,30 @@ namespace squad_dma
         {
             _config.EspShowVehicles = chkEspShowVehicles.Checked;
             Config.SaveConfig(_config);
-            _aimviewPanel?.RefreshSettings();
         }
 
         private void ChkShowAllies_CheckedChanged(object sender, EventArgs e)
         {
             _config.EspShowAllies = chkShowAllies.Checked;
             Config.SaveConfig(_config);
-            _aimviewPanel?.RefreshSettings();
         }
 
         private void ChkEspShowNames_CheckedChanged(object sender, EventArgs e)
         {
             _config.EspShowNames = chkEspShowNames.Checked;
             Config.SaveConfig(_config);
-            _aimviewPanel?.RefreshSettings();
         }
 
         private void ChkEspShowDistance_CheckedChanged(object sender, EventArgs e)
         {
             _config.EspShowDistance = chkEspShowDistance.Checked;
             Config.SaveConfig(_config);
-            _aimviewPanel?.RefreshSettings();
         }
 
         private void ChkEspShowHealth_CheckedChanged(object sender, EventArgs e)
         {
             _config.EspShowHealth = chkEspShowHealth.Checked;
             Config.SaveConfig(_config);
-            _aimviewPanel?.RefreshSettings();
         }
 
         private void TxtEspFontSize_TextChanged(object sender, EventArgs e)

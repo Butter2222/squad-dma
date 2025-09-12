@@ -48,7 +48,7 @@
         public const uint RelativeLocation = 0x128;
         public const uint RelativeRotation = 0x140;
         public const uint RelativeScale3D = 0x158;
-        public const uint ComponentToWorld = 0x188;
+        public const uint ComponentToWorld = 0x1E0;
     }
 
     public struct UPrimitiveComponent
@@ -173,7 +173,7 @@
         public const uint bIsCameraRecoilActive = 0x2ADA; // bool
         public const uint WeaponBasedFOV = 0x7B0; // Float
         public const uint CachedAnimInstance1p = 0x2BF0; // USQAnimInstanceSoldier1P*
-        public const uint Mesh = 0x758; // USkeletalMeshComponent*
+        public const uint Mesh = 0x330; // USkeletalMeshComponent* ACharacter
     }
 
     public struct USQPawnInventoryComponent

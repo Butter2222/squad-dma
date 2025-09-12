@@ -13,17 +13,20 @@ namespace squad_dma
         // Original Default: Light Blue (#00BBFE - RGB: 0, 187, 254)
         public static SKColor Friendly { get; set; } = new SKColor(0, 187, 254);
         
-        // Original Default: Light Red (#FF6B6B - RGB: 255, 107, 107)
-        public static SKColor EnemyPlayer { get; set; } = new SKColor(255, 107, 107);
+        // Updated: White for enemy players
+        public static SKColor EnemyPlayer { get; set; } = SKColors.White;
         
         // Original Default: Purple (#800080 - RGB: 128, 0, 128)
         public static SKColor Unknown { get; set; } = SKColors.Purple;
         
-        // Original Default: White (#FFFFFF - RGB: 255, 255, 255)
+        // White for unclaimed vehicles (used by other parts of software)
         public static SKColor Vehicle { get; set; } = SKColors.White;
         
-        // Original Default: Light Red (#FF6B6B - RGB: 255, 107, 107)
-        public static SKColor EnemyVehicle { get; set; } = new SKColor(255, 107, 107);
+        // Friendly blue color for friendly vehicles
+        public static SKColor FriendlyVehicle { get; set; } = new SKColor(0, 187, 254); // Same as Friendly
+        
+        // Yellow for enemy vehicles
+        public static SKColor EnemyVehicle { get; set; } = SKColors.Yellow;
         
         // Original Default: White (#FFFFFF - RGB: 255, 255, 255)
         public static SKColor UnclaimedVehicle { get; set; } = SKColors.White;
@@ -112,7 +115,7 @@ namespace squad_dma
             TextSize = 48,
             TextEncoding = SKTextEncoding.Utf8,
             IsAntialias = true,
-            Typeface = CustomFonts.SKFontFamilyBold,
+            Typeface = CustomFonts.SKFontFamilyRegular,
             TextAlign = SKTextAlign.Center
         };
 
@@ -168,7 +171,8 @@ namespace squad_dma
             Friendly = config.FriendlyPlayers.ToSKColor();
             EnemyPlayer = config.EnemyPlayers.ToSKColor();
             Unknown = config.UnknownPlayers.ToSKColor();
-            Vehicle = config.FriendlyVehicles.ToSKColor();
+            FriendlyVehicle = config.FriendlyVehicles.ToSKColor();
+            Vehicle = config.UnclaimedVehicles.ToSKColor(); // Vehicle now represents unclaimed vehicles
             EnemyVehicle = config.EnemyVehicles.ToSKColor();
             UnclaimedVehicle = config.UnclaimedVehicles.ToSKColor();
             RegularProjectile = config.RegularProjectiles.ToSKColor();
