@@ -8,9 +8,13 @@ namespace squad_dma
 {
     public class RegisteredActors
     {
+        private readonly ulong _gameWorld;
         private readonly ulong _persistentLevel;
+        private ulong _gameState;
+        private ulong _playerArray;
         private ulong _actorsArray;
         private readonly Stopwatch _regSw = new();
+        private readonly Stopwatch _vehicleUpdateSw = new(); // Separate timer for vehicles
         private readonly ConcurrentDictionary<ulong, UActor> _actors = new();
         private Dictionary<ulong, int> _squadCache = new();
         private DateTime _lastSquadUpdate = DateTime.MinValue;
@@ -18,11 +22,6 @@ namespace squad_dma
 
         // Bone IDs for ESP
         private static readonly int[] _boneIds = { 7, 6, 5, 3, 2, 65, 66, 67, 68, 92, 93, 94, 95, 130, 131, 132, 125, 126, 127 };
-
-        public IEnumerable<uint> GetActorNameIds()
-        {
-            return _actors.Values.Select(actor => actor.NameId).Where(id => id != 0);
-        }
 
         #region Getters
         public ReadOnlyDictionary<ulong, UActor> Actors { get; }
@@ -36,16 +35,37 @@ namespace squad_dma
                 {
                     try
                     {
+                        // Get actor count from the actor array (for vehicles/deployables)
                         var actorsTArray = _persistentLevel + Offsets.Level.Actors;
-                        var count = Memory.ReadValue<int>(actorsTArray + 0x8);
+                        var actorCount = Memory.ReadValue<int>(actorsTArray + 0x8);
 
-                        if (count < 1)
+                        // Get player count from player array
+                        if (_gameState == 0)
+                        {
+                            _gameState = Memory.ReadPtr(_gameWorld + Offsets.World.GameState);
+                        }
+
+                        int playerCount = 0;
+                        if (_gameState != 0)
+                        {
+                            var playerArrayTArray = _gameState + Offsets.AGameStateBase.PlayerArray;
+                            var playerArrayPtr = Memory.ReadPtr(playerArrayTArray);
+                            if (playerArrayPtr != 0)
+                            {
+                                playerCount = Memory.ReadValue<int>(playerArrayTArray + 0x8);
+                                if (playerCount < 0 || playerCount > 200) playerCount = 0; // Sanitize
+                            }
+                        }
+
+                        // Return combined count for hybrid system
+                        var totalCount = actorCount + playerCount;
+                        if (totalCount < 1)
                         {
                             this._actors.Clear();
                             return -1;
                         }
 
-                        return count;
+                        return totalCount;
                     }
                     catch (DMAShutdown)
                     {
@@ -53,7 +73,7 @@ namespace squad_dma
                     }
                     catch (Exception ex) when (attempt < maxAttempts - 1)
                     {
-                        Logger.Error($"PlayerCount attempt {attempt + 1} failed: {ex}");
+                        Logger.Error($"ActorCount attempt {attempt + 1} failed: {ex}");
                         Thread.Sleep(1000);
                     }
                 }
@@ -65,126 +85,39 @@ namespace squad_dma
         /// <summary>
         /// RegisteredPlayers List Constructor.
         /// </summary>
-        public RegisteredActors(ulong persistentLevelAddr)
+        public RegisteredActors(ulong gameWorldAddr)
         {
-            this._persistentLevel = persistentLevelAddr;
-            this.Actors = new(this._actors);
+            this._gameWorld = gameWorldAddr;
+            this._persistentLevel = Memory.ReadPtr(_gameWorld + Offsets.World.PersistentLevel);
             this._actorsArray = Memory.ReadPtr(_persistentLevel + Offsets.Level.Actors);
+            this.Actors = new(this._actors);
             this._regSw.Start();
+            this._vehicleUpdateSw.Start();
         }
 
         #region Update List/Player Functions
         public Dictionary<ulong, uint> GetActorBaseWithName()
         {
-            var count = this.ActorCount;
-            if (count < 1)
-                return new Dictionary<ulong, uint>();
-
-            var initialActorScatterMap = new ScatterReadMap(count);
-
-            var actorRound = initialActorScatterMap.AddRound();
-            var playerObjectIdRound = initialActorScatterMap.AddRound();
-
-            for (int i = 0; i < count; i++)
-            {
-                var actorAddr = actorRound.AddEntry<ulong>(i, 0, _actorsArray + (uint)(i * 0x8));
-                var playerObjectId = playerObjectIdRound.AddEntry<uint>(i, 1, actorAddr, null, Offsets.Actor.ID);
-            }
-
-            initialActorScatterMap.Execute();
-
-            var actorBaseWithName = new Dictionary<ulong, uint>();
-            for (int i = 0; i < count; i++)
-            {
-                if (!initialActorScatterMap.Results[i][0].TryGetResult<ulong>(out var actorAddr) || actorAddr == 0)
-                    continue;
-                if (!initialActorScatterMap.Results[i][1].TryGetResult<uint>(out var actorNameId) || actorNameId == 0)
-                    continue;
-                actorBaseWithName[actorAddr] = actorNameId;
-            }
-
-            return actorBaseWithName;
+            return _actors.Values
+                .Where(actor => actor.NameId != 0)
+                .ToDictionary(actor => actor.Base, actor => actor.NameId);
         }
 
 
         public void UpdateList()
         {
-            if (this._regSw.ElapsedMilliseconds < 500)
+            if (this._regSw.ElapsedMilliseconds < 300)
                 return;
 
             try
             {
-                var count = this.ActorCount;
-
-                if (count < 1) // todo
-                   throw new GameEnded();
-
-                var initialActorScatterMap = new ScatterReadMap(count);
-
-                var actorRound = initialActorScatterMap.AddRound();
-                var playerObjectIdRound = initialActorScatterMap.AddRound();
-
-                for (int i = 0; i < count; i++)
+                UpdatePlayersFromPlayerArray();
+                
+                // Update vehicles less frequently (every 500ms) since they move slower
+                if (_vehicleUpdateSw.ElapsedMilliseconds >= 300)
                 {
-                    var actorAddr = actorRound.AddEntry<ulong>(i, 0, _actorsArray + (uint)(i * 0x8));
-                    var playerObjectId = playerObjectIdRound.AddEntry<uint>(i, 1, actorAddr, null, Offsets.Actor.ID);
-                }
-
-                initialActorScatterMap.Execute();
-
-                var actorBaseWithName = new Dictionary<ulong, uint>();
-                for (int i = 0; i < count; i++) {
-                    if (!initialActorScatterMap.Results[i][0].TryGetResult<ulong>(out var actorAddr) || actorAddr == 0)
-                        continue;
-                    if (!initialActorScatterMap.Results[i][1].TryGetResult<uint>(out var actorNameId) || actorNameId == 0)
-                        continue;
-                    actorBaseWithName[actorAddr] = actorNameId;
-                }
-
-                var notUpdated = new HashSet<ulong>(_actors.Keys);
-                foreach (var item in actorBaseWithName) {
-                    if (_actors.ContainsKey(item.Key) && _actors[item.Key].NameId == item.Value) {
-                        notUpdated.Remove(item.Key);
-                        actorBaseWithName.Remove(item.Key);
-                    }
-                }
-                var names = Memory.GetNamesById([.. actorBaseWithName.Values.Distinct()]);
-                foreach (var item in names)
-                {
-                    if (item.Value.StartsWith("BP_UAF"))
-                    {
-                        names[item.Key] = item.Value.Replace("BP_UAF", "BP_Soldier_UAF");
-                    }
-                }
-                var playersNameIDs = names.Where(x => x.Value.StartsWith("BP_Soldier") || Names.TechNames.ContainsKey(x.Value)).ToDictionary();
-                var filteredActors = actorBaseWithName.Where(actor => playersNameIDs.ContainsKey(actor.Value)).Select(actor => actor.Key).ToList();
-                count = filteredActors.Count;
-                for (int i = 0; i < count; i++) {
-                    var actorAddr = filteredActors[i];
-                    var nameId = actorBaseWithName[actorAddr];
-                    var actorName = playersNameIDs[nameId];
-                    var team = Team.Unknown;
-                    var actorType = Names.TechNames.GetValueOrDefault(actorName, ActorType.Player);
-                    if (actorType == ActorType.Player) {
-                        team = Names.Teams.GetValueOrDefault(actorName[..14], Team.Unknown);
-                    }
-                    if (_actors.TryGetValue(actorAddr, out var actor)) {
-                        if (actor.ErrorCount > 50) {
-                            Logger.Error($"Existing player '{actor.Base}' being reallocated due to excessive errors...");
-                            reallocateActor(actorAddr, team, actorType, nameId);
-                        } else if (actor.Base != actorAddr) {
-                            Logger.Error($"Existing player '{actor.Base}' being reallocated due to new base address...");
-                            reallocateActor(actorAddr, team, actorType, nameId);
-                        }
-                    } else {
-                        reallocateActor(actorAddr, team, actorType, nameId);
-                    }
-                    _actors[actorAddr].Name = actorName;
-                    notUpdated.Remove(actorAddr);
-                }
-
-                foreach (var actorIdToRemove in notUpdated) {
-                    _actors.TryRemove(actorIdToRemove, out var _);
+                    UpdateVehiclesFromActorList();
+                    _vehicleUpdateSw.Restart();
                 }
             }
             catch (DMAShutdown)
@@ -203,24 +136,225 @@ namespace squad_dma
             {
                 this._regSw.Restart();
             }
+        }
 
-            UActor reallocateActor(ulong actorBase, Team team, ActorType actorType, uint nameId)
+
+        private void UpdatePlayersFromPlayerArray()
+        {
+            try
             {
-                try
+                // Get GameState if not cached
+                if (_gameState == 0)
                 {
-                    _actors[actorBase] = new UActor(actorBase)
-                    {
-                        Team = team,
-                        ActorType = actorType,
-                        NameId = nameId,
-                    };
-                    return _actors[actorBase];
+                    _gameState = Memory.ReadPtr(_gameWorld + Offsets.World.GameState);
+                    if (_gameState == 0) return;
                 }
-                catch (Exception ex)
+
+                // Get PlayerArray TArray address and read data pointer + count
+                var playerArrayTArray = _gameState + Offsets.AGameStateBase.PlayerArray;
+                _playerArray = Memory.ReadPtr(playerArrayTArray);
+                var playerCount = Memory.ReadValue<int>(playerArrayTArray + 0x8);
+                
+                if (_playerArray == 0 || playerCount <= 0 || playerCount > 200)
+                    return;
+
+                var playerScatterMap = new ScatterReadMap(playerCount);
+                var playerStateRound = playerScatterMap.AddRound();
+                var pawnRound = playerScatterMap.AddRound();
+                var pawnIdRound = playerScatterMap.AddRound();
+
+                for (int i = 0; i < playerCount; i++)
                 {
-                    throw new Exception($"ERROR re-allocating player: ", ex);
+                    var playerStateAddr = playerStateRound.AddEntry<ulong>(i, 0, _playerArray + (uint)(i * 0x8));
+                    var pawnAddr = pawnRound.AddEntry<ulong>(i, 1, playerStateAddr, null, Offsets.APlayerState.PawnPrivate);
+                    pawnIdRound.AddEntry<uint>(i, 2, pawnAddr, null, Offsets.Actor.ID);
+                }
+
+                playerScatterMap.Execute();
+
+                // Pre-allocate dictionaries for better performance
+                var playerBaseWithName = new Dictionary<ulong, uint>(playerCount);
+                var playerStateMap = new Dictionary<ulong, ulong>(playerCount);
+                
+                // Process results efficiently
+                for (int i = 0; i < playerCount; i++)
+                {
+                    var results = playerScatterMap.Results[i];
+                    
+                    if (!results.TryGetValue(0, out var playerStateResult) || 
+                        !playerStateResult.TryGetResult<ulong>(out var playerStateAddr) || playerStateAddr == 0 ||
+                        !results.TryGetValue(1, out var pawnResult) || 
+                        !pawnResult.TryGetResult<ulong>(out var pawnAddr) || pawnAddr == 0 ||
+                        !results.TryGetValue(2, out var pawnIdResult) || 
+                        !pawnIdResult.TryGetResult<uint>(out var pawnNameId) || pawnNameId == 0)
+                        continue;
+                    
+                    playerBaseWithName[pawnAddr] = pawnNameId;
+                    playerStateMap[pawnAddr] = playerStateAddr;
+                }
+
+                ProcessPlayerEntities(playerBaseWithName, playerStateMap);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error updating players from PlayerArray: {ex}");
+            }
+        }
+
+        private void UpdateVehiclesFromActorList()
+        {
+            try
+            {
+                var actorsTArray = _persistentLevel + Offsets.Level.Actors;
+                var actorCount = Memory.ReadValue<int>(actorsTArray + 0x8);
+                if (actorCount < 1) return;
+
+                var actorScatterMap = new ScatterReadMap(actorCount);
+                var actorRound = actorScatterMap.AddRound();
+                var actorIdRound = actorScatterMap.AddRound();
+
+                for (int i = 0; i < actorCount; i++)
+                {
+                    var actorAddr = actorRound.AddEntry<ulong>(i, 0, _actorsArray + (uint)(i * 0x8));
+                    var actorId = actorIdRound.AddEntry<uint>(i, 1, actorAddr, null, Offsets.Actor.ID);
+                }
+
+                actorScatterMap.Execute();
+
+                var actorBaseWithName = new Dictionary<ulong, uint>();
+                for (int i = 0; i < actorCount; i++)
+                {
+                    if (!actorScatterMap.Results[i].TryGetValue(0, out var actorResult) || 
+                        !actorResult.TryGetResult<ulong>(out var actorAddr) || actorAddr == 0)
+                        continue;
+                    if (!actorScatterMap.Results[i].TryGetValue(1, out var actorIdResult) || 
+                        !actorIdResult.TryGetResult<uint>(out var actorNameId) || actorNameId == 0)
+                        continue;
+                    actorBaseWithName[actorAddr] = actorNameId;
+                }
+
+                ProcessVehicleEntities(actorBaseWithName);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error updating vehicles from ActorList: {ex}");
+            }
+        }
+
+        private void ProcessPlayerEntities(Dictionary<ulong, uint> playerBaseWithName, Dictionary<ulong, ulong> playerStateMap)
+        {
+            var existingPlayers = _actors.Where(kv => kv.Value.ActorType == ActorType.Player).ToDictionary(kv => kv.Key, kv => kv.Value);
+            var playersToRemove = new HashSet<ulong>(existingPlayers.Keys);
+            
+            if (playerBaseWithName.Count == 0)
+            {
+                // Remove all players that are no longer rendered
+                foreach (var actorId in playersToRemove)
+                    _actors.TryRemove(actorId, out _);
+                return;
+            }
+            
+            // Get names only for new/changed entities
+            var newEntities = playerBaseWithName.Where(kv => !existingPlayers.ContainsKey(kv.Key) || existingPlayers[kv.Key].NameId != kv.Value).ToDictionary();
+            
+            if (newEntities.Count > 0)
+            {
+                var names = Memory.GetNamesById([.. newEntities.Values.Distinct()]);
+                
+                // Handle UAF naming convention
+                foreach (var (nameId, name) in names.Where(x => x.Value.StartsWith("BP_UAF")).ToList())
+                    names[nameId] = name.Replace("BP_UAF", "BP_Soldier_UAF");
+                
+                var soldierNames = names.Where(x => x.Value.StartsWith("BP_Soldier")).ToDictionary();
+                
+                foreach (var (pawnAddr, nameId) in newEntities.Where(kv => soldierNames.ContainsKey(kv.Value)))
+                {
+                    var actorName = soldierNames[nameId];
+                    var team = Names.Teams.GetValueOrDefault(actorName[..14], Team.Unknown);
+                    var playerStateAddr = playerStateMap[pawnAddr];
+                    
+                    ReallocatePlayerActor(pawnAddr, playerStateAddr, team, nameId, actorName);
                 }
             }
+            
+            // Mark existing players as still active
+            foreach (var pawnAddr in playerBaseWithName.Keys.Where(existingPlayers.ContainsKey))
+                playersToRemove.Remove(pawnAddr);
+
+            // Remove players that are no longer rendered
+            foreach (var actorId in playersToRemove)
+                _actors.TryRemove(actorId, out _);
+        }
+
+        private void ProcessVehicleEntities(Dictionary<ulong, uint> actorBaseWithName)
+        {
+            var notUpdated = new HashSet<ulong>(_actors.Where(kv => kv.Value.ActorType != ActorType.Player).Select(kv => kv.Key));
+            
+            foreach (var item in actorBaseWithName.ToList())
+            {
+                if (_actors.ContainsKey(item.Key) && _actors[item.Key].NameId == item.Value)
+                {
+                    notUpdated.Remove(item.Key);
+                    actorBaseWithName.Remove(item.Key);
+                }
+            }
+            
+            var names = Memory.GetNamesById([.. actorBaseWithName.Values.Distinct()]);
+            var vehiclesNameIDs = names.Where(x => Names.TechNames.ContainsKey(x.Value)).ToDictionary();
+            var filteredVehicles = actorBaseWithName.Where(actor => vehiclesNameIDs.ContainsKey(actor.Value)).ToList();
+            
+            foreach (var vehicleEntry in filteredVehicles)
+            {
+                var actorAddr = vehicleEntry.Key;
+                var nameId = vehicleEntry.Value;
+                var actorName = vehiclesNameIDs[nameId];
+                var actorType = Names.TechNames[actorName];
+                var team = Team.Unknown;
+                
+                if (_actors.TryGetValue(actorAddr, out var actor))
+                {
+                    if (actor.ErrorCount > 50 || actor.Base != actorAddr)
+                    {
+                        Logger.Error($"Existing vehicle '{actor.Base}' being reallocated...");
+                        ReallocateVehicleActor(actorAddr, team, actorType, nameId, actorName);
+                    }
+                }
+                else
+                {
+                    ReallocateVehicleActor(actorAddr, team, actorType, nameId, actorName);
+                }
+                notUpdated.Remove(actorAddr);
+            }
+
+            // Remove old vehicles that are no longer in the ActorList
+            foreach (var actorIdToRemove in notUpdated)
+            {
+                _actors.TryRemove(actorIdToRemove, out var _);
+            }
+        }
+
+        private void ReallocatePlayerActor(ulong pawnBase, ulong playerStateBase, Team team, uint nameId, string actorName)
+        {
+            _actors[pawnBase] = new UActor(pawnBase)
+            {
+                Team = team,
+                ActorType = ActorType.Player,
+                NameId = nameId,
+                Name = actorName,
+                PlayerStateAddress = playerStateBase
+            };
+        }
+
+        private void ReallocateVehicleActor(ulong actorBase, Team team, ActorType actorType, uint nameId, string actorName)
+        {
+            _actors[actorBase] = new UActor(actorBase)
+            {
+                Team = team,
+                ActorType = actorType,
+                NameId = nameId,
+                Name = actorName,
+                PlayerStateAddress = 0 // Vehicles don't have PlayerState
+            };
         }
 
         /// <summary>
@@ -231,7 +365,7 @@ namespace squad_dma
             try
             {
                 var count = _actors.Count;
-                if (count < 10) 
+                if (count < 1) 
                     throw new GameEnded();
                 var actorBases = _actors.Values.Select(actor => actor.Base).Order().ToArray();
 
@@ -245,25 +379,32 @@ namespace squad_dma
                 for (int i = 0; i < count; i++)
                 {
                     var actorAddr = actorBases[i];
-                    var actorType = _actors[actorAddr].ActorType;
+                    var actor = _actors[actorAddr];
 
                     var rootComponent = playerInstanceInfoRound.AddEntry<ulong>(i, 1, actorAddr + Offsets.Actor.RootComponent);
 
-                    if (actorType == ActorType.Player)
+                    if (actor.ActorType == ActorType.Player)
                     {
                         playerInstanceInfoRound.AddEntry<float>(i, 2, actorAddr + Offsets.ASQSoldier.Health);
 
+                        // Use the stored PlayerState address for team/squad info (new method)
+                        if (actor.PlayerStateAddress != 0)
+                        {
+                            teamInfoRound.AddEntry<int>(i, 6, actor.PlayerStateAddress, null, Offsets.ASQPlayerState.TeamID);
+                            teamInfoRound.AddEntry<ulong>(i, 7, actor.PlayerStateAddress, null, Offsets.ASQPlayerState.SquadState);
+                        }
+                        else
+                        {
+                            // Fallback to old method for team info
                         var pawnPlayerState = playerInstanceInfoRound.AddEntry<ulong>(i, 3, actorAddr + Offsets.Pawn.PlayerState);
-                        var controller = playerInstanceInfoRound.AddEntry<ulong>(i, 4, actorAddr + Offsets.Pawn.Controller);
-                        var controllerPlayerState = teamInfoRound.AddEntry<ulong>(i, 5, controller, null, Offsets.Controller.PlayerState);
-
                         teamInfoRound.AddEntry<int>(i, 6, pawnPlayerState, null, Offsets.ASQPlayerState.TeamID);
-                        teamInfoRound.AddEntry<int>(i, 7, controllerPlayerState, null, Offsets.ASQPlayerState.TeamID);
+                            teamInfoRound.AddEntry<ulong>(i, 7, pawnPlayerState, null, Offsets.ASQPlayerState.SquadState);
+                        }
 
                         // ESP bone tracking - Uncomment these lines to enable ESP
                          SetupESPEntries(playerInstanceInfoRound, meshRound, boneInfoRound, i, actorAddr);
                     }
-                    else if (Names.Deployables.Contains(actorType))
+                    else if (Names.Deployables.Contains(actor.ActorType))
                     {
                         playerInstanceInfoRound.AddEntry<float>(i, 2, actorAddr + Offsets.SQDeployable.Health);
                         playerInstanceInfoRound.AddEntry<float>(i, 3, actorAddr + Offsets.SQDeployable.MaxHealth);
@@ -275,8 +416,6 @@ namespace squad_dma
                         playerInstanceInfoRound.AddEntry<float>(i, 3, actorAddr + Offsets.SQVehicle.MaxHealth);
                         // Add vehicle team ID reading
                         playerInstanceInfoRound.AddEntry<ulong>(i, 14, actorAddr + Offsets.SQVehicle.ClaimedBySquad);
-                        // Read team ID directly from claimed squad
-                        playerInstanceInfoRound.AddEntry<int>(i, 15, actorAddr + Offsets.SQVehicle.ClaimedBySquad);
                     }
 
                     instigatorAndRootRound.AddEntry<double>(i, 8, rootComponent, null, Offsets.USceneComponent.RelativeLocation);
@@ -317,38 +456,13 @@ namespace squad_dma
 
                     if (actor.ActorType == ActorType.Player)
                     {
-                        bool teamIdFound = false;
-
-                        if (results.TryGetValue(6, out var pawnTeamResult) &&
-                            pawnTeamResult.TryGetResult<int>(out var pawnTeamId))
+                        // Get team ID from PlayerState
+                        if (results.TryGetValue(6, out var teamResult) && teamResult.TryGetResult<int>(out var teamId))
                         {
-                            actor.TeamID = pawnTeamId;
-                            teamIdFound = true;
+                            actor.TeamID = teamId;
                         }
 
-                        if (!teamIdFound && results.TryGetValue(7, out var controllerTeamResult) &&
-                            controllerTeamResult.TryGetResult<int>(out var controllerTeamId))
-                        {
-                            actor.TeamID = controllerTeamId;
-                            teamIdFound = true;
-                        }
-
-                        if (!teamIdFound && results.TryGetValue(4, out var controllerResult) &&
-                            controllerResult.TryGetResult<ulong>(out var controllerAddr) &&
-                            controllerAddr != 0)
-                        {
-                            try
-                            {
-                                var playerStateAddr = Memory.ReadPtr(controllerAddr + Offsets.Controller.PlayerState);
-                                if (playerStateAddr != 0)
-                                {
-                                    actor.TeamID = Memory.ReadValue<int>(playerStateAddr + Offsets.ASQPlayerState.TeamID);
-                                    teamIdFound = true;
-                                }
-                            }
-                            catch { /* Silently fail */ }
-                        }
-
+                        // Handle squad information
                         if (actor.IsFriendly())
                         {
                             if (_squadCache.TryGetValue(actor.Base, out var cachedSquadId))
@@ -360,27 +474,16 @@ namespace squad_dma
                                 actor.SquadID = -1;
                             }
 
-                            if (updateSquads)
+                            if (updateSquads && results.TryGetValue(7, out var squadStateResult) && 
+                                squadStateResult.TryGetResult<ulong>(out var squadStateAddr) && squadStateAddr != 0)
                             {
                                 try
                                 {
-                                    ulong playerState = 0;
-                                    if (results.TryGetValue(3, out var psResult))
-                                        psResult.TryGetResult<ulong>(out playerState);
-
-                                    if (playerState != 0)
-                                    {
-                                        var squadState = Memory.ReadPtr(playerState + Offsets.ASQPlayerState.SquadState);
-                                        if (squadState != 0)
-                                        {
-                                            var squadId = Memory.ReadValue<int>(squadState + Offsets.ASQSquadState.SquadId);
-
-                                            if (squadId > 0 && squadId < 1000)
+                                    var squadId = Memory.ReadValue<int>(squadStateAddr + Offsets.ASQSquadState.SquadId);
+                                    if (squadId > 0 && squadId < 1000)
                                             {
                                                 actor.SquadID = squadId;
                                                 _squadCache[actor.Base] = squadId; 
-                                            }
-                                        }
                                     }
                                 }
                                 catch { /* Silently fail */ }
@@ -395,7 +498,7 @@ namespace squad_dma
                     }
                     else if (Names.Deployables.Contains(actor.ActorType))
                     {
-                        if (results.TryGetValue(14, out var teamResult) &&
+                        if (results.TryGetValue(4, out var teamResult) &&
                             teamResult.TryGetResult<int>(out var teamId))
                         {
                             actor.TeamID = (teamId == 1 || teamId == 2) ? teamId : -1;
@@ -555,7 +658,7 @@ namespace squad_dma
             {
                 Location = localPlayer.Position,
                 Rotation = localPlayer.Rotation3D,
-                FOV = Memory._game.CurrentFOV
+                FOV = Memory._game?.CurrentFOV ?? 90f
             };
             
             actor.BoneTransforms.Clear();

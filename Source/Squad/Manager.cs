@@ -46,6 +46,9 @@ namespace squad_dma.Source.Squad
         
         // Weapon manager
         private WeaponManager _weaponManager;
+        
+        // Weapon detector (MortarCalculator instance)
+        public MortarCalculator WeaponDetector { get; private set; }
 
         /// <summary>
         /// Constructor for feature classes that inherit from Manager
@@ -76,6 +79,9 @@ namespace squad_dma.Source.Squad
             
             // Initialize weapon manager
             _weaponManager = new WeaponManager(_playerController, _inGame, this);
+            
+            // Initialize weapon detector (MortarCalculator)
+            WeaponDetector = new MortarCalculator(this, _game);
             
             // Initialize all feature modules
             InitializeFeatures();
@@ -173,7 +179,7 @@ namespace squad_dma.Source.Squad
             _infiniteAmmo = new InfiniteAmmo(_playerController, _inGame, _game);
             _quickSwap = new QuickSwap(_playerController, _inGame);
             _FullAuto = new ForceFullAuto(_playerController, _inGame);
-            _noCameraShake = new NoCameraShake(_playerController, _inGame);
+            _noCameraShake = new NoCameraShake(_playerController, _inGame, _game);
             _noSpread = new NoSpread(_playerController, _inGame, _game);
             _noRecoil = new NoRecoil(_playerController, _inGame, _game);
             _noSway = new NoSway(_playerController, _inGame, _game);
@@ -229,6 +235,9 @@ namespace squad_dma.Source.Squad
 
                         UpdateCachedPointers();
                         _weaponManager.Update();
+                        
+                        // Update weapon detector
+                        WeaponDetector?.Update();
 
                         // Get current player state from game instance
                         PlayerState currentState = _game?.GetPlayerState() ?? PlayerState.Unknown;
@@ -331,6 +340,9 @@ namespace squad_dma.Source.Squad
                 
             if (_config.DisableCollision)
                 _collision.Apply();
+                
+            if (_config.NoCameraShake)
+                _noCameraShake.Apply();
         }
         
         /// <summary>

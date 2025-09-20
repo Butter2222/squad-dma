@@ -225,8 +225,7 @@ namespace squad_dma
         private bool InitActors() => 
             TryExecute(() => 
             {
-                var persistentLevel = Memory.ReadPtr(_gameWorld + Offsets.World.PersistentLevel);
-                _actors = new RegisteredActors(persistentLevel);
+                _actors = new RegisteredActors(_gameWorld);
             });
   
         private bool GetLocalPlayer() => 

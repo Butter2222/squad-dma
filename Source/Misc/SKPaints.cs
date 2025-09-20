@@ -7,7 +7,7 @@ namespace squad_dma
         #region Configurable Team Colors
         // These colors are now loaded from configuration but have original defaults shown in comments
         
-        // Original Default: Green (#00FF00 - RGB: 0, 255, 0)
+        // Original Default: Green (#008000 - RGB: 0, 128, 0)
         public static SKColor Squad { get; set; } = SKColors.Green;
         
         // Original Default: Light Blue (#00BBFE - RGB: 0, 187, 254)

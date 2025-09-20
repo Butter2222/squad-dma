@@ -102,6 +102,7 @@
         public const uint PCOwner = 0x2B0;
         public const uint DefaultFOV = 0x2C8;
         public const uint ViewTarget = 0x340;
+        public const uint ModifierList = 0x2520; // TArray<UCameraModifier*>
         public const uint CachedCameraShakeMod = 0x25B8; // UCameraModifier_CameraShake*
     }
 
@@ -124,9 +125,19 @@
         public const uint SplitScreenShakeScale = 0xa8; // float
     }
 
+    public struct AGameStateBase
+    {
+        public const uint PlayerArray = 0x2C8;
+    }
+
     public struct ASQGameState
     {
         public const uint TeamStates = 0x3E0;
+    }
+
+    public struct APlayerState
+    {
+        public const uint PawnPrivate = 0x330;
     }
 
     public struct ASQPlayerState
@@ -272,10 +283,19 @@
 
     public struct SQVehicle
     {
-        public const uint Health = 0x9A0;
-        public const uint MaxHealth = 0x9A4;
-        public const uint ClaimedBySquad = 0x660;
-        public const uint VehicleType = 0x7D0; // Added from DebugVehicles
+        public const uint ClaimedBySquad = 0x660; // ASQSquadState*
+        public const uint Health = 0x9A0; // float
+        public const uint MaxHealth = 0x9A4; // float
+
+    }
+    
+    public struct FSQUsableData
+    {
+        public const uint DisplayName = 0x0; // FText
+        public const uint InteractionData = 0x10; // TArray<FSQUsableWidgetData>
+        public const uint InteractWidgetClass = 0x20; // TSubclassOf<USQInteractableWidgetList*>
+        public const uint DrawLocationOffset = 0x28; // FVector
+        public const uint InteractVisiblity = 0x40; // ESQInteractVisibility
     }
 
     public struct SQDeployable
@@ -306,17 +326,16 @@
 
     public struct USQVehicleSeatComponent
     {
+        public const uint SeatConfig = 0x240; // FSQVehicleSeatConfig
+        public const uint AnimationSeatState = 0x2B8; // int32
         public const uint SeatPawn = 0x2C0; // ASQVehicleSeat*
+        public const uint SeatedPlayer = 0x2C8; // ASQPlayerState*
+        public const uint SeatedSoldier = 0x2D0; // ASQSoldier*
     }
 
     public struct ASQVehicleSeat
     {
         public const uint VehicleInventory = 0x4B0; // USQVehicleInventoryComponent*
-    }
-
-    public struct USQVehicleComponent
-    {
-        public const uint Health = 0x708; // float
     }
 
     public struct USQAnimInstanceSoldier1P

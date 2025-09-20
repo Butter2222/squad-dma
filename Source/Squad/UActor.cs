@@ -164,6 +164,7 @@ namespace squad_dma
         }
 
         public ActorType ActorType { get; set; } = ActorType.Player;
+        public ulong PlayerStateAddress { get; set; } = 0; // Address of the PlayerState for this actor
         private Vector3D _pos = new Vector3D(0, 0, 0);
         public Vector3D Position // 192 bits, cannot set atomically
         {

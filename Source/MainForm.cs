@@ -3,6 +3,7 @@ using MaterialSkin.Controls;
 using SkiaSharp;
 using SkiaSharp.Views.Desktop;
 using squad_dma.Source.Misc;
+using squad_dma.Source.Squad;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Drawing.Drawing2D;
@@ -27,6 +28,7 @@ namespace squad_dma
         private GameStatus _previousGameStatus = GameStatus.NotFound;
         private EspOverlay _espOverlay;
         private AimviewWidget _aimviewWidget;
+        private TInfoWidget _tInfoWidget;
 
         private bool _isFreeMapToggled;
         private bool _isDragging;
@@ -92,6 +94,37 @@ namespace squad_dma
             }
         }
 
+        public void ClearAllPointsOfInterest()
+        {
+            _pointsOfInterest.Clear();
+            _mapCanvas.Invalidate();
+        }
+
+        public List<PointOfInterest> GetPointsOfInterest()
+        {
+            return _pointsOfInterest;
+        }
+
+        public double GetTechMortarDegrees(int meters)
+        {
+            return MortarCalculator.MetersToTechMortarDegrees(meters);
+        }
+
+        public double GetMortarMilliradians(int meters)
+        {
+            return MortarCalculator.MetersToMortarMilliradians(meters);
+        }
+
+        public UActor GetLocalPlayer()
+        {
+            return LocalPlayer;
+        }
+
+        public Vector3D GetAbsoluteLocation()
+        {
+            return AbsoluteLocation;
+        }
+
         public void ClearPointsOfInterest()
         {
             _pointsOfInterest.Clear();
@@ -151,6 +184,9 @@ namespace squad_dma
             {
                 InitializeAimviewWidget();
             }
+            
+            // Initialize TInfo Widget
+            InitializeTInfoWidget();
         }
         
         private void InitializeAimviewWidget()
@@ -163,6 +199,46 @@ namespace squad_dma
             var location = new SKRect(savedX, savedY, savedX + savedWidth, savedY + savedHeight);
 
             _aimviewWidget = new AimviewWidget(_mapCanvas, this, location, false, _uiScale);
+            
+            // Subscribe to widget change events to save position/size when user finishes dragging/resizing
+            _aimviewWidget.WidgetChanged += OnAimviewWidgetChanged;
+        }
+
+        private void OnAimviewWidgetChanged(object sender, WidgetChangedEventArgs e)
+        {
+            // Save the new position and size to config
+            _config.AimviewPanelX = (int)e.Location.X;
+            _config.AimviewPanelY = (int)e.Location.Y;
+            _config.AimviewPanelWidth = (int)e.Size.Width;
+            _config.AimviewPanelHeight = (int)e.Size.Height;
+            Config.SaveConfig(_config);
+        }
+
+        private void SaveAimviewWidgetState()
+        {
+            if (_aimviewWidget != null)
+            {
+                int newX = (int)_aimviewWidget.Location.X;
+                int newY = (int)_aimviewWidget.Location.Y;
+                int newWidth = (int)_aimviewWidget.Size.Width;
+                int newHeight = (int)_aimviewWidget.Size.Height;
+
+                // Only save if there are actual changes
+                if (_config.AimviewPanelX != newX || _config.AimviewPanelY != newY ||
+                    _config.AimviewPanelWidth != newWidth || _config.AimviewPanelHeight != newHeight)
+                {
+                    _config.AimviewPanelX = newX;
+                    _config.AimviewPanelY = newY;
+                    _config.AimviewPanelWidth = newWidth;
+                    _config.AimviewPanelHeight = newHeight;
+                    Config.SaveConfig(_config);
+                }
+            }
+        }
+        
+        private void InitializeTInfoWidget()
+        {
+            _tInfoWidget = new TInfoWidget(_mapCanvas, this, _uiScale);
         }
 
         private void InitializeTimers()
@@ -180,6 +256,7 @@ namespace squad_dma
             var ticketUpdateTimer = new System.Windows.Forms.Timer { Interval = 1000 };
             ticketUpdateTimer.Tick += (s, e) => UpdateTicketsDisplay();
             ticketUpdateTimer.Start();
+
 
 
             var stateMonitor = new System.Windows.Forms.Timer { Interval = 500 };
@@ -255,8 +332,18 @@ namespace squad_dma
                 _espOverlay = null;
             }
 
-            _aimviewWidget?.Dispose();
-            _aimviewWidget = null;
+            // Save aimview widget position and size before disposing
+            SaveAimviewWidgetState();
+
+            if (_aimviewWidget != null)
+            {
+                _aimviewWidget.WidgetChanged -= OnAimviewWidgetChanged;
+                _aimviewWidget.Dispose();
+                _aimviewWidget = null;
+            }
+            
+            _tInfoWidget?.Dispose();
+            _tInfoWidget = null;
 
             CleanupLoadedBitmaps();
             Config.ClearCache();
@@ -652,7 +739,8 @@ namespace squad_dma
 
                 var worldX = (mouseX - _selectedMap.ConfigFile.X) / _selectedMap.ConfigFile.Scale;
                 var worldY = (mouseY - _selectedMap.ConfigFile.Y) / _selectedMap.ConfigFile.Scale;
-                var worldZ = this.LocalPlayer.Position.Z + AbsoluteLocation.Z;
+                // Use flat ground assumption - set POI to same height as local player
+                var worldZ = this.LocalPlayer.Position.Z;
 
                 var poiPosition = new Vector3D(worldX - AbsoluteLocation.X, worldY - AbsoluteLocation.Y, worldZ - AbsoluteLocation.Z);
 
@@ -695,6 +783,9 @@ namespace squad_dma
                         
                         // Draw aimview widget
                         _aimviewWidget?.Draw(canvas);
+                        
+                        // Draw TInfo widget
+                        _tInfoWidget?.Draw(canvas);
                     }
                 }
                 else
@@ -788,6 +879,7 @@ namespace squad_dma
             InitiateFontSize();
             
             _aimviewWidget?.SetScaleFactor(_uiScale);
+            _tInfoWidget?.SetScaleFactor(_uiScale);
             
             if (_mapCanvas != null)
             {
@@ -1457,7 +1549,17 @@ namespace squad_dma
             string currentMap = MapName;
             if (_selectedMap is null || !_selectedMap.ConfigFile.MapID.Any(id => id.Equals(currentMap, StringComparison.OrdinalIgnoreCase)))
             {
+                // First try exact match
                 var selectedMap = _maps.FirstOrDefault(x => x.ConfigFile.MapID.Any(id => id.Equals(currentMap, StringComparison.OrdinalIgnoreCase)));
+                
+                // If no exact match found, try partial matching (contains)
+                if (selectedMap is null)
+                {
+                    selectedMap = _maps.FirstOrDefault(x => x.ConfigFile.MapID.Any(id => 
+                        id.Contains(currentMap, StringComparison.OrdinalIgnoreCase) || 
+                        currentMap.Contains(id, StringComparison.OrdinalIgnoreCase)));
+                }
+                
                 if (selectedMap is not null)
                 {
                     _selectedMap = selectedMap;
@@ -1468,6 +1570,7 @@ namespace squad_dma
                 else
                 {
                     Logger.Error($"Map Error: Current map '{currentMap}' is not configured. Please add this map name to the corresponding map configuration file.");
+                    LogUnmappedMapName(currentMap);
                 }
             }
         }
@@ -1502,6 +1605,15 @@ namespace squad_dma
                 Parallel.ForEach(_loadedBitmaps, bitmap => bitmap?.Dispose());
                 _loadedBitmaps = null;
             }
+        }
+
+        /// <summary>
+        /// Logs unmapped map names to console for debugging purposes
+        /// </summary>
+        /// <param name="mapName">The map name that couldn't be matched</param>
+        private void LogUnmappedMapName(string mapName)
+        {
+            Console.WriteLine($"[MAP DEBUG] Unmapped map name detected: '{mapName}'");
         }
 
         private bool IsReadyToRender()
@@ -1677,6 +1789,32 @@ namespace squad_dma
             var localPlayerZoomedPos = localPlayerMapPos.ToZoomedPos(mapParams);
 
             localPlayerZoomedPos.DrawPlayerMarker(canvas, LocalPlayer, trkAimLength.Value);
+            
+            // Draw max range circle around player if ballistic weapon is equipped
+            if (Memory._game?._soldierManager?.WeaponDetector != null)
+            {
+                var mortarCalculator = Memory._game._soldierManager.WeaponDetector;
+                if (mortarCalculator.HasBallisticWeapon && mortarCalculator.CurrentWeaponData != null)
+                {
+                    // Calculate max range using proper ballistic formula
+                    float maxRangeMeters = mortarCalculator.CalculateMaxDistance(mortarCalculator.CurrentWeaponData);
+                    float maxRangeMapUnits = maxRangeMeters * 100; // Convert to game units
+                    float maxRangePixels = (float)(maxRangeMapUnits * _selectedMap.ConfigFile.Scale * mapParams.XScale);
+
+                    var playerCenter = localPlayerZoomedPos.GetPoint();
+                    
+                    // Draw max range circle
+                    using var maxRangePaint = new SKPaint
+                    {
+                        Color = SKColors.Black, // Black color
+                        Style = SKPaintStyle.Stroke,
+                        StrokeWidth = 2 * _uiScale, // Original thinner line width
+                        IsAntialias = true
+                    };
+
+                    canvas.DrawCircle(playerCenter.X, playerCenter.Y, maxRangePixels, maxRangePaint);
+                }
+            }
 
             foreach (var actor in allPlayers)
             {
@@ -2015,22 +2153,125 @@ namespace squad_dma
                 Style = SKPaintStyle.Stroke
             };
 
-            foreach (var poi in _pointsOfInterest)
+            for (int i = 0; i < _pointsOfInterest.Count; i++)
             {
+                var poi = _pointsOfInterest[i];
                 var poiRenderPos = new Vector3D(poi.Position.X + AbsoluteLocation.X, poi.Position.Y + AbsoluteLocation.Y, poi.Position.Z + AbsoluteLocation.Z);
                 var poiMapPos = poiRenderPos.ToMapPos(_selectedMap);
                 var poiZoomedPos = poiMapPos.ToZoomedPos(mapParams);
 
-                var dx = localPlayerPos.X - poi.Position.X;
-                var dy = localPlayerPos.Y - poi.Position.Y;
-                var dz = localPlayerPos.Z - poi.Position.Z;
-                var distance = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-                int distanceMeters = (int)Math.Round(distance / 100);
-                double milliradians = MetersToMilliradians(distanceMeters);
-
                 var center = poiZoomedPos.GetPoint();
-                float crossSize = 8 * _uiScale;
+                float crossSize = 3; // Fixed small size for precise center marking
 
+                // Draw damage radius circle if ballistic weapon is equipped
+                if (Memory._game?._soldierManager?.WeaponDetector != null)
+                {
+                    var mortarCalculator = Memory._game._soldierManager.WeaponDetector;
+                    if (mortarCalculator.HasBallisticWeapon)
+                    {
+                        // Use flat ground assumption - both positions at same height
+                        var playerPos = new Vector3((float)LocalPlayer.Position.X, (float)LocalPlayer.Position.Y, 0f);
+                        var targetPos = new Vector3((float)poi.Position.X, (float)poi.Position.Y, 0f);
+                        
+                        var solution = mortarCalculator.CalculateTrajectory(targetPos, playerPos);
+                        if (solution != null && solution.SpreadEllipse != null)
+                        {
+                            // Calculate elliptical spread dimensions in pixels
+                            float horizontalSpreadMeters = solution.SpreadEllipse.Horizontal;
+                            float verticalSpreadMeters = solution.SpreadEllipse.Vertical;
+                            
+                            float horizontalSpreadMapUnits = horizontalSpreadMeters * 100; // Convert to game units
+                            float verticalSpreadMapUnits = verticalSpreadMeters * 100; // Convert to game units
+                            
+                            float horizontalSpreadPixels = (float)(horizontalSpreadMapUnits * _selectedMap.ConfigFile.Scale * mapParams.XScale);
+                            float verticalSpreadPixels = (float)(verticalSpreadMapUnits * _selectedMap.ConfigFile.Scale * mapParams.YScale);
+
+                            // Draw elliptical spread (NOT a perfect circle!)
+                            using var spreadEllipsePaint = new SKPaint
+                            {
+                                Color = new SKColor(255, 0, 0, 60), // Transparent red fill
+                                Style = SKPaintStyle.Fill,
+                                IsAntialias = true
+                            };
+                            
+                            using var spreadEllipseStrokePaint = new SKPaint
+                            {
+                                Color = new SKColor(255, 0, 0, 180), // Red outline
+                                Style = SKPaintStyle.Stroke,
+                                StrokeWidth = 2 * _uiScale,
+                IsAntialias = true
+            };
+
+                            // Create ellipse path with proper orientation relative to local player
+                            using var ellipsePath = new SKPath();
+                            
+                            // Calculate the bearing from local player to target
+                            var localPlayerWorldPos = new Vector3D(
+                                LocalPlayer.Position.X + AbsoluteLocation.X,
+                                LocalPlayer.Position.Y + AbsoluteLocation.Y,
+                                LocalPlayer.Position.Z + AbsoluteLocation.Z
+                            );
+                            var poiWorldPos = new Vector3D(
+                                poi.Position.X + AbsoluteLocation.X,
+                                poi.Position.Y + AbsoluteLocation.Y,
+                                poi.Position.Z + AbsoluteLocation.Z
+                            );
+                            
+                            // Calculate bearing angle in radians (FROM local player TO target)
+                            // This is the direction the projectiles are traveling
+                            double deltaX = poiWorldPos.X - localPlayerWorldPos.X;
+                            double deltaY = poiWorldPos.Y - localPlayerWorldPos.Y;
+                            double bearingRadians = Math.Atan2(deltaY, deltaX);
+                            
+                            // Determine spread orientation based on weapon type
+                            string currentWeaponName = mortarCalculator.CurrentWeaponName?.ToLower() ?? "";
+                            
+                            // For rocket barrages (UB-32, Tech.UB-32), the spread should be perpendicular to the bearing
+                            // This creates a linear spread aligned horizontally relative to the player
+                            if (currentWeaponName.Contains("ub32") || currentWeaponName.Contains("ub-32"))
+                            {
+                                // Add 90 degrees to make the ellipse perpendicular to the firing direction
+                                bearingRadians += Math.PI / 2;
+                            }
+                            // For mortars, the spread should point toward the player (current behavior)
+                            // No rotation needed for mortars
+                            
+                            // Create ellipse rectangle (centered on POI)
+                            // Create a standard horizontal ellipse first
+                            var ellipseRect = new SKRect(
+                                center.X - horizontalSpreadPixels / 2,  // Width = horizontal spread
+                                center.Y - verticalSpreadPixels / 2,   // Height = vertical spread
+                                center.X + horizontalSpreadPixels / 2,
+                                center.Y + verticalSpreadPixels / 2
+                            );
+                            
+                            // Add ellipse to path
+                            ellipsePath.AddOval(ellipseRect);
+                            
+                            // Save the current canvas state
+                            canvas.Save();
+                            
+                            // Translate to the center of the ellipse
+                            canvas.Translate(center.X, center.Y);
+                            
+                            // Rotate the canvas by the bearing angle
+                            // This aligns the ellipse so vertical spread points toward local player
+                            canvas.RotateDegrees((float)(bearingRadians * 180.0 / Math.PI));
+                            
+                            // Translate back to draw the ellipse at the correct position
+                            canvas.Translate(-center.X, -center.Y);
+                            
+                            // Draw the rotated elliptical spread
+                            canvas.DrawPath(ellipsePath, spreadEllipsePaint);
+                            canvas.DrawPath(ellipsePath, spreadEllipseStrokePaint);
+                            
+                            // Restore the canvas state
+                            canvas.Restore();
+                        }
+                    }
+                }
+
+                // Draw crosshair
                 canvas.DrawLine(
                     center.X - crossSize, center.Y - crossSize,
                     center.X + crossSize, center.Y + crossSize,
@@ -2041,122 +2282,93 @@ namespace squad_dma
                     center.X - crossSize, center.Y + crossSize,
                     crosshairPaint);
 
-                float bearing = CalculateBearing(localPlayerPos, poi.Position);
-                DrawPOIText(canvas, poiZoomedPos, distance, bearing, crossSize);
+                // Draw marker number instead of text
+                DrawPOINumber(canvas, center, i + 1, crossSize);
+            }
+            
+            // Draw minimum distance circle if ballistic weapon is equipped and has minimum distance
+            if (Memory._game?._soldierManager?.WeaponDetector != null)
+            {
+                var mortarCalculator = Memory._game._soldierManager.WeaponDetector;
+                
+                if (mortarCalculator.HasBallisticWeapon && 
+                    mortarCalculator.CurrentWeaponData != null && 
+                    mortarCalculator.CurrentWeaponData.MinDistance > 0)
+                {
+                    float minDistanceMeters = mortarCalculator.CurrentWeaponData.MinDistance;
+                    float minDistanceMapUnits = minDistanceMeters * 100; // Convert to game units
+                    float minDistancePixels = (float)(minDistanceMapUnits * _selectedMap.ConfigFile.Scale * mapParams.XScale);
+                    
+                    // Create minimum distance circle paints
+                    using var minDistanceFillPaint = new SKPaint
+                    {
+                        Color = new SKColor(64, 64, 64, 77), // Dark grey with 30% opacity (77/255 ≈ 30%)
+                        Style = SKPaintStyle.Fill,
+                        IsAntialias = true
+                    };
+                    
+                    using var minDistanceStrokePaint = new SKPaint
+                    {
+                        Color = new SKColor(0, 0, 0, 255), // Black outline
+                        Style = SKPaintStyle.Stroke,
+                        StrokeWidth = 2 * _uiScale,
+                        IsAntialias = true
+                    };
+                    
+                    // Draw minimum distance circle centered on local player
+                    var localPlayerWorldPos = new Vector3D(
+                        LocalPlayer.Position.X + AbsoluteLocation.X,
+                        LocalPlayer.Position.Y + AbsoluteLocation.Y,
+                        LocalPlayer.Position.Z + AbsoluteLocation.Z
+                    );
+                    var localPlayerMapPos = localPlayerWorldPos.ToMapPos(_selectedMap).ToZoomedPos(mapParams).GetPoint();
+                    canvas.DrawCircle(localPlayerMapPos.X, localPlayerMapPos.Y, minDistancePixels, minDistanceFillPaint);
+                    canvas.DrawCircle(localPlayerMapPos.X, localPlayerMapPos.Y, minDistancePixels, minDistanceStrokePaint);
+                }
             }
         }
 
-        private void DrawPOIText(SKCanvas canvas, MapPosition position, double distance, float bearing, float crosshairSize)
+        private void DrawPOINumber(SKCanvas canvas, SKPoint center, int markerNumber, float crosshairSize)
         {
-            int distanceMeters = (int)Math.Round(distance / 100);
-            double milliradians = MetersToMilliradians(distanceMeters);
-            bool isOutOfRange = distanceMeters < 50 || distanceMeters > 1250;
-
-            string[] lines =
-            {
-                isOutOfRange ? "—" : $"{milliradians:F1}",
-                $"{bearing:F1}°",
-                $"{distanceMeters}m"
-            };
-
-            // Use same styling as vehicle distance text
-            using var textPaint = new SKPaint
-            {
-                Color = SKColors.White,
-                TextSize = 13 * _uiScale * 1.1f,
-                TextAlign = SKTextAlign.Left,
-                Typeface = CustomFonts.SKFontFamilyRegular,
-                SubpixelText = true,
-                IsAntialias = true,
-                FilterQuality = SKFilterQuality.High
-            };
-
+            // Calculate position - top right of damage radius circle
+            float numberSize = 10 * _uiScale;
+            float offsetX = 15 * _uiScale; // Distance from center
+            float offsetY = -15 * _uiScale; // Above center
+            
+            var numberPosition = new SKPoint(center.X + offsetX, center.Y + offsetY);
+            
+            // Use same styling as player/vehicle distance text
             using var outlinePaint = new SKPaint
             {
                 Color = SKColors.Black,
-                TextSize = 13 * _uiScale * 1.1f,
-                StrokeWidth = 2.8f * _uiScale,
-                TextAlign = SKTextAlign.Left,
+                TextSize = numberSize,
+                TextAlign = SKTextAlign.Center,
                 Typeface = CustomFonts.SKFontFamilyRegular,
-                SubpixelText = true,
                 IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                FilterQuality = SKFilterQuality.High
+                SubpixelText = true,
+                FilterQuality = SKFilterQuality.High,
+                StrokeWidth = 2.8f * _uiScale,
+                Style = SKPaintStyle.Stroke
             };
-
-            // Create background paint
-            using var backgroundPaint = new SKPaint
+            
+            using var textPaint = new SKPaint
             {
-                Color = new SKColor(40, 40, 40, 200), // Dark gray with transparency
-                IsAntialias = true
+                Color = SKColors.White,
+                TextSize = numberSize,
+                TextAlign = SKTextAlign.Center,
+                Typeface = CustomFonts.SKFontFamilyRegular,
+                IsAntialias = true,
+                SubpixelText = true,
+                FilterQuality = SKFilterQuality.High,
+                Style = SKPaintStyle.Fill
             };
-
-            var basePosition = position.GetPoint(crosshairSize + 12 * _uiScale, 0);
-            float verticalSpacing = 13 * _uiScale * 1.1f;
             
-            // Calculate text bounds for background
-            float maxWidth = 0;
-            float totalHeight = lines.Length * verticalSpacing;
-            
-            foreach (var line in lines)
-            {
-                SKRect textBounds = new SKRect();
-                textPaint.MeasureText(line, ref textBounds);
-                maxWidth = Math.Max(maxWidth, textBounds.Width);
-            }
-
-            // Draw background rectangle
-            float padding = 4 * _uiScale;
-            SKRect backgroundRect = new SKRect(
-                basePosition.X - padding,
-                basePosition.Y - (13 * _uiScale * 1.1f * 0.8f) - padding, // Adjust for text baseline
-                basePosition.X + maxWidth + padding,
-                basePosition.Y + totalHeight - (13 * _uiScale * 1.1f * 0.8f) + padding
-            );
-            
-            canvas.DrawRoundRect(backgroundRect, 3 * _uiScale, 3 * _uiScale, backgroundPaint);
-
-            // Draw text
-            foreach (var line in lines)
-            {
-                canvas.DrawText(line, basePosition.X, basePosition.Y, outlinePaint);
-                canvas.DrawText(line, basePosition.X, basePosition.Y, textPaint);
-                basePosition.Y += verticalSpacing;
-            }
+            // Draw number text with black outline and white fill
+            float textY = numberPosition.Y + (textPaint.FontMetrics.Descent - textPaint.FontMetrics.Ascent) / 2;
+            canvas.DrawText(markerNumber.ToString(), numberPosition.X, textY, outlinePaint);
+            canvas.DrawText(markerNumber.ToString(), numberPosition.X, textY, textPaint);
         }
-
-        private double MetersToMilliradians(double meters)
-        {
-            double[] distances = { 50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050, 1100, 1150, 1200, 1250 };
-            double[] milliradians = { 1579, 1558, 1538, 1517, 1496, 1475, 1453, 1431, 1409, 1387, 1364, 1341, 1317, 1292, 1267, 1240, 1212, 1183, 1152, 1118, 1081, 1039, 988, 918, 800 };
-
-            if (meters <= 50) return 1579.0;
-            if (meters >= 1250) return 800.0;
-
-            for (int i = 0; i < distances.Length - 1; i++)
-            {
-                if (meters >= distances[i] && meters <= distances[i + 1])
-                {
-                    double rate = (milliradians[i + 1] - milliradians[i]) / (distances[i + 1] - distances[i]);
-                    return Math.Round(milliradians[i] + rate * (meters - distances[i]), 1);
-                }
-            }
-            return 800;
-        }
-
-        private float CalculateBearing(Vector3D playerPos, Vector3D poiPos)
-        {
-            double deltaX = poiPos.X - playerPos.X;
-            double deltaY = playerPos.Y - poiPos.Y;
-
-            double radians = Math.Atan2(deltaY, deltaX);
-            double degrees = radians * (180.0 / Math.PI);
-            degrees = 90.0 - degrees;
-
-            if (degrees < 0) degrees += 360.0;
-
-            return (float)degrees;
-        }
+        
 
         private void DrawToolTips(SKCanvas canvas)
         {
@@ -2536,8 +2748,14 @@ namespace squad_dma
             }
             else
             {
-                _aimviewWidget?.Dispose();
-                _aimviewWidget = null;
+                // Save aimview widget state before disposing
+                SaveAimviewWidgetState();
+                if (_aimviewWidget != null)
+                {
+                    _aimviewWidget.WidgetChanged -= OnAimviewWidgetChanged;
+                    _aimviewWidget.Dispose();
+                    _aimviewWidget = null;
+                }
             }
         }
 

@@ -6,6 +6,25 @@ using System.Windows.Forms;
 
 namespace squad_dma
 {
+    /// <summary>
+    /// Event arguments for widget change events
+    /// </summary>
+    public class WidgetChangedEventArgs : EventArgs
+    {
+        public SKPoint Location { get; }
+        public SKSize Size { get; }
+        public bool WasDragged { get; }
+        public bool WasResized { get; }
+
+        public WidgetChangedEventArgs(SKPoint location, SKSize size, bool wasDragged, bool wasResized)
+        {
+            Location = location;
+            Size = size;
+            WasDragged = wasDragged;
+            WasResized = wasResized;
+        }
+    }
+
     public abstract class SKWidget : IDisposable
     {
         #region Fields
@@ -38,6 +57,11 @@ namespace squad_dma
         #region Public Properties
         public bool Minimized { get; protected set; }
         public SKRect ClientRectangle => new(Rectangle.Left, Rectangle.Top + TitleBarHeight, Rectangle.Right, Rectangle.Bottom);
+        
+        /// <summary>
+        /// Event fired when the widget's position or size changes (after user interaction ends)
+        /// </summary>
+        public event EventHandler<WidgetChangedEventArgs> WidgetChanged;
         public SKSize Size
         {
             get => _size;
@@ -135,8 +159,17 @@ namespace squad_dma
 
         private void Parent_MouseUp(object sender, MouseEventArgs e)
         {
+            bool wasDragged = _titleDrag;
+            bool wasResized = _resizeDrag;
+            
             _titleDrag = false;
             _resizeDrag = false;
+            
+            // Fire event if widget was changed
+            if (wasDragged || wasResized)
+            {
+                WidgetChanged?.Invoke(this, new WidgetChangedEventArgs(Location, Size, wasDragged, wasResized));
+            }
         }
 
         private void Parent_MouseDown(object sender, MouseEventArgs e)

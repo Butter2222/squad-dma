@@ -420,7 +420,7 @@ namespace squad_dma
                                 }
 
                                 Memory._game.GameLoop();
-                                Thread.SpinWait(1000);
+                                Thread.SpinWait(100); // Reduced from 1000 to 100 for faster updates
                             }
                         }
                         catch (GameNotRunningException)

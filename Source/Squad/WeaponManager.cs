@@ -30,6 +30,52 @@ namespace squad_dma.Source.Squad
         }
 
         /// <summary>
+        /// Simple, robust weapon validation - checks if item has weapon-specific offsets
+        /// </summary>
+        public static bool IsWeapon(ulong equipableItem)
+        {
+            if (equipableItem == 0) return false;
+
+            try
+            {
+                // Simple check: try to read WeaponConfig offset
+                // If this succeeds and returns a valid pointer, it's likely a weapon
+                ulong weaponConfig = Memory.ReadPtr(equipableItem + ASQWeapon.WeaponConfig);
+                return weaponConfig != 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Validates weapon memory is still accessible before operations
+        /// </summary>
+        public static bool IsWeaponMemoryValid(ulong weapon)
+        {
+            if (weapon == 0) return false;
+
+            try
+            {
+                // Try to read weapon config and fire modes to ensure memory is accessible
+                ulong weaponConfig = Memory.ReadPtr(weapon + ASQWeapon.WeaponConfig);
+                if (weaponConfig == 0) return false;
+
+                ulong fireModesArray = weaponConfig + FSQWeaponData.FireModes;
+                ulong fireModesData = Memory.ReadPtr(fireModesArray);
+                if (fireModesData == 0) return false;
+
+                int fireModeCount = Memory.ReadValue<int>(fireModesArray + 0x8);
+                return fireModeCount > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Registers a weapon feature to receive weapon change notifications
         /// </summary>
         public void RegisterFeature(Weapon feature)
@@ -51,10 +97,14 @@ namespace squad_dma.Source.Squad
                                 ulong inventoryComponent = Memory.ReadPtr(soldierActor + ASQSoldier.InventoryComponent);
                                 if (inventoryComponent != 0)
                                 {
-                                    _currentWeapon = Memory.ReadPtr(inventoryComponent + USQPawnInventoryComponent.CurrentWeapon);
-                                    if (_currentWeapon != 0 && feature.IsEnabled)
+                                    ulong currentItem = Memory.ReadPtr(inventoryComponent + USQPawnInventoryComponent.CurrentWeapon);
+                                    if (currentItem != 0 && IsWeapon(currentItem))
                                     {
-                                        feature.OnWeaponChanged(_currentWeapon, 0);
+                                        _currentWeapon = currentItem;
+                                        if (feature.IsEnabled)
+                                        {
+                                            feature.OnWeaponChanged(_currentWeapon, 0);
+                                        }
                                     }
                                 }
                             }
@@ -96,7 +146,11 @@ namespace squad_dma.Source.Squad
                 // Check for vehicle weapon first
                 if (_manager.IsInVehicle())
                 {
-                    newWeapon = _manager.GetVehicleWeapon();
+                    ulong vehicleWeapon = _manager.GetVehicleWeapon();
+                    if (vehicleWeapon != 0 && IsWeapon(vehicleWeapon))
+                    {
+                        newWeapon = vehicleWeapon;
+                    }
                 }
                 
                 // If not in vehicle or no vehicle weapon, check infantry weapon
@@ -111,7 +165,11 @@ namespace squad_dma.Source.Squad
                     ulong inventoryComponent = Memory.ReadPtr(soldierActor + ASQSoldier.InventoryComponent);
                     if (inventoryComponent == 0) return;
 
-                    newWeapon = Memory.ReadPtr(inventoryComponent + USQPawnInventoryComponent.CurrentWeapon);
+                    ulong currentItem = Memory.ReadPtr(inventoryComponent + USQPawnInventoryComponent.CurrentWeapon);
+                    if (currentItem != 0 && IsWeapon(currentItem))
+                    {
+                        newWeapon = currentItem;
+                    }
                 }
 
                 // Only notify if the weapon has actually changed

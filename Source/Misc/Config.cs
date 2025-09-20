@@ -468,7 +468,7 @@ namespace squad_dma
     public class RadarColors
     {
         [JsonPropertyName("squadMembers")]
-        public ColorConfig SquadMembers { get; set; } = new ColorConfig(0, 255, 0); // Green
+        public ColorConfig SquadMembers { get; set; } = new ColorConfig(0, 128, 0); // Green 
 
         [JsonPropertyName("friendlyPlayers")]
         public ColorConfig FriendlyPlayers { get; set; } = new ColorConfig(0, 187, 254); // Light Blue
@@ -507,7 +507,7 @@ namespace squad_dma
         public ColorConfig DeadMarkers { get; set; } = new ColorConfig(255, 255, 255); // White
 
         [JsonPropertyName("adminMarkers")]
-        public ColorConfig AdminMarkers { get; set; } = new ColorConfig(255, 255, 255); // White
+        public ColorConfig AdminMarkers { get; set; } = new ColorConfig(255, 0, 128); // Bright Magenta (#FF0080)
     }
 
     /// <summary>
