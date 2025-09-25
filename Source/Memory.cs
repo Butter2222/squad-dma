@@ -27,9 +27,11 @@ namespace squad_dma
         private static readonly Stopwatch _tickSw = new();
         private static readonly ManualResetEvent _syncProcessRunning = new(false);
         private static readonly Stopwatch _processCheckTimer = new();
-        private const int PROCESS_CHECK_INTERVAL = 500;
-        private const int HEARTBEAT_CHECK_INTERVAL = 1000;
+        private const int PROCESS_CHECK_INTERVAL = 5000; // Increased from 500ms to 5 seconds
+        private const int HEARTBEAT_CHECK_INTERVAL = 10000; // Increased from 1 second to 10 seconds
         private static readonly Stopwatch _heartbeatTimer = new();
+        private static int _consecutiveVerificationFailures = 0;
+        private const int MAX_VERIFICATION_FAILURES = 3; // Allow 3 consecutive failures before giving up
 
         public static GameStatus GameStatus = GameStatus.NotFound;
 
@@ -311,13 +313,18 @@ namespace squad_dma
         {
             try
             {
-                if (!GetPid() || !GetModuleBase())
+                // First, try a lightweight check without re-acquiring process/module
+                if (_process == null || _squadBase == 0)
                 {
-                    Logger.Error("Process or module base no longer available!");
-                    return false;
+                    Logger.Error("Process or module base is null, attempting to reacquire...");
+                    if (!GetPid() || !GetModuleBase())
+                    {
+                        Logger.Error("Process or module base no longer available!");
+                        return false;
+                    }
                 }
 
-                // Check if process is still responding
+                // Lightweight verification - just check if we can read from the module base
                 try
                 {
                     var scatterMap = new ScatterReadMap(1);
@@ -328,24 +335,22 @@ namespace squad_dma
                     if (!scatterMap.Results[0][0].TryGetResult<string>(out var moduleHeader) ||
                         !moduleHeader.StartsWith("MZ"))
                     {
-                        Logger.Error("Module header verification failed - game may have terminated!");
-                        return false;
+                        Logger.Error("Module header verification failed, attempting to reacquire module base...");
+                        if (!GetModuleBase())
+                        {
+                            Logger.Error("Failed to reacquire module base!");
+                            return false;
+                        }
+                        return true; // Give it another chance
                     }
 
-                    // Additional check for game state
-                    if (Memory._game != null && !Memory._game.InGame)
-                    {
-                        Logger.Error("Game state verification failed!");
-                        return false;
-                    }
-
-                    // Check game heartbeat if enough time has passed
+                    // Check game heartbeat less frequently and with more tolerance
                     if (_heartbeatTimer.ElapsedMilliseconds > HEARTBEAT_CHECK_INTERVAL)
                     {
                         if (!CheckGameHeartbeat())
                         {
-                            Logger.Error("Game heartbeat check failed!");
-                            return false;
+                            Logger.Error("Game heartbeat check failed, but continuing...");
+                            // Don't fail immediately, just log a warning
                         }
                         _heartbeatTimer.Restart();
                     }
@@ -354,13 +359,14 @@ namespace squad_dma
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error($"Process verification error: {ex.Message}");
-                    return false;
+                    Logger.Error($"Process verification error (non-critical): {ex.Message}");
+                    // Don't fail on verification errors, just log and continue
+                    return true;
                 }
             }
             catch (Exception ex)
             {
-                Logger.Error($"Process verification error: {ex.Message}");
+                Logger.Error($"Critical process verification error: {ex.Message}");
                 return false;
             }
         }
@@ -407,8 +413,19 @@ namespace squad_dma
                                 {
                                     if (!VerifyRunningProcess())
                                     {
-                                        Logger.Error("Game process verification failed!");
-                                        throw new GameNotRunningException();
+                                        _consecutiveVerificationFailures++;
+                                        Logger.Error($"Game process verification failed! (Failure #{_consecutiveVerificationFailures})");
+                                        
+                                        if (_consecutiveVerificationFailures >= MAX_VERIFICATION_FAILURES)
+                                        {
+                                            Logger.Error($"Too many consecutive verification failures ({_consecutiveVerificationFailures}), restarting...");
+                                            throw new GameNotRunningException();
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // Reset failure counter on success
+                                        _consecutiveVerificationFailures = 0;
                                     }
                                     _processCheckTimer.Restart();
                                 }

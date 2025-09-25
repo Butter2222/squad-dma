@@ -12,7 +12,6 @@ namespace squad_dma
         private readonly ulong _persistentLevel;
         private ulong _gameState;
         private ulong _playerArray;
-        private ulong _actorsArray;
         private readonly Stopwatch _regSw = new();
         private readonly Stopwatch _vehicleUpdateSw = new(); // Separate timer for vehicles
         private readonly ConcurrentDictionary<ulong, UActor> _actors = new();
@@ -89,7 +88,6 @@ namespace squad_dma
         {
             this._gameWorld = gameWorldAddr;
             this._persistentLevel = Memory.ReadPtr(_gameWorld + Offsets.World.PersistentLevel);
-            this._actorsArray = Memory.ReadPtr(_persistentLevel + Offsets.Level.Actors);
             this.Actors = new(this._actors);
             this._regSw.Start();
             this._vehicleUpdateSw.Start();
@@ -205,9 +203,22 @@ namespace squad_dma
         {
             try
             {
+                // Always use direct calculation - no caching, no cooldowns, no bullshit
                 var actorsTArray = _persistentLevel + Offsets.Level.Actors;
                 var actorCount = Memory.ReadValue<int>(actorsTArray + 0x8);
-                if (actorCount < 1) return;
+                
+                // Simple bounds check
+                if (actorCount < 1 || actorCount > 20000) 
+                {
+                    return; // Just skip silently if count is invalid
+                }
+
+                // Get actors array pointer directly
+                var actorsArrayPtr = Memory.ReadPtr(actorsTArray);
+                if (actorsArrayPtr == 0)
+                {
+                    return; // Skip silently if pointer is null
+                }
 
                 var actorScatterMap = new ScatterReadMap(actorCount);
                 var actorRound = actorScatterMap.AddRound();
@@ -215,7 +226,7 @@ namespace squad_dma
 
                 for (int i = 0; i < actorCount; i++)
                 {
-                    var actorAddr = actorRound.AddEntry<ulong>(i, 0, _actorsArray + (uint)(i * 0x8));
+                    var actorAddr = actorRound.AddEntry<ulong>(i, 0, actorsArrayPtr + (uint)(i * 0x8));
                     var actorId = actorIdRound.AddEntry<uint>(i, 1, actorAddr, null, Offsets.Actor.ID);
                 }
 
@@ -237,9 +248,11 @@ namespace squad_dma
             }
             catch (Exception ex)
             {
+                // Just log the error and continue - no complex recovery logic
                 Logger.Error($"Error updating vehicles from ActorList: {ex}");
             }
         }
+
 
         private void ProcessPlayerEntities(Dictionary<ulong, uint> playerBaseWithName, Dictionary<ulong, ulong> playerStateMap)
         {

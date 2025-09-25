@@ -51,7 +51,6 @@ namespace squad_dma
             btnApplyMapScale = new Button();
             chkHighAlert = new CheckBox();
             tabSettings = new TabPage();
-            tabColors = new TabPage();
             grpUserInterface = new GroupBox();
             lblUIScale = new Label();
             lblAimline = new Label();
@@ -116,6 +115,7 @@ namespace squad_dma
             txtSecondScopeMag = new TextBox();
             lblThirdScopeMag = new Label();
             txtThirdScopeMag = new TextBox();
+            tabColors = new TabPage();
             tabRadar = new TabPage();
             ticketsPanel = new Panel();
             grpMapSetup = new GroupBox();
@@ -127,7 +127,6 @@ namespace squad_dma
             ((System.ComponentModel.ISupportInitialize)trkAimLength).BeginInit();
             ((System.ComponentModel.ISupportInitialize)trkTechMarkerScale).BeginInit();
             tabSettings.SuspendLayout();
-            tabColors.SuspendLayout();
             grpUserInterface.SuspendLayout();
             grpRadar.SuspendLayout();
             grpLocalSoldier.SuspendLayout();
@@ -162,7 +161,7 @@ namespace squad_dma
             chkEnableAimview.Font = new Font("Segoe UI", 9F);
             chkEnableAimview.Location = new Point(265, 75);
             chkEnableAimview.Name = "chkEnableAimview";
-            chkEnableAimview.Size = new Size(106, 19);
+            chkEnableAimview.Size = new Size(110, 19);
             chkEnableAimview.TabIndex = 16;
             chkEnableAimview.Text = "Enable Aimview";
             toolTip.SetToolTip(chkEnableAimview, "Toggle visibility of the aimview panel overlay");
@@ -360,16 +359,6 @@ namespace squad_dma
             tabSettings.TabIndex = 1;
             tabSettings.Text = "Settings";
             // 
-            // tabColors
-            // 
-            tabColors.BackColor = SystemColors.Control;
-            tabColors.Location = new Point(4, 24);
-            tabColors.Name = "tabColors";
-            tabColors.Padding = new Padding(3);
-            tabColors.Size = new Size(1256, 653);
-            tabColors.TabIndex = 2;
-            tabColors.Text = "Colors";
-            // 
             // grpUserInterface
             // 
             grpUserInterface.Controls.Add(lblUIScale);
@@ -537,9 +526,9 @@ namespace squad_dma
             chkRapidFire.AutoSize = true;
             chkRapidFire.Location = new Point(210, 45);
             chkRapidFire.Name = "chkRapidFire";
-            chkRapidFire.Size = new Size(125, 19);
+            chkRapidFire.Size = new Size(78, 19);
             chkRapidFire.TabIndex = 7;
-            chkRapidFire.Text = "Rapid Fire ( Crash )";
+            chkRapidFire.Text = "Rapid Fire";
             chkRapidFire.UseVisualStyleBackColor = true;
             // 
             // chkInfiniteAmmo
@@ -547,9 +536,9 @@ namespace squad_dma
             chkInfiniteAmmo.AutoSize = true;
             chkInfiniteAmmo.Location = new Point(210, 20);
             chkInfiniteAmmo.Name = "chkInfiniteAmmo";
-            chkInfiniteAmmo.Size = new Size(150, 19);
+            chkInfiniteAmmo.Size = new Size(103, 19);
             chkInfiniteAmmo.TabIndex = 8;
-            chkInfiniteAmmo.Text = "Infinite Ammo ( Crash )";
+            chkInfiniteAmmo.Text = "Infinite Ammo";
             chkInfiniteAmmo.UseVisualStyleBackColor = true;
             // 
             // chkQuickSwap
@@ -567,9 +556,9 @@ namespace squad_dma
             chkForceFullAuto.AutoSize = true;
             chkForceFullAuto.Location = new Point(210, 70);
             chkForceFullAuto.Name = "chkForceFullAuto";
-            chkForceFullAuto.Size = new Size(153, 19);
+            chkForceFullAuto.Size = new Size(106, 19);
             chkForceFullAuto.TabIndex = 10;
-            chkForceFullAuto.Text = "Force Full Auto ( Crash )";
+            chkForceFullAuto.Text = "Force Full Auto";
             chkForceFullAuto.UseVisualStyleBackColor = true;
             chkForceFullAuto.CheckedChanged += ChkForceFullAuto_CheckedChanged;
             // 
@@ -611,9 +600,9 @@ namespace squad_dma
             chkNoCameraShake.AutoSize = true;
             chkNoCameraShake.Location = new Point(210, 170);
             chkNoCameraShake.Name = "chkNoCameraShake";
-            chkNoCameraShake.Size = new Size(167, 19);
+            chkNoCameraShake.Size = new Size(120, 19);
             chkNoCameraShake.TabIndex = 14;
-            chkNoCameraShake.Text = "No Camera Shake ( Crash )";
+            chkNoCameraShake.Text = "No Camera Shake";
             chkNoCameraShake.UseVisualStyleBackColor = true;
             chkNoCameraShake.CheckedChanged += ChkNoCameraShake_CheckedChanged;
             // 
@@ -983,7 +972,6 @@ namespace squad_dma
             txtEspFontSize.Size = new Size(75, 23);
             txtEspFontSize.TabIndex = 9;
             // 
-            // 
             // lblFirstScopeMag
             // 
             lblFirstScopeMag.Location = new Point(300, 55);
@@ -1028,6 +1016,16 @@ namespace squad_dma
             txtThirdScopeMag.Name = "txtThirdScopeMag";
             txtThirdScopeMag.Size = new Size(75, 23);
             txtThirdScopeMag.TabIndex = 23;
+            // 
+            // tabColors
+            // 
+            tabColors.BackColor = SystemColors.Control;
+            tabColors.Location = new Point(4, 24);
+            tabColors.Name = "tabColors";
+            tabColors.Padding = new Padding(3);
+            tabColors.Size = new Size(1256, 653);
+            tabColors.TabIndex = 2;
+            tabColors.Text = "Colors";
             // 
             // tabRadar
             // 
@@ -1125,7 +1123,6 @@ namespace squad_dma
             ((System.ComponentModel.ISupportInitialize)trkAimLength).EndInit();
             ((System.ComponentModel.ISupportInitialize)trkTechMarkerScale).EndInit();
             tabSettings.ResumeLayout(false);
-            tabColors.ResumeLayout(false);
             grpUserInterface.ResumeLayout(false);
             grpUserInterface.PerformLayout();
             grpRadar.ResumeLayout(false);

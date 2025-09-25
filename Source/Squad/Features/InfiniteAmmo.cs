@@ -22,6 +22,40 @@ namespace squad_dma.Source.Squad.Features
         {
         }
         
+        /// <summary>
+        /// Override SetEnabled to immediately apply/restore to current weapon when enabled/disabled
+        /// </summary>
+        public override void SetEnabled(bool enable)
+        {
+            if (enable)
+            {
+                _isEnabled = enable;
+                Logger.Debug($"[{_featureName}] Feature enabled");
+                
+                // If enabling, immediately apply to current weapon if player is alive
+                if (IsLocalPlayerValid() && _cachedCurrentWeapon != 0)
+                {
+                    ApplyToWeapon(_cachedCurrentWeapon);
+                    _isApplied = true; // Mark as applied
+                }
+            }
+            else
+            {
+                _isEnabled = enable;
+                Logger.Debug($"[{_featureName}] Feature disabled");
+                
+                // If disabling, immediately restore all applied weapons
+                if (_appliedWeapons.Count > 0)
+                {
+                    foreach (ulong weaponPtr in _appliedWeapons.ToList())
+                    {
+                        RestoreWeapon(weaponPtr);
+                    }
+                    _isApplied = false; // Mark as not applied
+                }
+            }
+        }
+        
         protected override bool ShouldApplyModifications()
         {
             return Program.Config.InfiniteAmmo;
@@ -121,7 +155,7 @@ namespace squad_dma.Source.Squad.Features
                     }
                 }
                 
-                Logger.Debug($"[{_featureName}] Weapon changed: 0x{oldWeapon:X} -> 0x{newWeapon:X}");
+                Logger.Debug($"[{_featureName}] Weapon changed");
                 
             }
             catch (Exception ex)
@@ -134,19 +168,45 @@ namespace squad_dma.Source.Squad.Features
         {
             try
             {
-                if (weapon == 0 || _appliedWeapons.Contains(weapon))
-                    return;
+                if (weapon == 0) return;
                     
                 ulong weaponConfigOffset = weapon + ASQWeapon.WeaponConfig;
-                Memory.WriteValue<byte>(weaponConfigOffset + FSQWeaponData.bInfiniteAmmo, 1);
-                Memory.WriteValue<byte>(weaponConfigOffset + FSQWeaponData.bInfiniteMags, 1);
+                
+                // bInfiniteAmmo and bInfiniteMags are bit flags within the same byte
+                // bInfiniteAmmo = bit 0, bInfiniteMags = bit 1
+                byte currentFlags = Memory.ReadValue<byte>(weaponConfigOffset);
+                
+                // Set bit 0 (bInfiniteAmmo) and bit 1 (bInfiniteMags)
+                byte newFlags = (byte)(currentFlags | 0x03); // Set bits 0 and 1
+                
+                // Write the new flags byte
+                Memory.WriteValue<byte>(weaponConfigOffset, newFlags);
+                
+                // Try writing to weapon static info as well (in case there are multiple locations)
+                try
+                {
+                    ulong itemStaticInfo = Memory.ReadPtr(weapon + ASQEquipableItem.ItemStaticInfo);
+                    if (itemStaticInfo != 0)
+                    {
+                        Memory.WriteValue<byte>(itemStaticInfo, newFlags);
+                    }
+                }
+                catch { }
+                
+                // Try to force weapon refresh by writing to CurrentFireMode and back
+                try
+                {
+                    int currentFireMode = Memory.ReadValue<int>(weapon + ASQWeapon.CurrentFireMode);
+                    Memory.WriteValue<int>(weapon + ASQWeapon.CurrentFireMode, currentFireMode);
+                }
+                catch { }
                 
                 _appliedWeapons.Add(weapon);
-                Logger.Debug($"[{_featureName}] Applied infinite ammo to weapon at 0x{weapon:X}");
+                Logger.Debug($"[{_featureName}] Applied infinite ammo to weapon");
             }
             catch (Exception ex)
             {
-                Logger.Error($"[{_featureName}] Error applying infinite ammo to weapon at 0x{weapon:X}: {ex.Message}");
+                Logger.Error($"[{_featureName}] Error applying infinite ammo: {ex.Message}");
             }
         }
         
@@ -154,19 +214,25 @@ namespace squad_dma.Source.Squad.Features
         {
             try
             {
-                if (weapon == 0)
-                    return;
+                if (weapon == 0) return;
                     
                 ulong weaponConfigOffset = weapon + ASQWeapon.WeaponConfig;
-                Memory.WriteValue<byte>(weaponConfigOffset + FSQWeaponData.bInfiniteAmmo, 0);
-                Memory.WriteValue<byte>(weaponConfigOffset + FSQWeaponData.bInfiniteMags, 0);
+                
+                // Read current flags byte
+                byte currentFlags = Memory.ReadValue<byte>(weaponConfigOffset);
+                
+                // Clear bit 0 (bInfiniteAmmo) and bit 1 (bInfiniteMags)
+                byte newFlags = (byte)(currentFlags & ~0x03); // Clear bits 0 and 1
+                
+                // Write the new flags byte
+                Memory.WriteValue<byte>(weaponConfigOffset, newFlags);
                 
                 _appliedWeapons.Remove(weapon);
-                Logger.Debug($"[{_featureName}] Restored weapon at 0x{weapon:X} to original ammo state");
+                Logger.Debug($"[{_featureName}] Restored weapon ammo");
             }
             catch (Exception ex)
             {
-                Logger.Error($"[{_featureName}] Error restoring weapon at 0x{weapon:X}: {ex.Message}");
+                Logger.Error($"[{_featureName}] Error restoring weapon: {ex.Message}");
             }
         }
         

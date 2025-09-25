@@ -28,13 +28,16 @@ namespace squad_dma.Source.Squad.Features
         /// </summary>
         protected override void LoadOriginalValues()
         {
-            ulong camMgr = _cachedCameraManager;
-            if (camMgr == 0) return;
-            
-            _originalPtr = Memory.ReadPtr(camMgr + PlayerCameraManager.CachedCameraShakeMod);
-            if (_originalPtr == 0) return;
-            
-            Logger.Debug($"[{_featureName}] Loaded original camera shake modifier: 0x{_originalPtr:X}");
+            SafeLoadOriginals(() =>
+            {
+                ulong camMgr = _cachedCameraManager;
+                if (camMgr == 0) return;
+                
+                _originalPtr = Memory.ReadPtr(camMgr + PlayerCameraManager.CachedCameraShakeMod);
+                if (_originalPtr == 0) return;
+                
+                Logger.Debug($"[{_featureName}] Loaded original camera shake modifier: 0x{_originalPtr:X}");
+            }, "camera shake modifier");
         }
         
         /// <summary>
@@ -42,11 +45,15 @@ namespace squad_dma.Source.Squad.Features
         /// </summary>
         protected override void ApplyModifications()
         {
-            ulong camMgr = _cachedCameraManager;
-            if (camMgr == 0) return;
-            
-            Memory.WriteValue(camMgr + PlayerCameraManager.CachedCameraShakeMod, 0UL);
-            Logger.Debug($"[{_featureName}] Applied no camera shake (disabled camera shake modifier)");
+            SafeApplyModifications(() =>
+            {
+                ulong camMgr = _cachedCameraManager;
+                if (camMgr == 0) return;
+                
+                Memory.WriteValue(camMgr + PlayerCameraManager.CachedCameraShakeMod, 0UL);
+                Logger.Debug($"[{_featureName}] Applied no camera shake (disabled camera shake modifier)");
+                
+            }, "camera shake modifier nulling");
         }
 
         /// <summary>
@@ -54,11 +61,15 @@ namespace squad_dma.Source.Squad.Features
         /// </summary>
         protected override void RestoreOriginalValues()
         {
-            ulong camMgr = _cachedCameraManager;
-            if (camMgr == 0) return;
-            
-            Memory.WriteValue(camMgr + PlayerCameraManager.CachedCameraShakeMod, _originalPtr);
-            Logger.Debug($"[{_featureName}] Restored original camera shake modifier: 0x{_originalPtr:X}");
+            SafeRestoreValues(() =>
+            {
+                ulong camMgr = _cachedCameraManager;
+                if (camMgr == 0) return;
+                
+                Memory.WriteValue(camMgr + PlayerCameraManager.CachedCameraShakeMod, _originalPtr);
+                Logger.Debug($"[{_featureName}] Restored original camera shake modifier: 0x{_originalPtr:X}");
+                
+            }, "camera shake modifier restoration");
         }
     }
 } 
