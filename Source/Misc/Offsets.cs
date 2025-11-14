@@ -2,9 +2,9 @@
 {
     public struct GameObjects
     {
-        public const uint GObjects = 0xC801BE0;
-        public const uint GNames = 0xC71DC80;
-        public const uint GWorld = 0xC98AFE8;
+        public const uint GObjects = 0xC8839E0;
+        public const uint GNames = 0xC79FA80;
+        public const uint GWorld = 0xCA0CDE8;
     }
 
     public struct World
@@ -133,6 +133,7 @@
     public struct ASQGameState
     {
         public const uint TeamStates = 0x3E0;
+        public const uint WinningTeam = 0x408; // ASQTeamState*
     }
 
     public struct APlayerState

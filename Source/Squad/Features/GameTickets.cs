@@ -39,7 +39,6 @@ namespace squad_dma.Source.Squad.Features
                 ulong gameState = Memory.ReadPtr(_gameWorld + World.GameState);
                 if (gameState == 0)
                 {
-                    Logger.Error($"[{NAME}] Failed to get game state for tickets");
                     return teamTickets;
                 }
 
@@ -53,12 +52,10 @@ namespace squad_dma.Source.Squad.Features
 
                 if (!scatterMap.Results[0][0].TryGetResult<ulong>(out var teamStatesArray) || teamStatesArray == 0)
                 {
-                    Logger.Error($"[{NAME}] Failed to get team states array for tickets");
                     return teamTickets;
                 }
                 if (!scatterMap.Results[0][1].TryGetResult<int>(out var teamCount) || teamCount < 2)
                 {
-                    Logger.Error($"[{NAME}] Invalid team count for tickets: {teamCount}");
                     return teamTickets;
                 }
 
@@ -78,7 +75,6 @@ namespace squad_dma.Source.Squad.Features
                 }
                 else
                 {
-                    Logger.Error($"[{NAME}] Failed to get team 1 state for tickets");
                 }
 
                 if (teamScatter.Results[1][1].TryGetResult<ulong>(out var team2) && team2 != 0)
@@ -89,7 +85,6 @@ namespace squad_dma.Source.Squad.Features
                 }
                 else
                 {
-                    Logger.Error($"[{NAME}] Failed to get team 2 state for tickets");
                 }
             }
             catch (Exception ex)

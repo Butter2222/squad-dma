@@ -306,7 +306,6 @@ namespace squad_dma
 
         private void LoadInitialData()
         {
-            LoadConfig();
             LoadMaps();
             _fpsWatch.Start();
         }
@@ -446,45 +445,6 @@ namespace squad_dma
 
         private void InitializeKeybinds()
         {
-            chkDisableSuppression.Checked = _config.DisableSuppression;
-            chkDisableSuppression.CheckedChanged += ChkDisableSuppression_CheckedChanged;
-
-            chkSetInteractionDistances.Checked = _config.SetInteractionDistances;
-            chkSetInteractionDistances.CheckedChanged += ChkSetInteractionDistances_CheckedChanged;
-
-            chkAllowShootingInMainBase.Checked = _config.AllowShootingInMainBase;
-            chkAllowShootingInMainBase.CheckedChanged += ChkAllowShootingInMainBase_CheckedChanged;
-
-            chkSpeedHack.Checked = _config.SetSpeedHack;
-            chkSpeedHack.CheckedChanged += ChkSetTimeDilation_CheckedChanged;
-
-            chkAirStuck.Checked = _config.AirStuckEnabled;
-            chkAirStuck.CheckedChanged += ChkAirStuck_CheckedChanged;
-
-            chkDisableCollision.Checked = _config.DisableCollision;
-            chkDisableCollision.Enabled = _config.AirStuckEnabled;
-            chkDisableCollision.CheckedChanged += ChkDisableCollision_CheckedChanged;
-
-            chkQuickZoom.Checked = _config.QuickZoom;
-            chkQuickZoom.CheckedChanged += ChkQuickZoom_CheckedChanged;
-
-            chkRapidFire.Checked = _config.RapidFire;
-            chkRapidFire.CheckedChanged += ChkRapidFire_CheckedChanged;
-
-            chkShowEnemyDistance.Checked = _config.ShowEnemyDistance;
-            chkShowEnemyDistance.CheckedChanged += ChkShowEnemyDistance_CheckedChanged;
-
-            chkEnableAimview.Checked = _config.EnableAimview;
-            chkEnableAimview.CheckedChanged += ChkEnableAimview_CheckedChanged;
-
-            chkInfiniteAmmo.Checked = _config.InfiniteAmmo;
-            chkInfiniteAmmo.CheckedChanged += ChkInfiniteAmmo_CheckedChanged;
-
-            chkQuickSwap.Checked = _config.QuickSwap;
-            chkQuickSwap.CheckedChanged += ChkQuickSwap_CheckedChanged;
-
-            chkForceFullAuto.Checked = _config.ForceFullAuto;
-            chkForceFullAuto.CheckedChanged += ChkForceFullAuto_CheckedChanged;
 
             // Keybind buttons
             btnKeybindSpeedHack.Text = _config.KeybindSpeedHack == Keys.None ? "None" : _config.KeybindSpeedHack.ToString();
@@ -1192,11 +1152,8 @@ namespace squad_dma
             #region General
             #region UI Config
             chkShowEnemyDistance.Checked = _config.ShowEnemyDistance;
-            chkShowEnemyDistance.CheckedChanged += ChkShowEnemyDistance_CheckedChanged;
             chkEnableAimview.Checked = _config.EnableAimview;
-            chkEnableAimview.CheckedChanged += ChkEnableAimview_CheckedChanged;
             chkHighAlert.Checked = _config.HighAlert;
-            chkHighAlert.CheckedChanged += chkHighAlert_CheckedChanged;
 
             trkAimLength.Value = _config.PlayerAimLineLength;
             trkUIScale.Value = _config.UIScale;
@@ -1224,25 +1181,21 @@ namespace squad_dma
 
             #region Features Config
             chkDisableSuppression.Checked = _config.DisableSuppression;
-            chkDisableSuppression.CheckedChanged += ChkDisableSuppression_CheckedChanged;
             chkSetInteractionDistances.Checked = _config.SetInteractionDistances;
-            chkSetInteractionDistances.CheckedChanged += ChkSetInteractionDistances_CheckedChanged;
             chkAllowShootingInMainBase.Checked = _config.AllowShootingInMainBase;
-            chkAllowShootingInMainBase.CheckedChanged += ChkAllowShootingInMainBase_CheckedChanged;
             chkSpeedHack.Checked = _config.SetSpeedHack;
-            chkSpeedHack.CheckedChanged += ChkSetTimeDilation_CheckedChanged;
             chkAirStuck.Checked = _config.AirStuckEnabled;
-            chkAirStuck.CheckedChanged += ChkAirStuck_CheckedChanged;
+            chkDisableCollision.Checked = _config.DisableCollision;
+            chkQuickZoom.Checked = _config.QuickZoom;
+            chkRapidFire.Checked = _config.RapidFire;
+            chkInfiniteAmmo.Checked = _config.InfiniteAmmo;
+            chkQuickSwap.Checked = _config.QuickSwap;
+            chkForceFullAuto.Checked = _config.ForceFullAuto;
             chkNoCameraShake.Checked = _config.NoCameraShake;
-            chkNoCameraShake.CheckedChanged += ChkNoCameraShake_CheckedChanged;
             chkNoRecoil.Checked = _config.NoRecoil;
-            chkNoRecoil.CheckedChanged += ChkNoRecoil_CheckedChanged;
             chkNoSpread.Checked = _config.NoSpread;
-            chkNoSpread.CheckedChanged += ChkNoSpread_CheckedChanged;
             chkNoSway.Checked = _config.NoSway;
-            chkNoSway.CheckedChanged += ChkNoSway_CheckedChanged;
             chkInstantGrenade.Checked = _config.InstantGrenade;
-            chkInstantGrenade.CheckedChanged += ChkInstantGrenade_CheckedChanged;
             #endregion
 
             #endregion

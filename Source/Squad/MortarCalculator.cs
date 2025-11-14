@@ -362,6 +362,9 @@ namespace squad_dma.Source.Squad
             if (lowerName.Contains("ub32"))
                 return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "Tech.UB-32");
 
+            if (lowerName.Contains("M1064A3 M121mortar"))
+                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "M1064M121");
+
             // Try to find weapon by exact name match first
             var exactMatch = WeaponDatabase.Weapons.FirstOrDefault(w => 
                 w.Name.Equals(weaponName, StringComparison.OrdinalIgnoreCase));
@@ -612,7 +615,7 @@ namespace squad_dma.Source.Squad
 
         #region Weapon Ranging Data Arrays
         
-        // Tech.Mortar ranging data: distance -> degrees (EXACT GAME DATA)
+        // Tech.Mortar ranging data: distance -> degrees
         private static readonly double[] TechMortarDistances = { 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1250 };
         private static readonly double[] TechMortarDegrees = { 83.8, 82.9, 80.5, 78.0, 75.7, 73.2, 70.5, 68.0, 65.0, 62.0, 58.4, 53.8, 48.2, 40.0 };
 
@@ -624,13 +627,13 @@ namespace squad_dma.Source.Squad
         private static readonly double[] UB32Distances = { 50, 250, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900, 2000 };
         private static readonly double[] UB32Degrees = { 0, 0, 2.5, 5, 5, 7.5, 8.8, 10, 12, 13.5, 15.5, 16.3, 18, 20, 22.5, 25, 27.5, 29.8, 32 };
 
-        // HellCannon ranging data: distance -> degrees (EXACT GAME DATA)
+        // HellCannon ranging data: distance -> degrees
         // Note: HellCannon has non-monotonic ranging - same distance can have different angles
         // Using the high-angle trajectory (more common for mortars)
         private static readonly double[] HellCannonDistances = { 150, 200, 300, 400, 500, 600, 700, 800, 850, 875, 900, 925 };
         private static readonly double[] HellCannonDegrees = { 85, 83.5, 80.5, 77, 73.5, 70, 65, 60, 55, 50, 45, 40 };
 
-        // BM-21Grad ranging data: distance -> degrees (EXACT GAME DATA)
+        // BM-21Grad ranging data: distance -> degrees
         private static readonly double[] BM21GradDistances = { 1000, 1050, 1100, 1150, 1200, 1250, 1300, 1350, 1400, 1450, 1500, 1550, 1600, 1650, 1700, 1750, 1800, 1850, 1900, 1950, 2000, 2050 };
         private static readonly double[] BM21GradDegrees = { 14.7, 15.5, 16.3, 17.2, 18, 18.9, 19.8, 20.7, 21.7, 22.7, 23.7, 24.7, 25.9, 27, 28.2, 29.6, 31, 32.6, 34.4, 36.5, 39.4, 45 };
         

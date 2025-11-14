@@ -36,7 +36,7 @@ namespace squad_dma.Source.Squad.Debug
                         Program.Log($"{nameEntry.Key} {nameEntry.Value}");
                     }
                 }
-                _vehiclesLogged = !force; // Reset only if not forced
+                _vehiclesLogged = true; // Always set to true after logging
             }
             else
             {
