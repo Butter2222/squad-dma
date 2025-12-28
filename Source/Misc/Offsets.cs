@@ -2,9 +2,9 @@
 {
     public struct GameObjects
     {
-        public const uint GObjects = 0xC8839E0;
-        public const uint GNames = 0xC79FA80;
-        public const uint GWorld = 0xCA0CDE8;
+        public const uint GObjects = 0xc8bb960;
+        public const uint GNames = 0xC7D7A00;
+        public const uint GWorld = 0xCA44D68;
     }
 
     public struct World
@@ -20,10 +20,11 @@
     public struct GameInstance
     {
         public const uint LocalPlayers = 0x38;
-        public const uint CurrentLayer = 0x628;
+        public const uint CurrentLayer = 0x640;
     }
 
-    public struct SQLayer {
+    public struct SQLayer
+    {
         public const uint LevelID = 0x68;
     }
 
@@ -146,7 +147,7 @@
         public const uint TeamID = 0x4E8; // per player
         public const uint SquadState = 0x7C8; // ASQSquadState*
         public const uint PlayerStateData = 0x710;
-        public const uint Soldier = 0x7D0; // ASQSoldier*
+        public const uint Soldier = 0x7E8; // ASQSoldier*
         public const uint CurrentSeat = 0x7A8; // USQVehicleSeatComponent*
     }
 
@@ -289,7 +290,7 @@
         public const uint MaxHealth = 0x9A4; // float
 
     }
-    
+
     public struct FSQUsableData
     {
         public const uint DisplayName = 0x0; // FText
