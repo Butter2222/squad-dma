@@ -144,11 +144,11 @@
 
     public struct ASQPlayerState
     {
-        public const uint TeamID = 0x4E8; // per player
-        public const uint SquadState = 0x7C8; // ASQSquadState*
-        public const uint PlayerStateData = 0x710;
+        public const uint TeamID = 0x500; // per player
+        public const uint SquadState = 0x7E0; // ASQSquadState*
+        public const uint PlayerStateData = 0x728;
         public const uint Soldier = 0x7E8; // ASQSoldier*
-        public const uint CurrentSeat = 0x7A8; // USQVehicleSeatComponent*
+        public const uint CurrentSeat = 0x7C0; // USQVehicleSeatComponent*
     }
 
     public struct ASQTeamState
