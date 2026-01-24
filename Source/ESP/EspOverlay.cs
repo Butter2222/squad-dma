@@ -27,11 +27,12 @@ namespace squad_dma
     public class EspOverlay : Form
     {
         private WindowRenderTarget renderTarget;
-        private SolidColorBrush brush;
-        private SolidColorBrush vehicleBrush;
-        private SolidColorBrush boneBrush;
-        private SolidColorBrush healthBrush;
+        private SolidColorBrush enemyPlayerBrush;
         private SolidColorBrush friendlyBrush;
+        private SolidColorBrush squadBrush;
+        private SolidColorBrush enemyVehicleBrush;
+        private SolidColorBrush friendlyVehicleBrush;
+        private SolidColorBrush healthBrush;
         private SharpDX.DirectWrite.TextFormat textFormat;
         private bool running = true;
         private Game Game => Memory._game;
@@ -75,13 +76,13 @@ namespace squad_dma
             { ActorType.Mine, "Mine" },
             { ActorType.Motorcycle, "Motorcycle" },
             { ActorType.RallyPoint, "Rally Point" },
-            { ActorType.Tank, "Heavy Tank" },
-            { ActorType.TankMGS, "Medium Tank" },
+            { ActorType.Tank, "Tank" },
+            { ActorType.TankMGS, "Tank MGS" },
             { ActorType.TrackedAPC, "Tracked APC" },
-            { ActorType.TrackedLogistics, "Half Track" },
             { ActorType.TrackedAPCArtillery, "Tracked APC Artillery" },
-            { ActorType.TrackedIFV, "Light Tank" },
+            { ActorType.TrackedIFV, "Tracked IFV" },
             { ActorType.TrackedJeep, "Tracked Jeep" },
+            { ActorType.TrackedLogistics, "Tracked Logistics" },
             { ActorType.TransportHelicopter, "Transport Helicopter" },
             { ActorType.TruckAntiAir, "Truck Anti-Air" },
             { ActorType.TruckArtillery, "Truck Artillery" },
@@ -169,59 +170,82 @@ namespace squad_dma
                 PixelSize = new Size2(Width, Height),
                 PresentOptions = PresentOptions.Immediately
             };
-            renderTarget = new WindowRenderTarget(factory, new RenderTargetProperties(), renderProperties);
-            brush = new SolidColorBrush(renderTarget, new RawColor4(
-                Program.Config.EspTextColor.R / 255f,
-                Program.Config.EspTextColor.G / 255f,
-                Program.Config.EspTextColor.B / 255f,
-                Program.Config.EspTextColor.A / 255f
-            ));
-            vehicleBrush = new SolidColorBrush(renderTarget, new RawColor4(1.0f, 0.0f, 0.0f, 1.0f));
-            boneBrush = brush;
-            healthBrush = new SolidColorBrush(renderTarget, new RawColor4(0.0f, 1.0f, 0.0f, 1.0f));
-            // Friendly/ally brush using SKPaints.Friendly color (light blue)
+            
+            // Create render target with optimized settings for high FPS
+            var rtProps = new RenderTargetProperties
+            {
+                Type = RenderTargetType.Default,
+                PixelFormat = new PixelFormat(SharpDX.DXGI.Format.B8G8R8A8_UNorm, AlphaMode.Premultiplied)
+            };
+            renderTarget = new WindowRenderTarget(factory, rtProps, renderProperties);
+            
+            // Initialize brushes - NO ANTIALIASING for performance
+            // Enemy players = White (SKPaints.EnemyPlayer)
+            enemyPlayerBrush = new SolidColorBrush(renderTarget, new RawColor4(1.0f, 1.0f, 1.0f, 1.0f));
+            
+            // Friendly players = Light Blue (SKPaints.Friendly - RGB: 0, 187, 254)
             friendlyBrush = new SolidColorBrush(renderTarget, new RawColor4(0f / 255f, 187f / 255f, 254f / 255f, 1.0f));
+            
+            // Squad members = Green (SKPaints.Squad)
+            squadBrush = new SolidColorBrush(renderTarget, new RawColor4(0f, 128f / 255f, 0f, 1.0f));
+            
+            // Enemy vehicles = Yellow (SKPaints.EnemyVehicle)
+            enemyVehicleBrush = new SolidColorBrush(renderTarget, new RawColor4(1.0f, 1.0f, 0.0f, 1.0f));
+            
+            // Friendly vehicles = Light Blue (SKPaints.FriendlyVehicle)
+            friendlyVehicleBrush = new SolidColorBrush(renderTarget, new RawColor4(0f / 255f, 187f / 255f, 254f / 255f, 1.0f));
+            
+            // Health bar brush (dynamic color based on health percentage)
+            healthBrush = new SolidColorBrush(renderTarget, new RawColor4(0.0f, 1.0f, 0.0f, 1.0f));
+            
+            // Optimized text format - no antialiasing
             textFormat = new SharpDX.DirectWrite.TextFormat(new SharpDX.DirectWrite.Factory(), "Verdana", Program.Config.ESPFontSize)
             {
                 TextAlignment = SharpDX.DirectWrite.TextAlignment.Center,
                 ParagraphAlignment = SharpDX.DirectWrite.ParagraphAlignment.Center,
-                WordWrapping = SharpDX.DirectWrite.WordWrapping.NoWrap // Prevent text wrapping
+                WordWrapping = SharpDX.DirectWrite.WordWrapping.NoWrap
             };
+            
+            // Set render target to Aliased mode for performance (no antialiasing)
+            renderTarget.AntialiasMode = AntialiasMode.Aliased;
+            renderTarget.TextAntialiasMode = SharpDX.Direct2D1.TextAntialiasMode.Aliased;
         }
 
         private void StartRenderLoop()
         {
             Thread renderThread = new Thread(() =>
             {
-                Program.Log("Render thread started.");
+                Program.Log("Render thread started - Target: 144 FPS");
                 bool wasReadyLastFrame = false;
                 var stopwatch = Stopwatch.StartNew();
                 while (running)
                 {
                     stopwatch.Restart();
-                    var memoryStart = Stopwatch.StartNew();
                     bool isMemoryReady = Memory.Ready;
                     if (!isMemoryReady)
                     {
                         renderTarget.BeginDraw();
-                        renderTarget.Clear(new RawColor4(0, 0, 0, 1));
+                        renderTarget.Clear(new RawColor4(0, 0, 0, 0)); // Transparent black background only
                         renderTarget.EndDraw();
-                        this.Invalidate();
                         Thread.Sleep(wasReadyLastFrame ? 500 : 1500);
                         wasReadyLastFrame = false;
                         continue;
                     }
 
                     RenderFrame();
+                    
+                    // Target 144 FPS = ~6.9ms per frame
                     int elapsedMs = (int)stopwatch.ElapsedMilliseconds;
-                    int targetMs = 8;
-                    int sleepMs = Math.Max(1, targetMs - elapsedMs);
-                    Thread.Sleep(sleepMs);
+                    int targetMs = 7; // 144 FPS target
+                    int sleepMs = targetMs - elapsedMs;
+                    if (sleepMs > 0)
+                        Thread.Sleep(sleepMs);
+                    
                     wasReadyLastFrame = true;
                 }
                 Program.Log("Render thread stopped.");
             });
-            renderThread.Priority = ThreadPriority.AboveNormal;
+            renderThread.Priority = ThreadPriority.Highest; // Highest priority for 144 FPS
             renderThread.Start();
         }
 
@@ -254,41 +278,42 @@ namespace squad_dma
             renderTarget.EndDraw();
         }
 
-        private RawRectangleF CalculatePlayerBox(UActor actor, Vector2 screenPos, MinimalViewInfo viewInfo)
+        private RawRectangleF CalculatePlayerBox(UActor actor, Vector2 screenPos, float distance, MinimalViewInfo viewInfo)
         {
-            const float playerHeight = 175f;
-            const float halfHeight = playerHeight / 2f;
-            const float aspectRatio = 0.4f;
+            // Use EXACT same method as AimviewWidget - simple distance-based box
+            float boxSize = Math.Max(20f, Math.Min(100f, 2000f / distance)); // Adaptive size based on distance
+            float boxWidth = boxSize * 0.6f; // Narrower width for player aspect ratio
+            float boxHeight = boxSize;
 
-            Vector3D middlePos = actor.Position;
-            Vector3D feetPos = new Vector3D(middlePos.X, middlePos.Y, middlePos.Z - halfHeight);
-            Vector3D headPos = new Vector3D(middlePos.X, middlePos.Y, middlePos.Z + halfHeight);
-
-            Vector2 feetScreen = Camera.WorldToScreen(viewInfo, feetPos);
-            Vector2 headScreen = Camera.WorldToScreen(viewInfo, headPos);
-
-            if (feetScreen == Vector2.Zero || headScreen == Vector2.Zero)
-                return new RawRectangleF(0, 0, 0, 0);
-
-            float topY = Math.Min(headScreen.Y, feetScreen.Y);
-            float bottomY = Math.Max(headScreen.Y, feetScreen.Y);
-            float height = bottomY - topY;
-            if (height <= 0)
-                return new RawRectangleF(0, 0, 0, 0);
-
-            float width = height * aspectRatio;
-            float leftX = screenPos.X - width / 2f;
-            float rightX = screenPos.X + width / 2f;
-
-            const float padding = 6f;
-            return new RawRectangleF(leftX - padding, topY - padding, rightX + padding, bottomY + padding);
+            return new RawRectangleF(
+                screenPos.X - boxWidth / 2f,
+                screenPos.Y - boxHeight / 2f,
+                screenPos.X + boxWidth / 2f,
+                screenPos.Y + boxHeight / 2f
+            );
         }
 
+        // Cache text metrics to avoid expensive TextLayout creation - MAJOR PERFORMANCE BOOST
+        private Dictionary<string, (float width, float height)> _textMetricsCache = new Dictionary<string, (float width, float height)>();
+        private int _frameCacheCounter = 0;
+        
         private (float width, float height) GetTextMetrics(string text)
         {
+            // Clear cache every 60 frames to prevent memory buildup
+            if (_frameCacheCounter++ > 60)
+            {
+                _textMetricsCache.Clear();
+                _frameCacheCounter = 0;
+            }
+            
+            if (_textMetricsCache.TryGetValue(text, out var cached))
+                return cached;
+            
             using (var textLayout = new TextLayout(new SharpDX.DirectWrite.Factory(), text, textFormat, 1000f, 100f))
             {
-                return (textLayout.Metrics.Width, textLayout.Metrics.Height);
+                var metrics = (textLayout.Metrics.Width, textLayout.Metrics.Height);
+                _textMetricsCache[text] = metrics;
+                return metrics;
             }
         }
 
@@ -313,7 +338,6 @@ namespace squad_dma
             float vehicleMaxDistance = Program.Config.EspVehicleMaxDistance;
             bool showAllies = Program.Config.EspShowAllies;
             bool showVehicles = Program.Config.EspShowVehicles;
-            var playerColor = brush.Color;
 
             var visibleActors = new List<(UActor actor, Vector2 screenPos, float distance)>();
 
@@ -360,7 +384,7 @@ namespace squad_dma
             {
                 if (actor.ActorType == ActorType.Player)
                 {
-                    RawRectangleF boxRect = CalculatePlayerBox(actor, screenPos, viewInfo);
+                    RawRectangleF boxRect = CalculatePlayerBox(actor, screenPos, distance, viewInfo);
                     if ((boxRect.Left == 0 && boxRect.Top == 0 && boxRect.Right == 0 && boxRect.Bottom == 0) &&
                         Program.Config.EspBones && actor.BoneScreenPositions != null)
                     {
@@ -372,7 +396,9 @@ namespace squad_dma
 
                     if (Program.Config.EspShowBox)
                     {
-                        var boxBrush = actor.IsFriendly() ? friendlyBrush : boneBrush;
+                        // Use squad, friendly, or enemy brush based on actor status
+                        var boxBrush = actor.IsInMySquad() ? squadBrush : 
+                                       actor.IsFriendly() ? friendlyBrush : enemyPlayerBrush;
                         renderTarget.DrawRectangle(boxRect, boxBrush);
                     }
 
@@ -388,7 +414,8 @@ namespace squad_dma
                             boxCenterX - rectWidth / 2f, boxRect.Top - textHeight - 5f,
                             boxCenterX + rectWidth / 2f, boxRect.Top - 5f
                         );
-                        var textBrush = actor.IsFriendly() ? friendlyBrush : brush;
+                        var textBrush = actor.IsInMySquad() ? squadBrush : 
+                                       actor.IsFriendly() ? friendlyBrush : enemyPlayerBrush;
                         renderTarget.DrawText(nameText, textFormat, nameRect, textBrush);
                     }
 
@@ -401,7 +428,8 @@ namespace squad_dma
                             boxCenterX - rectWidth / 2f, boxRect.Bottom + 5f,
                             boxCenterX + rectWidth / 2f, boxRect.Bottom + textHeight + 5f
                         );
-                        var distBrush = actor.IsFriendly() ? friendlyBrush : brush;
+                        var distBrush = actor.IsInMySquad() ? squadBrush : 
+                                       actor.IsFriendly() ? friendlyBrush : enemyPlayerBrush;
                         renderTarget.DrawText(distanceText, textFormat, distanceRect, distBrush);
                     }
 
@@ -458,10 +486,8 @@ namespace squad_dma
             if (!Program.Config.EspShowAllies && !isEnemy)
                 return;
 
-            // Better color differentiation for vehicles
-            vehicleBrush.Color = isUnclaimed ? new RawColor4(1.0f, 1.0f, 0.0f, 1.0f) :  // Yellow for unclaimed
-                                isEnemy ? new RawColor4(1.0f, 1.0f, 0.0f, 1.0f) :        // Yellow for enemy
-                                new RawColor4(0.4f, 0.7f, 1.0f, 1.0f);                   // Light blue for friendly
+            // Select brush based on vehicle ownership - matching AimviewWidget color scheme
+            var vehicleBrush = (isUnclaimed || isEnemy) ? enemyVehicleBrush : friendlyVehicleBrush;
 
             // Vehicle-type-based sizing with reduced base size
             float baseSize = 480f; // Reduced by 60% (1200 * 0.4)
@@ -519,7 +545,9 @@ namespace squad_dma
                     screenPositions[startIndex] == Vector2.Zero || screenPositions[endIndex] == Vector2.Zero)
                     continue;
 
-                var lineBrush = actor.IsFriendly() ? friendlyBrush : boneBrush;
+                // Use squad, friendly, or enemy brush based on actor status
+                var lineBrush = actor.IsInMySquad() ? squadBrush : 
+                               actor.IsFriendly() ? friendlyBrush : enemyPlayerBrush;
                 renderTarget.DrawLine(
                     screenPositions[startIndex].ToRawVector2(),
                     screenPositions[endIndex].ToRawVector2(),
@@ -561,7 +589,7 @@ namespace squad_dma
 
             healthBrush.Color = new RawColor4(1.0f - (health / 100f), health / 100f, 0.0f, 1.0f);
             renderTarget.FillRectangle(new RawRectangleF(barX, barY, barX + barWidth, barY + healthHeight), healthBrush);
-            renderTarget.DrawRectangle(new RawRectangleF(barX, boxRect.Top, barX + barWidth, boxRect.Bottom), boneBrush);
+            renderTarget.DrawRectangle(new RawRectangleF(barX, boxRect.Top, barX + barWidth, boxRect.Bottom), enemyPlayerBrush);
         }
 
         private string GetNameText(UActor actor)
@@ -574,11 +602,12 @@ namespace squad_dma
         protected override void OnClosed(EventArgs e)
         {
             running = false;
-            brush.Dispose();
-            vehicleBrush.Dispose();
-            boneBrush.Dispose();
-            healthBrush.Dispose();
+            enemyPlayerBrush.Dispose();
             friendlyBrush.Dispose();
+            squadBrush.Dispose();
+            enemyVehicleBrush.Dispose();
+            friendlyVehicleBrush.Dispose();
+            healthBrush.Dispose();
             textFormat.Dispose();
             renderTarget.Dispose();
             base.OnClosed(e);

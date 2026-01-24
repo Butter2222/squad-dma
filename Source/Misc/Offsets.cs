@@ -2,9 +2,9 @@
 {
     public struct GameObjects
     {
-        public const uint GObjects = 0xc8bb960;
-        public const uint GNames = 0xC7D7A00;
-        public const uint GWorld = 0xCA44D68;
+        public const uint GObjects = 0xC8B3960;
+        public const uint GNames = 0xC7CFE00;
+        public const uint GWorld = 0xCA3CD68;
     }
 
     public struct World
@@ -20,7 +20,7 @@
     public struct GameInstance
     {
         public const uint LocalPlayers = 0x38;
-        public const uint CurrentLayer = 0x640;
+        public const uint CurrentLayer = 0x648;
     }
 
     public struct SQLayer

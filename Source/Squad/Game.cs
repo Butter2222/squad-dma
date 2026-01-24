@@ -119,6 +119,16 @@ namespace squad_dma
 
                         Thread.Sleep(1000);
                         Logger.Info("Game has started!!");
+                        
+                        if (!string.IsNullOrEmpty(_currentLevel))
+                        {
+                            Logger.Info($"Map is \"{_currentLevel}\"");
+                        }
+                        else
+                        {
+                            Logger.Error("Map not found");
+                        }
+                        
                         this._inGame = true;
                         Memory.GameStatus = GameStatus.InGame;
                         
@@ -219,7 +229,6 @@ namespace squad_dma
                 var currentLevelIdPtr = currentLayer + Offsets.SQLayer.LevelID;
                 var currentLevelId = Memory.ReadValue<uint>(currentLevelIdPtr);
                 _currentLevel = Memory.GetNamesById([currentLevelId])[currentLevelId];
-                Logger.Info($"Current level is {_currentLevel}");
             });
 
         private bool InitActors() => 

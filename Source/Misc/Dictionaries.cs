@@ -80,6 +80,9 @@ namespace squad_dma {
             {"BP_CTM131_Logistic_C", ActorType.TruckLogistics},
             {"BP_CTM131_Logistic_Naval_C", ActorType.TruckLogistics},
 
+            {"BP_Kraz_6322_C", ActorType.TruckTransport},
+            {"BP_Kraz_6322_Logi_C", ActorType.TruckLogistics},
+
             // Jeeps
             {"BP_Technical4Seater_Transport_C", ActorType.JeepTransport}, // Candy van labeled wrong
             {"BP_Technical4Seater_Logi_C", ActorType.JeepLogistics},
@@ -112,6 +115,7 @@ namespace squad_dma {
             {"BP_Technical2Seater_Camo_M2_CRF_C", ActorType.JeepTurret},
             {"BP_Technical4Seater_Logi_Camo_CRF_C", ActorType.JeepLogistics},
             {"BP_Technical4Seater_Transport_CRF_C", ActorType.JeepTransport},
+            {"BP_Kozak_2M1_Kord_C", ActorType.JeepTurret},
 
             {"BP_Safir_C", ActorType.JeepLogistics},
             {"BP_Safir_MG3_C", ActorType.JeepTurret},
@@ -485,12 +489,15 @@ namespace squad_dma {
             {"BP_M60T_Desert_C", ActorType.Tank},
             {"BP_M60T_WPMC_C", ActorType.Tank},
 
+            {"BP_T64BM2_Cage_C", ActorType.Tank},
+
             {"BP_MI8_C", ActorType.TransportHelicopter},
             {"BP_MI8_CAS_C", ActorType.AttackHelicopter},
             {"BP_MI17_MEA_C", ActorType.TransportHelicopter},
             {"BP_MI17_MEA_CAS_C", ActorType.AttackHelicopter},
             {"BP_CH178_C", ActorType.TransportHelicopter},
             {"BP_MI8_VDV_C", ActorType.TransportHelicopter},
+            {"BP_MI8_AFU_C", ActorType.TransportHelicopter},
             
             {"BP_UH60_C", ActorType.TransportHelicopter},
             {"BP_UH60_TLF_PKM_C", ActorType.TransportHelicopter},
@@ -524,6 +531,7 @@ namespace squad_dma {
 
             {"BP_BM21Grad_MIL_C", ActorType.TruckArtillery},
             {"BP_BM21Grad_INS_C", ActorType.TruckArtillery},
+            {"BP_Kraz_6322_BM21Grad_C", ActorType.TruckArtillery},
 
             {"BP_RHIB_Christmas_C", ActorType.Boat},
             {"BP_RHIB_DSHK_C", ActorType.Boat},
@@ -873,6 +881,8 @@ namespace squad_dma {
             {"SD_BP_FV432_RWS_Child_C", ActorType.TrackedAPC},
             {"SD_BP_ZBD04A_Desert_C", ActorType.TrackedIFV},
             {"SD_BP_ZSL10_QJZ-89_Desert_C", ActorType.APC},
+            {"BP_FV510_Turret_Woodland_C", ActorType.TrackedAPC},
+            {"BP_BTR4_AFU_C", ActorType.IFV},
 
             {"BP_M163_C", ActorType.AntiAir},
             {"BP_2k22m1_C", ActorType.AntiAir},
