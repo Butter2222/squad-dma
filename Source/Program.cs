@@ -41,6 +41,7 @@ namespace squad_dma {
                     {
                         Thread.Sleep(100);
                     }
+                    
                     Game game = Memory._game;
                     Application.Run(new MainForm());
                 }

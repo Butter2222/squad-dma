@@ -78,19 +78,28 @@ namespace squad_dma
         {
             try
             {
-                Logger.Info($"Startup sequence initializing");
+                Logger.Info("===========================================");
+                Logger.Info("Squad DMA - Initializing...");
+                Logger.Info("===========================================");
+
+                // Validate maps before anything else
+                if (!ValidateMaps())
+                {
+                    Logger.Error("Maps validation failed - application cannot continue");
+                    Environment.Exit(-1);
+                }
 
                 if (!File.Exists("mmap.txt"))
                 {
-                    Logger.Error($"Memory map not found - generating new map");
+                    Logger.Error("Memory map not found - generating new map");
                     GenerateMMap();
-                    Logger.Info($"Memory map generation completed");
+                    Logger.Info("Memory map generation completed");
                 }
                 else
                 {
-                    Logger.Info($"Existing memory map found - loading");
+                    Logger.Info("Existing memory map found - loading");
                     vmmInstance = new Vmm("-device", "fpga", "-memmap", "mmap.txt");
-                    Logger.Info($"Memory map loaded successfully");
+                    Logger.Info("Memory map loaded successfully");
                 }
 
                 InitiateMemoryWorker();
@@ -99,7 +108,7 @@ namespace squad_dma
             {
                 try
                 {
-                    Logger.Info("attempting to regenerate mmap...");
+                    Logger.Info("Attempting to regenerate mmap...");
 
                     if (File.Exists("mmap.txt"))
                         File.Delete("mmap.txt");
@@ -113,6 +122,85 @@ namespace squad_dma
                     Environment.Exit(-1);
                 }
             }
+        }
+
+        private static bool ValidateMaps()
+        {
+            Logger.Info("Checking for maps folder...");
+            
+            if (!MapsDownloader.ValidateMapsFolder())
+            {
+                var missingFiles = MapsDownloader.GetMissingMapFiles();
+                Logger.Error($"Maps validation failed! Missing {missingFiles.Count} file(s)");
+                
+                int showCount = Math.Min(5, missingFiles.Count);
+                for (int i = 0; i < showCount; i++)
+                {
+                    Logger.Error($"  - {missingFiles[i]}");
+                }
+                if (missingFiles.Count > 5)
+                {
+                    Logger.Error($"  ... and {missingFiles.Count - 5} more files");
+                }
+                
+                Logger.Info("===========================================");
+                Logger.Info("Starting automatic maps download...");
+                Logger.Info("===========================================");
+                
+                // Download maps with console progress
+                var progress = new Progress<DownloadProgress>(p =>
+                {
+                    var percentComplete = p.TotalBytes > 0 ? (p.BytesDownloaded * 100.0 / p.TotalBytes) : 0;
+                    var mbDownloaded = p.BytesDownloaded / 1024.0 / 1024.0;
+                    var mbTotal = p.TotalBytes / 1024.0 / 1024.0;
+                    var speedMBps = p.SpeedBytesPerSec / 1024.0 / 1024.0;
+                    
+                    // Calculate ETA
+                    string eta = "calculating...";
+                    if (p.SpeedBytesPerSec > 0 && p.TotalBytes > 0)
+                    {
+                        var remainingBytes = p.TotalBytes - p.BytesDownloaded;
+                        var etaSeconds = remainingBytes / p.SpeedBytesPerSec;
+                        
+                        if (etaSeconds < 60)
+                            eta = $"{etaSeconds:F0}s";
+                        else if (etaSeconds < 3600)
+                            eta = $"{etaSeconds / 60:F0}m {etaSeconds % 60:F0}s";
+                        else
+                            eta = $"{etaSeconds / 3600:F0}h {(etaSeconds % 3600) / 60:F0}m";
+                    }
+                    
+                    Logger.Info($"Download Progress: {percentComplete:F1}% ({mbDownloaded:F2} MB / {mbTotal:F2} MB) | Speed: {speedMBps:F2} MB/s | ETA: {eta}");
+                });
+                
+                try
+                {
+                    // Synchronously wait for download to complete
+                    var downloadTask = MapsDownloader.DownloadMapsAsync(progress);
+                    downloadTask.Wait();
+                    
+                    if (!downloadTask.Result)
+                    {
+                        Logger.Error("Maps download failed!");
+                        return false;
+                    }
+                    
+                    Logger.Info("===========================================");
+                    Logger.Info("Maps installed successfully!");
+                    Logger.Info("===========================================");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error($"Maps download error: {ex.Message}");
+                    return false;
+                }
+            }
+            else
+            {
+                Logger.Info("Maps folder validated successfully");
+            }
+            
+            return true;
         }
 
         private static void InitiateMemoryWorker()

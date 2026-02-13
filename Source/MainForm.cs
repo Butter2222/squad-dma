@@ -1131,20 +1131,35 @@ namespace squad_dma
         {
             var dir = new DirectoryInfo($"{Environment.CurrentDirectory}\\Maps");
             if (!dir.Exists)
-                dir.Create();
+            {
+                Program.Log("Maps directory not found. This should have been caught at startup.");
+                return;
+            }
 
             var configs = dir.GetFiles("*.json");
             if (configs.Length == 0)
-                throw new IOException("No .json map configs found!");
+            {
+                Program.Log("No .json map configs found in Maps directory.");
+                return;
+            }
 
             foreach (var config in configs)
             {
-                var name = Path.GetFileNameWithoutExtension(config.Name);
-                var mapConfig = MapConfig.LoadFromFile(config.FullName);
-                var map = new Map(name.ToUpper(), mapConfig, config.FullName);
-                map.ConfigFile.MapLayers = map.ConfigFile.MapLayers.OrderBy(x => x.MinHeight).ToList();
-                _maps.Add(map);
+                try
+                {
+                    var name = Path.GetFileNameWithoutExtension(config.Name);
+                    var mapConfig = MapConfig.LoadFromFile(config.FullName);
+                    var map = new Map(name.ToUpper(), mapConfig, config.FullName);
+                    map.ConfigFile.MapLayers = map.ConfigFile.MapLayers.OrderBy(x => x.MinHeight).ToList();
+                    _maps.Add(map);
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"Error loading map config {config.Name}: {ex.Message}");
+                }
             }
+
+            Program.Log($"Loaded {_maps.Count} map configurations.");
         }
         private void LoadConfig()
         {
