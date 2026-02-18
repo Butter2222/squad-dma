@@ -2642,18 +2642,6 @@ namespace squad_dma
         #region Settings
         #region General
         #region Event Handlers
-        private void chkShowMapSetup_CheckedChanged(object sender, EventArgs e)
-        {
-            if (chkShowMapSetup.Checked)
-            {
-                grpMapSetup.Visible = true;
-                txtMapSetupX.Text = _selectedMap?.ConfigFile.X.ToString() ?? "0";
-                txtMapSetupY.Text = _selectedMap?.ConfigFile.Y.ToString() ?? "0";
-                txtMapSetupScale.Text = _selectedMap?.ConfigFile.Scale.ToString() ?? "0";
-            }
-            else
-                grpMapSetup.Visible = false;
-        }
 
         private void btnRestartRadar_Click(object sender, EventArgs e)
         {
@@ -2691,7 +2679,9 @@ namespace squad_dma
         {
             if (!InGame) return;
 
-            Memory._game.ListVehicles();
+            // Toggle vehicle detection
+            bool isEnabled = btnListVehicles.Checked;
+            Memory._game?.DebugVehicles?.ToggleVehicleDetection(isEnabled);
         }
 
         private void ChkShowEnemyDistance_CheckedChanged(object sender, EventArgs e)

@@ -9,6 +9,12 @@ namespace squad_dma.Source.Squad.Debug
         private readonly bool _inGame;
         private readonly RegisteredActors _actors;
         private bool _vehiclesLogged;
+        private string _lastLoggedVehicleName = string.Empty;
+        private DateTime _lastVehicleCheck = DateTime.MinValue;
+        private const int VehicleCheckInterval = 1000;
+        private CancellationTokenSource _cancellationTokenSource;
+        private bool _isDetectionEnabled = false;
+        private bool _lastInVehicleState = false;
 
 
         public DebugVehicles(ulong playerController, bool inGame, RegisteredActors actors)
@@ -17,6 +23,7 @@ namespace squad_dma.Source.Squad.Debug
             _inGame = inGame;
             _actors = actors;
             _vehiclesLogged = false;
+            _cancellationTokenSource = new CancellationTokenSource();
         }
 
         public void LogVehicles(bool force = false)
@@ -194,5 +201,131 @@ namespace squad_dma.Source.Squad.Debug
                 Program.Log($"Error in ListVehicles: {ex.Message}");
             }
         }
+
+        public void DetectVehicleName()
+        {
+            try
+            {
+                if (!_inGame || _playerController == 0)
+                    return;
+
+                ulong playerState = Memory.ReadPtr(_playerController + Offsets.Controller.PlayerState);
+                if (playerState == 0)
+                    return;
+
+                ulong currentSeat = Memory.ReadPtr(playerState + Offsets.ASQPlayerState.CurrentSeat);
+                
+                bool isInVehicle = currentSeat != 0;
+                
+                // State change detection: not in vehicle -> in vehicle or vice versa
+                if (isInVehicle != _lastInVehicleState)
+                {
+                    _lastInVehicleState = isInVehicle;
+                    
+                    if (!isInVehicle)
+                    {
+                        // Player exited vehicle
+                        Program.Log("Vehicle not found. Please enter a vehicle...");
+                        _lastLoggedVehicleName = string.Empty;
+                    }
+                    else
+                    {
+                        // Player entered vehicle - get vehicle name
+                        ulong seatPawn = Memory.ReadPtr(currentSeat + Offsets.USQVehicleSeatComponent.SeatPawn);
+                        string vehicleName = GetVehicleName(seatPawn);
+                        
+                        if (!string.IsNullOrEmpty(vehicleName) && vehicleName != "Unknown")
+                        {
+                            Program.Log($"Vehicle found. Vehicle name: {vehicleName}");
+                            _lastLoggedVehicleName = vehicleName;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error detecting vehicle name: {ex.Message}");
+            }
+        }
+
+        private string GetVehicleName(ulong vehiclePtr)
+        {
+            try
+            {
+                if (vehiclePtr == 0)
+                    return "Unknown";
+
+                string vehicleClassName = Memory.GetActorClassName(vehiclePtr);
+                return CleanVehicleName(vehicleClassName);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error getting vehicle name: {ex.Message}");
+                return "Error";
+            }
+        }
+
+        private string CleanVehicleName(string vehicleClassName)
+        {
+            if (string.IsNullOrEmpty(vehicleClassName))
+                return "Unknown";
+
+            return vehicleClassName;
+        }
+
+        public void ToggleVehicleDetection(bool enable)
+        {
+            if (enable && !_isDetectionEnabled)
+            {
+                _isDetectionEnabled = true;
+                _lastInVehicleState = false;
+                _lastLoggedVehicleName = string.Empty;
+                StartVehicleDetectionLoop();
+                Program.Log("Vehicle detection enabled.");
+            }
+            else if (!enable && _isDetectionEnabled)
+            {
+                _isDetectionEnabled = false;
+                _cancellationTokenSource?.Cancel();
+                _cancellationTokenSource?.Dispose();
+                _cancellationTokenSource = new CancellationTokenSource();
+                Program.Log("Vehicle detection disabled.");
+            }
+        }
+
+        private void StartVehicleDetectionLoop()
+        {
+            Task.Run(async () =>
+            {
+                while (!_cancellationTokenSource.Token.IsCancellationRequested && _isDetectionEnabled)
+                {
+                    try
+                    {
+                        if ((DateTime.Now - _lastVehicleCheck).TotalMilliseconds >= VehicleCheckInterval)
+                        {
+                            DetectVehicleName();
+                            _lastVehicleCheck = DateTime.Now;
+                        }
+
+                        await Task.Delay(100, _cancellationTokenSource.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"Vehicle Detection Loop Failed: {ex.Message}");
+                        await Task.Delay(1000, _cancellationTokenSource.Token);
+                    }
+                }
+            }, _cancellationTokenSource.Token);
+        }
+
+        public void Dispose()
+        {
+            _cancellationTokenSource?.Cancel();
+            _cancellationTokenSource?.Dispose();
+        }
     }
-} 
+}

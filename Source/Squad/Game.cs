@@ -60,6 +60,7 @@ namespace squad_dma
         public bool IsFiring => _isFiring;
         public int MagnificationIndex => _magnificationIndex;
         public PlayerState CurrentPlayerState => _currentPlayerState;
+        public DebugVehicles DebugVehicles => _debugVehicles;
         #endregion
 
         #region Constructor

@@ -40,8 +40,7 @@ namespace squad_dma
             trkUIScale = new TrackBar();
             trkAimLength = new TrackBar();
             trkTechMarkerScale = new TrackBar();
-            btnListVehicles = new Button();
-            chkShowMapSetup = new CheckBox();
+            btnListVehicles = new CheckBox();
             btnToggleMap = new Button();
             btnRestartRadar = new Button();
             txtMapSetupX = new TextBox();
@@ -230,28 +229,16 @@ namespace squad_dma
             // 
             // btnListVehicles
             // 
+            btnListVehicles.AutoSize = true;
             btnListVehicles.Font = new Font("Segoe UI", 9F);
             btnListVehicles.Location = new Point(15, 30);
             btnListVehicles.Name = "btnListVehicles";
-            btnListVehicles.Size = new Size(100, 25);
+            btnListVehicles.Size = new Size(150, 19);
             btnListVehicles.TabIndex = 19;
-            btnListVehicles.Text = "List Vehicles";
-            toolTip.SetToolTip(btnListVehicles, "Display information about all vehicles in the game");
+            btnListVehicles.Text = "Actor Detect ( Debug )";
+            toolTip.SetToolTip(btnListVehicles, "Toggle vehicle name detection");
             btnListVehicles.UseVisualStyleBackColor = true;
             btnListVehicles.Click += btnListVehicles_Click;
-            // 
-            // chkShowMapSetup
-            // 
-            chkShowMapSetup.AutoSize = true;
-            chkShowMapSetup.Font = new Font("Segoe UI", 9F);
-            chkShowMapSetup.Location = new Point(125, 34);
-            chkShowMapSetup.Name = "chkShowMapSetup";
-            chkShowMapSetup.Size = new Size(115, 19);
-            chkShowMapSetup.TabIndex = 20;
-            chkShowMapSetup.Text = "Show Map Setup";
-            toolTip.SetToolTip(chkShowMapSetup, "Show map setup controls");
-            chkShowMapSetup.UseVisualStyleBackColor = true;
-            chkShowMapSetup.CheckedChanged += chkShowMapSetup_CheckedChanged;
             // 
             // btnToggleMap
             // 
@@ -405,14 +392,13 @@ namespace squad_dma
             lblTechMarkerScale.Font = new Font("Segoe UI", 9F);
             lblTechMarkerScale.Location = new Point(15, 160);
             lblTechMarkerScale.Name = "lblTechMarkerScale";
-            lblTechMarkerScale.Size = new Size(104, 15);
+            lblTechMarkerScale.Size = new Size(103, 15);
             lblTechMarkerScale.TabIndex = 18;
             lblTechMarkerScale.Text = "Vehicle/Tech Scale";
             // 
             // grpRadar
             // 
             grpRadar.Controls.Add(btnRestartRadar);
-            grpRadar.Controls.Add(chkShowMapSetup);
             grpRadar.Controls.Add(btnToggleMap);
             grpRadar.Controls.Add(btnDumpNames);
             grpRadar.Controls.Add(btnListVehicles);
@@ -1158,7 +1144,6 @@ namespace squad_dma
         private Button btnDumpNames;
         private GroupBox grpRadar;
         private Button btnRestartRadar;
-        private CheckBox chkShowMapSetup;
         private Button btnToggleMap;
         private TabPage tabRadar;
         private GroupBox grpMapSetup;
@@ -1234,7 +1219,7 @@ namespace squad_dma
         private Label lblThirdScopeMag;
         private TextBox txtThirdScopeMag;
         private CheckBox chkHighAlert;
-        private Button btnListVehicles;
+        private CheckBox btnListVehicles;
 
         private void BtnKeybindZoomIn_Click(object sender, EventArgs e)
         {

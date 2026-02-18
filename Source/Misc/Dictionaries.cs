@@ -9,7 +9,7 @@ namespace squad_dma {
             {"BP_M-Gator_Logistics_C", ActorType.TruckLogistics},
             {"BP_M-Gator_Logistics_ARID_C", ActorType.TruckLogistics},
             {"BP_M-Gator_Transport_ARID_C", ActorType.TruckTransport},
-            
+
             {"BP_US_Util_Desert_C", ActorType.TruckTransport},
             {"BP_US_Util_Woodland_C", ActorType.TruckTransport},
             {"BP_US_Util_Desert_Logi_C", ActorType.TruckLogistics},
@@ -28,14 +28,14 @@ namespace squad_dma {
             {"BP_CAF_Util_Woodland_C", ActorType.TruckTransport},
             {"BP_CAF_Util_Desert_Logi_C", ActorType.TruckLogistics},
             {"BP_CAF_Util_Woodland_Logi_C", ActorType.TruckLogistics},
-            
+
             {"BP_Brit_Util_Truck_C", ActorType.TruckTransport},
             {"BP_Brit_Util_Truck_Woodland_C", ActorType.TruckTransport},
             {"BP_Brit_Util_Truck_Logi_C", ActorType.TruckLogistics},
             {"BP_Brit_Util_Truck_Logi_Woodland_C", ActorType.TruckLogistics},
             {"BP_Aussie_Util_Truck_C", ActorType.TruckTransport},
             {"BP_Aussie_Util_Truck_Logi_C", ActorType.TruckLogistics},
-            
+
             {"BP_Ural_375_Desert_C", ActorType.TruckTransport},
             {"BP_Ural_375_Green_C", ActorType.TruckTransport},
             {"BP_Ural_375_Mil_C", ActorType.TruckTransport},
@@ -51,7 +51,7 @@ namespace squad_dma {
             {"BP_Ural_375_Logi_INS_C", ActorType.TruckLogistics},
             {"BP_Ural_375_ZU23_C", ActorType.TruckAntiAir},
             {"BP_Ural_4320_GFI_C", ActorType.TruckTransport},
-            
+
             {"BP_Ural_4320_MEA_C", ActorType.TruckTransport},
             {"BP_Ural_4320_logi_MEA_C", ActorType.TruckLogistics},
             {"BP_Ural_4320_C", ActorType.TruckTransport},
@@ -59,17 +59,17 @@ namespace squad_dma {
             {"BP_Ural_4320_logi_C", ActorType.TruckTransport},
             {"BP_Ural_4320_logi_Desert_C", ActorType.TruckLogistics},
             {"BP_Ural_4320_logi_GFI_C", ActorType.TruckLogistics},
-            
+
             {"BP_Kamaz_5350_Desert_C", ActorType.TruckTransport},
             {"BP_Kamaz_5350_C", ActorType.TruckTransport},
             {"BP_Kamaz_5350_Logi_Desert_C", ActorType.TruckLogistics},
             {"BP_Kamaz_5350_Logi_C", ActorType.TruckLogistics},
-            
+
             {"BP_TLF_Util_Truck_Desert_C", ActorType.TruckTransport},
             {"BP_TLF_Util_Truck_C", ActorType.TruckTransport},
             {"BP_TLF_Util_Truck_Logi_Desert_C", ActorType.TruckLogistics},
             {"BP_TLF_Util_Truck_Logi_C", ActorType.TruckLogistics},
-            
+
             {"BP_CTM131_Desert_C", ActorType.TruckTransport},
             {"BP_CTM131_C", ActorType.TruckTransport},
             {"BP_CTM131_QJZ89_Desert_C", ActorType.TruckTransportArmed},
@@ -116,12 +116,14 @@ namespace squad_dma {
             {"BP_Technical4Seater_Logi_Camo_CRF_C", ActorType.JeepLogistics},
             {"BP_Technical4Seater_Transport_CRF_C", ActorType.JeepTransport},
             {"BP_Kozak_2M1_Kord_C", ActorType.JeepTurret},
+            {"BP_Kozak_2M1_AGS_C", ActorType.JeepRWSTurret },
+            {"BP_Technical2Seater_AFU_Kornet_C", ActorType.JeepAntitank},
 
             {"BP_Safir_C", ActorType.JeepLogistics},
             {"BP_Safir_MG3_C", ActorType.JeepTurret},
             {"BP_Safir_Kord_C", ActorType.JeepTurret},
             {"BP_Safir_Kornet_C", ActorType.JeepTurret},
-            
+
             {"BP_LUVW_Desert_C", ActorType.JeepTransport},
             {"BP_LUVW_C", ActorType.JeepTransport},
             {"BP_LUVW_Logi_Desert_C", ActorType.JeepLogistics},
@@ -130,7 +132,7 @@ namespace squad_dma {
             {"BP_LUVW_C6_C", ActorType.JeepTurret},
             {"BP_LUVW_M2_Desert_C", ActorType.JeepTurret},
             {"BP_LUVW_M2_C", ActorType.JeepTurret},
-            
+
             {"BP_M1151_Technical_C", ActorType.JeepTurret},
             {"BP_M1151_Light_C", ActorType.JeepTurret},
             {"BP_M1151_Light_Woodland_C", ActorType.JeepTurret},
@@ -156,7 +158,7 @@ namespace squad_dma {
             {"BP_M1151_Light_TOW_Woodland_CRF_C", ActorType.JeepAntitank},
             {"BP_M1151_GFI_C", ActorType.JeepTurret},
             {"BP_M1151_TOW_GFI_C", ActorType.JeepAntitank},
-            
+
             {"BP_MATV_M240_C", ActorType.JeepTurret},
             {"BP_MATV_M240_Woodland_C", ActorType.JeepTurret},
             {"BP_MATV_C", ActorType.JeepTurret},
@@ -177,28 +179,29 @@ namespace squad_dma {
             {"BP_MATV_USMC_CROWS_Woodland_C", ActorType.JeepRWSTurret},
             {"BP_MATV_USMC_TOW_C", ActorType.JeepAntitank},
             {"BP_MATV_USMC_TOW_Woodland_C", ActorType.JeepAntitank},
-            
+
             {"BP_TAPV_C", ActorType.JeepRWSTurret},
             {"BP_TAPV_C6_C", ActorType.JeepRWSTurret},
             {"BP_TAPV_Desert_C", ActorType.JeepRWSTurret},
             {"BP_TAPV_C6_Desert_C", ActorType.JeepRWSTurret},
             {"BP_TAPV_C16_C", ActorType.JeepRWSTurret},
             {"BP_TAPV_C16_Desert_C", ActorType.JeepRWSTurret},
-            
+
             {"BP_LPPV_C", ActorType.JeepTurret},
             {"BP_LPPV_M2RWS_C", ActorType.JeepRWSTurret},
             {"BP_LPPV_Woodland_C", ActorType.JeepTurret},
             {"BP_LPPV_M2RWS_Woodland_C", ActorType.JeepRWSTurret},
-            
+
             {"BP_PMV_Mag58_C", ActorType.JeepTurret},
             {"BP_PMV_Mag58x3_C", ActorType.JeepTurret},
             {"BP_PMV_RWS_C", ActorType.JeepRWSTurret},
-            
+
             {"BP_Tigr_Desert_C", ActorType.JeepTurret},
             {"BP_Tigr_C", ActorType.JeepTurret},
             {"BP_Tigr_RWS_Desert_C", ActorType.JeepRWSTurret},
             {"BP_Tigr_RWS_C", ActorType.JeepRWSTurret},
-            
+            {"BP_Tigr_AGS17_Desert_C", ActorType.JeepTurret},
+
             {"BP_BRDM-2_C", ActorType.JeepRWSTurret},
             {"BP_BRDM-2_Spandrel_C", ActorType.JeepAntitank},
             {"BP_BRDM-2_RUS_C", ActorType.JeepRWSTurret},
@@ -212,7 +215,8 @@ namespace squad_dma {
             {"BP_BRDM-2_MEA_Spandrel_C", ActorType.JeepAntitank},
             {"BP_BRDM-2_GFI_C", ActorType.JeepAntitank},
             {"BP_BRDM-2_GFI_Spandrel_C", ActorType.JeepAntitank},
-            
+            {"BP_BRDM-2L1_AFU_C", ActorType.JeepAntitank },
+
             {"BP_Cobra2_M2_Desert_C", ActorType.JeepTurret},
             {"BP_Cobra2_M2_C", ActorType.JeepTurret},
             {"BP_Cobra2_RWS_M2_Desert_C", ActorType.JeepRWSTurret},
@@ -221,7 +225,7 @@ namespace squad_dma {
             {"BP_Cobra2_MG3_C", ActorType.JeepTurret},
             {"BP_Cobra2_RWS_MG3_Desert_C", ActorType.JeepRWSTurret},
             {"BP_Cobra2_RWS_MG3_C", ActorType.JeepRWSTurret},
-            
+
             {"BP_CSK131_QJY88_Desert_C", ActorType.JeepTransport},
             {"BP_CSK131_QJY88_C", ActorType.JeepTransport},
             {"BP_CSK131_QJY88_Naval_C", ActorType.JeepTransport},
@@ -234,45 +238,49 @@ namespace squad_dma {
             {"BP_CSK131_HJ8ATGM_Desert_C", ActorType.JeepRWSTurret},
             {"BP_CSK131_HJ-8ATGM_C", ActorType.JeepRWSTurret},
             {"BP_CSK131_HJ-8ATGM_Naval", ActorType.JeepRWSTurret},
-            
+            {"BP_LynxATV_Rollcage_QJZ89_C", ActorType.JeepTurret },
+            {"BP_LynxATV_Rollcage_QLZ87_C", ActorType.JeepTurret  },
+            {"BP_LynxATV_C", ActorType.JeepTransport},
+
+
             {"BP_M1117_C", ActorType.JeepRWSTurret},
-            
+
             {"BP_CPV_M134_C", ActorType.JeepTurret},
             {"BP_CPV_M134_Red_C", ActorType.JeepTurret},
             {"BP_CPV_M134_Blue_C", ActorType.JeepTurret},
             {"BP_CPV_Transport_C", ActorType.JeepTransport},
             {"BP_CPV_Transport_Red_C", ActorType.JeepTransport},
             {"BP_CPV_Transport_Blue_C", ActorType.JeepTransport},
-            
+
             {"BP_BTR80_RUS_Desert_C", ActorType.APC},
             {"BP_BTR80_RUS_C", ActorType.APC},
             {"BP_BTR80_INS_C", ActorType.APC},
             {"BP_BTR80_Militia_C", ActorType.APC},
 
             {"BP_LAV2_Coyote_CRF_C", ActorType.IFV},
-            
+
             {"BP_BTR82A_RUS_Desert_C", ActorType.IFV},
             {"BP_BTR82A_RUS_C", ActorType.IFV},
-            
+
             {"BP_LAV25_C", ActorType.IFV},
             {"BP_LAV25_Woodland_C", ActorType.IFV},
-            
+
             {"BP_LAV2_Coyote_C", ActorType.IFV},
             {"BP_LAV2_Coyote_Woodland_C", ActorType.IFV},
-            
+
             {"BP_ASLAV_C", ActorType.IFV},
-            
+
             {"BP_LAV6_Desert_C", ActorType.IFV},
             {"BP_LAV6_Woodland_C", ActorType.IFV},
-            
+
             {"BP_LAV_RWS_C6_Desert_C", ActorType.APC},
             {"BP_LAV_RWS_C6_C", ActorType.APC},
             {"BP_LAV_RWS_M2_Desert_C", ActorType.APC},
             {"BP_LAV_RWS_M2_C", ActorType.APC},
-            
+
             {"BP_M1064A3_M121_C", ActorType.TrackedAPC},
             {"BP_M1064A3_M121_Desert_C", ActorType.TrackedAPC},
-            
+
             {"BP_M113A3_C6_Desert_C", ActorType.TrackedJeep},
             {"BP_M113A3_C6_C", ActorType.TrackedJeep},
             {"BP_M113A3_MK19_C", ActorType.TrackedAPC},
@@ -297,7 +305,7 @@ namespace squad_dma {
             {"BP_M113A3_WPMC_M2_C", ActorType.TrackedJeep},
             {"BP_M113A3_MSV_WPMC_C", ActorType.TrackedJeep},
             {"BP_M113A3_M2_CRF_C", ActorType.TrackedAPC},
-            
+
             {"BP_M113A2T_Logistics_TLF_C", ActorType.TrackedIFV},
             {"BP_M113A2T_Logistics_TLF_Desert_C", ActorType.TrackedIFV},
             {"BP_M113A2T_M2_TLF_C", ActorType.TrackedIFV},
@@ -305,15 +313,15 @@ namespace squad_dma {
             {"BP_M113A2T_MK19_TLF_C", ActorType.TrackedAPCArtillery},
             {"BP_M113A2T_MK19_TLF_Desert_C", ActorType.TrackedAPCArtillery},
             {"BP_M113A2T_TLF_Desert_C", ActorType.TrackedIFV},
-            
+
             {"BP_M1126_M240_C", ActorType.APC},
             {"BP_M1126_M240_Woodland_C", ActorType.APC},
             {"BP_M1126_C", ActorType.APC},
             {"BP_M1126_Woodland_C", ActorType.APC},
-            
+
             {"BP_M1128_C", ActorType.TankMGS},
             {"BP_M1128_Woodland_C", ActorType.TankMGS},
-            
+
             {"BP_ZBL08_C", ActorType.IFV},
             {"BP_ZBL08_Desert_C", ActorType.IFV},
             {"BP_ZBL08_Naval_C", ActorType.IFV},
@@ -323,22 +331,22 @@ namespace squad_dma {
             {"BP_ZSL10_QJZ-89_C", ActorType.APC},
             {"BP_ZSL10_QJZ-89_Desert_C", ActorType.APC},
             {"BP_ZSL10_QJZ-89_Naval_C", ActorType.APC},
-            
+
             {"BP_AAVP7A1_Woodland_Logi_C", ActorType.TrackedAPC},
             {"BP_AAVP7A1_Logi_C", ActorType.TrackedAPC},
             {"BP_AAVP7A1_Woodland_C", ActorType.TrackedAPC},
             {"BP_AAVP7A1_C", ActorType.TrackedAPC},
-            
+
             {"BP_FV432_C", ActorType.TrackedJeep},
             {"BP_FV432_woodland_C", ActorType.TrackedJeep},
             {"BP_FV432_RWS_C", ActorType.TrackedAPC},
             {"BP_FV432_RWS_M2_C", ActorType.TrackedAPC},
             {"BP_FV432_RWS_Woodland_C", ActorType.TrackedAPC},
             {"BP_FV432_RWS_M2_Woodland_C", ActorType.TrackedAPC},
-            
+
             {"BP_FV107_C", ActorType.TrackedIFV},
             {"BP_FV107_Woodland_C", ActorType.TrackedIFV},
-            
+
             {"BP_MTLB_VMK_RUS_Desert_C", ActorType.TrackedJeep},
             {"BP_MTLB_VMK_RUS_C", ActorType.TrackedJeep},
             {"BP_MTLBM_6MA_RUS_Desert_C", ActorType.TrackedJeep},
@@ -362,60 +370,69 @@ namespace squad_dma {
             {"BP_MTLB_VMK_GFI_C", ActorType.TrackedAPC},
             {"BP_MTLBM_6MA_GFI_C", ActorType.TrackedAPC},
             {"BP_MTLB_LOGI_GFI_C", ActorType.TrackedLogistics},
-            
+            {"BP_MTLB_AFU_C", ActorType.TrackedAPC},
+
             {"BP_BMP1_MIL_C", ActorType.TrackedIFV},
             {"BP_BMP1_INS_C", ActorType.TrackedIFV},
             {"BP_BMP1_MIL_ZU23_C", ActorType.AntiAir},
             {"BP_BMP1_INS_ZU23_C", ActorType.AntiAir},
             {"BP_BMP1_MEA_C", ActorType.TrackedIFV},
             {"BP_BMP1_GFI_C", ActorType.TrackedIFV},
-            
+
             {"BP_BMP2_C", ActorType.TrackedIFV},
             {"BP_BMP2_Desert_C", ActorType.TrackedIFV},
             {"BP_BMP2_MEA_C", ActorType.TrackedIFV},
             {"BP_BMP2_IMF_C", ActorType.TrackedIFV},
             {"BP_BMP2_GFI_C", ActorType.TrackedIFV},
-            
+            {"BP_BMP2_AFU_C", ActorType.TrackedIFV},
+            {"BP_BMP2M_Desert_C", ActorType.TrackedIFV},
+
             {"BP_BMP1AM_C", ActorType.TrackedIFV},
             {"BP_BMP1AM_Desert_C", ActorType.TrackedIFV},
             {"BP_BMP2M_C", ActorType.TrackedIFV},
             {"BP_BMP3M_C", ActorType.TrackedIFV},
             {"BP_BMP3M_Desert_C", ActorType.TrackedIFV},
-            
+
             {"BP_BFV_C", ActorType.TrackedIFV},
             {"BP_BFV_Woodland_C", ActorType.TrackedIFV},
-            
+
             {"BP_FV510_C", ActorType.TrackedIFV},
             {"BP_FV510_Woodland_C", ActorType.TrackedIFV},
             {"BP_FV510UA_C", ActorType.TrackedIFV},
             {"BP_FV510UA_Woodland_C", ActorType.TrackedIFV},
-            
+
             {"BP_FV510UA_CTAS40_C", ActorType.TrackedIFV},
             {"BP_FV510UA_CTAS40_Woodland_C", ActorType.TrackedIFV},
-            
+
             {"BP_ZBD04A_C", ActorType.TrackedIFV},
             {"BP_ZBD04A_Desert_C", ActorType.TrackedIFV},
-            
+
             {"BP_ZSD05_QJZ-89_C", ActorType.TrackedAPC},
             {"BP_ZSD05_Logi_C", ActorType.TrackedLogistics},
             {"BP_ZSD05_QJZ-89_Woodland_C", ActorType.TrackedAPC},
             {"BP_ZSD05_Logi_Woodland_C", ActorType.TrackedLogistics},
+            {"BP_ZSD89II_Desert_C", ActorType.TrackedIFV },
+            {"BP_ZSD89_Desert_C", ActorType.TrackedAPC },
+            {"BP_ZSD89_QLZ-87_Desert_C", ActorType.TrackedAPC },
+            {"BP_WZ551A_Desert_C", ActorType.IFV },
+            {"BP_WZ551B_QLZ-87_Desert_C", ActorType.APC },
+            {"BP_WZ551B_Desert_C", ActorType.APC },
             {"BP_ZBD05_C", ActorType.TrackedIFV},
             {"BP_ZBD05_HJ73C_C", ActorType.TrackedIFV},
             {"BP_ZBD05_Woodland_C", ActorType.TrackedIFV},
             {"BP_ZBD05_HJ73C_Woodland_C", ActorType.TrackedIFV},
             {"BP_ZTD05_C", ActorType.TankMGS},
             {"BP_ZTD05_WoodLand_C", ActorType.TankMGS},
-            
+
             {"BP_BMD4M_C", ActorType.TrackedIFV},
             {"BP_BMD4M_Desert_C", ActorType.TrackedIFV},
-            
+
             {"BP_M7A3_IFV_C", ActorType.TrackedIFV},
             {"BP_M7A3_IFV_Woodland_C", ActorType.TrackedIFV},
-            
+
             {"BP_BMD1M_C", ActorType.TrackedIFV},
             {"BP_BMD1M_Desert_C", ActorType.TrackedIFV},
-            
+
             {"BP_BTR-D_Kord_C", ActorType.TrackedAPC},
             {"BP_BTR-D_Kord_Desert_C", ActorType.TrackedAPC},
             {"BP_BTR-D_PKM_C", ActorType.TrackedAPC},
@@ -424,25 +441,25 @@ namespace squad_dma {
             {"BP_BTR-D_Transport_Desert_C", ActorType.TrackedAPC},
             {"BP_BTR-DG_Logistics_C", ActorType.TrackedLogistics},
             {"BP_BTR-DG_Logistics_Desert_C", ActorType.TrackedLogistics},
-            
+
             {"BP_BTR-ZD_C", ActorType.AntiAir},
             {"BP_BTR-ZD_Desert_C", ActorType.AntiAir},
-            
+
             {"BP_BTRMDM_PKT_RWS_C", ActorType.TrackedAPC},
             {"BP_BTRMDM_PKT_RWS_Desert_C", ActorType.TrackedAPC},
             {"BP_BTRMDM_Transport_C", ActorType.TrackedAPC},
             {"BP_BTRMDM_Transport_Desert_C", ActorType.TrackedAPC},
-            
+
             {"BP_Sprut_C", ActorType.TankMGS},
             {"BP_Sprut_Desert_C", ActorType.TankMGS},
-            
+
             {"BP_ACV-15_Desert_C", ActorType.TrackedIFV},
             {"BP_ACV-15_C", ActorType.TrackedIFV},
             {"BP_ACV-15_M2_Desert_C", ActorType.TrackedAPC},
             {"BP_ACV-15_M2_C", ActorType.TrackedAPC},
             {"BP_ACV-15_MG3_Desert_C", ActorType.TrackedAPC},
             {"BP_ACV-15_MG3_C", ActorType.TrackedAPC},
-            
+
             {"BP_PARS3_Desert_C", ActorType.IFV},
             {"BP_PARS3_C", ActorType.IFV},
             {"BP_PARS3_M2_Desert_C", ActorType.APC},
@@ -451,40 +468,40 @@ namespace squad_dma {
             {"BP_PARS3_MG3_C", ActorType.APC},
             {"BP_PARS3_MK19_Desert_C", ActorType.APC},
             {"BP_PARS3_MK19_C", ActorType.APC},
-            
+
             {"BP_FV4034_C", ActorType.Tank},
             {"BP_FV4034_Woodland_C", ActorType.Tank},
-            
+
             {"BP_2A6_Desert_C", ActorType.Tank},
             {"BP_2A6_Desert_Cage_C", ActorType.Tank},
             {"BP_2A6_Woodland_C", ActorType.Tank},
             {"BP_2A6_Woodland_Cage_C", ActorType.Tank},
-            
+
             {"BP_M1A2_C", ActorType.Tank},
             {"BP_M1A2_Woodland_C", ActorType.Tank},
-            
+
             {"BP_AUS_M1A1_C", ActorType.Tank},
             {"BP_M1A1_USMC_C", ActorType.Tank},
             {"BP_M1A1_USMC_Woodland_C", ActorType.Tank},
-            
+
             {"BP_T62_MIL_C", ActorType.Tank},
             {"BP_T62_C", ActorType.Tank},
             {"BP_T62_MEA_C", ActorType.Tank},
             {"BP_T62_GFI_C", ActorType.Tank},
-            
+
             {"BP_T72B3_Desert_C", ActorType.Tank},
             {"BP_T72B3_C", ActorType.Tank},
             {"BP_T72AV_MEA_C", ActorType.Tank},
             {"BP_T72S_GFI_C", ActorType.Tank},
-            
+
             {"BP_T90A_C", ActorType.Tank},
             {"BP_T90A_Desert_C", ActorType.Tank},
-            
+
             {"BP_ZTZ99_C", ActorType.Tank},
             {"BP_ZTZ99_wCage_C", ActorType.Tank},
             {"BP_ZTZ99_Desert_C", ActorType.Tank},
             {"BP_ZTZ99_Desert_wCage_C", ActorType.Tank},
-            
+
             {"BP_M60T_C", ActorType.Tank},
             {"BP_M60T_Desert_C", ActorType.Tank},
             {"BP_M60T_WPMC_C", ActorType.Tank},
@@ -498,32 +515,33 @@ namespace squad_dma {
             {"BP_CH178_C", ActorType.TransportHelicopter},
             {"BP_MI8_VDV_C", ActorType.TransportHelicopter},
             {"BP_MI8_AFU_C", ActorType.TransportHelicopter},
-            
+
             {"BP_UH60_C", ActorType.TransportHelicopter},
             {"BP_UH60_TLF_PKM_C", ActorType.TransportHelicopter},
             {"BP_UH60_CAS_C", ActorType.AttackHelicopter},
             {"BP_UH60_M134_C", ActorType.TransportHelicopter},
             {"BP_UH60_AUS_C", ActorType.TransportHelicopter},
-            
+
             {"BP_UH1Y_C", ActorType.TransportHelicopter},
-            
+
             {"BP_UH1H_Desert_C", ActorType.TransportHelicopter},
             {"BP_UH1H_C", ActorType.TransportHelicopter},
             {"BP_UH1H_GFI_C", ActorType.TransportHelicopter},
-            
+
             {"BP_SA330_C", ActorType.TransportHelicopter},
-            
+
             {"BP_MRH90_Mag58_C", ActorType.TransportHelicopter},
             {"BP_MRH90_CAS_C", ActorType.AttackHelicopter},
-            
+
             {"BP_CH146_C", ActorType.TransportHelicopter},
             {"BP_CH146_CAS_C", ActorType.AttackHelicopter},
             {"BP_CH146_Desert_C", ActorType.TransportHelicopter},
             {"BP_CH146_Desert_CAS_C", ActorType.AttackHelicopter},
-            
+
             {"BP_Z8G_C", ActorType.TransportHelicopter},
             {"BP_Z8J_C", ActorType.TransportHelicopter},
             {"BP_Z8J_CAS_C", ActorType.AttackHelicopter},
+            {"BP_Z9A_C", ActorType.TransportHelicopter },
             
             {"BP_CH146_Raven_C", ActorType.TransportHelicopter},
             {"BP_Loach_C", ActorType.LoachScout},
@@ -689,6 +707,8 @@ namespace squad_dma {
             {"BP_APC_EITAN_M2_C", ActorType.APC},
             {"BP_BFV_Black_C", ActorType.TrackedIFV},
             {"BP_BMP1_IRAQ_C", ActorType.TrackedIFV},
+            {"BP_BMP1TS_AFU_C", ActorType.TrackedIFV },
+            {"BP_BMP1_AFU_C", ActorType.TrackedIFV },
 
             {"BP_M113A3_CIWS-AA_Cage_GE_Woodland_C", ActorType.AntiAir},
             {"BP_M113A3_CIWS-AA_Desert_Cage_GE_C", ActorType.AntiAir},

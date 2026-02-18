@@ -2,9 +2,9 @@
 {
     public struct GameObjects
     {
-        public const uint GObjects = 0xC8B3960;
-        public const uint GNames = 0xC7CFE00;
-        public const uint GWorld = 0xCA3CD68;
+        public const uint GObjects = 0xCC450E0;
+        public const uint GNames = 0xCB61580;
+        public const uint GWorld = 0xCDCB470;
     }
 
     public struct World
@@ -206,7 +206,7 @@
         public const uint CachedPipScope = 0x828; // USQPipScopeCaptureComponent*
         public const uint CurrentFOV = 0x92C; // float
         public const uint bFireInput = 0x835; // bool
-        public const uint WeaponStaticInfo = 0x590; // USQWeaponStaticInfo*
+        public const uint WeaponStaticInfo = 0x598; // USQWeaponStaticInfo*
         public const uint CurrentState = 0x820; // ESQWeaponState
     }
 
@@ -329,10 +329,10 @@
     public struct USQVehicleSeatComponent
     {
         public const uint SeatConfig = 0x240; // FSQVehicleSeatConfig
-        public const uint AnimationSeatState = 0x2B8; // int32
-        public const uint SeatPawn = 0x2C0; // ASQVehicleSeat*
-        public const uint SeatedPlayer = 0x2C8; // ASQPlayerState*
-        public const uint SeatedSoldier = 0x2D0; // ASQSoldier*
+        public const uint AnimationSeatState = 0x2C0; // int32
+        public const uint SeatPawn = 0x2C8; // ASQVehicleSeat*
+        public const uint SeatedPlayer = 0x2D0; // ASQPlayerState*
+        public const uint SeatedSoldier = 0x2D8; // ASQSoldier*
     }
 
     public struct ASQVehicleSeat
