@@ -172,6 +172,11 @@
         public const uint NumWoundeds = 0x10; // int32
     }
 
+    public struct ACharacter
+    {
+        public const uint Mesh = 0x330; // USkeletalMeshComponent* ACharacter
+    }
+
     public struct ASQSoldier
     {
         public const uint Health = 0x26D0; // float
@@ -186,7 +191,6 @@
         public const uint bIsCameraRecoilActive = 0x2ADA; // bool
         public const uint WeaponBasedFOV = 0x7B0; // Float
         public const uint CachedAnimInstance1p = 0x2BF0; // USQAnimInstanceSoldier1P*
-        public const uint Mesh = 0x330; // USkeletalMeshComponent* ACharacter
     }
 
     public struct USQPawnInventoryComponent

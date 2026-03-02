@@ -364,6 +364,33 @@ namespace squad_dma
                     return false;
                 }
 
+                //float screenWidth = Screen.PrimaryScreen.Bounds.Width;
+                //float screenHeight = Screen.PrimaryScreen.Bounds.Height;
+                //
+                //var viewInfo = new MinimalViewInfo
+                //{
+                //    Location = _localUPlayer.Position,
+                //    Rotation = _localUPlayer.Rotation3D,
+                //    FOV = CurrentFOV,
+                //    AspectRatio = screenWidth / screenHeight
+                //};
+                //
+                //Camera.Location = _localUPlayer.Position.ToVector3();
+                //Camera.ViewProjectionMatrix = Camera.CalculateViewProjectionMatrix(viewInfo);
+
+                Camera.Location = _localUPlayer.Position;
+                Camera.ViewportRect = new Vector2(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height);
+                
+                var viewInfo = new MinimalViewInfo
+                {
+                    Location = _localUPlayer.Position,
+                    Rotation = _localUPlayer.Rotation3D,
+                    FOV = Memory._game?.CurrentFOV ?? 90f,
+                    AspectRatio = Camera.ViewportRect.X / Camera.ViewportRect.Y
+                };
+                
+                Camera.ViewProjectionMatrix = Camera.CalculateViewProjectionMatrix(viewInfo);
+
                 return true;
             }
             catch (Exception)
