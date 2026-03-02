@@ -1,16 +1,39 @@
 ﻿using System;
 using System.Numerics;
+using System.Security.Cryptography.X509Certificates;
 using System.Windows.Forms;
+
 
 namespace squad_dma
 {
-    public struct ViewMatrix
+    public struct FMatrix
     {
         public float[,] matrix;
 
-        public ViewMatrix(float[,] values)
+        public FMatrix(float[,] values)
         {
             matrix = values;
+        }
+
+        public static FMatrix Multiply(FMatrix a, FMatrix b)
+        {
+            float[,] result = new float[4, 4];
+            for (int i = 0; i < 4; i++)
+            {
+                for (int j = 0; j < 4; j++)
+                {
+                    result[i, j] = a.matrix[i, 0] * b.matrix[0, j] +
+                                   a.matrix[i, 1] * b.matrix[1, j] +
+                                   a.matrix[i, 2] * b.matrix[2, j] +
+                                   a.matrix[i, 3] * b.matrix[3, j];
+                }
+            }
+            return new FMatrix(result);
+        }
+
+        public static FMatrix operator *(FMatrix a, FMatrix b)
+        {
+            return FMatrix.Multiply(a, b);
         }
     }
 
@@ -19,80 +42,127 @@ namespace squad_dma
         public Vector3D Location;
         public Vector3D Rotation;
         public float FOV;
+        public float AspectRatio;
+
+        //FMinimalViewInfo::CalculateProjectionMatrix
+        public FMatrix CalculateProjectionMatrix()
+        {
+            float halfFOV = Single.DegreesToRadians(Math.Max(0.001f, FOV) / 2f);
+            FMatrix projectionMatrix = Camera.CalculateReversedZPerspectiveMatrix(
+                halfFOV,
+                AspectRatio,
+                1f,
+                Camera.GNearClippingPlane
+            );
+
+            return projectionMatrix;
+        }
     }
 
     public static class Camera
     {
-        private static readonly float DEG_TO_RAD = (float)(Math.PI / 180.0);
+        public static FMatrix ViewProjectionMatrix;
+        public static Vector3D Location;
+        public static Vector2 ViewportRect;
 
-        public static ViewMatrix CreateMatrix(Vector3 rot, Vector3 origin)
+        public static readonly float GNearClippingPlane = 0.01f; // 0.001f m -> 0.01f cm
+        public static readonly float WorldToScreenTolerance = 0.001f; // safe and small enough
+        private static readonly FMatrix Planes = new FMatrix(new float[,] {
+            { 0, 0, 1, 0 },
+            { 1, 0, 0, 0 },
+            { 0, 1, 0, 0 },
+            { 0, 0, 0, 1 }
+        });
+
+        // FInverseRotationMatrix
+        public static FMatrix CalculateInverseRotationMatrix(Vector3 rotation)
         {
-            float radPitch = rot.X * DEG_TO_RAD;
-            float radYaw = rot.Y * DEG_TO_RAD;
-            float radRoll = rot.Z * DEG_TO_RAD;
+            float radPitch = Single.DegreesToRadians(rotation.X);
+            float radYaw = Single.DegreesToRadians(rotation.Y);
+            float radRoll = Single.DegreesToRadians(rotation.Z);
+            
+            float SP = Single.Sin(radPitch);
+            float CP = Single.Cos(radPitch);
+            float SY = Single.Sin(radYaw);
+            float CY = Single.Cos(radYaw);
+            float SR = Single.Sin(radRoll);
+            float CR = Single.Cos(radRoll);
 
-            float SP = (float)Math.Sin(radPitch);
-            float CP = (float)Math.Cos(radPitch);
-            float SY = (float)Math.Sin(radYaw);
-            float CY = (float)Math.Cos(radYaw);
-            float SR = (float)Math.Sin(radRoll);
-            float CR = (float)Math.Cos(radRoll);
+            FMatrix mYaw = new FMatrix(new float[4, 4] {
+                { CY, -SY, 0, 0 },
+                { SY,  CY, 0, 0 },
+                { 0,   0,  1, 0 },
+                { 0,   0,  0, 1 },
+            });
 
-            float[,] matrix = new float[4, 4];
-            matrix[0, 0] = CP * CY;
-            matrix[0, 1] = CP * SY;
-            matrix[0, 2] = SP;
-            matrix[0, 3] = 0f;
+            FMatrix mPitch = new FMatrix(new float[4, 4] {
+                { CP,  0, -SP, 0 },
+                { 0,   1,  0,  0 },
+                { SP,  0,  CP, 0 },
+                { 0,   0,  0,  1 },
+            });
 
-            matrix[1, 0] = SR * SP * CY - CR * SY;
-            matrix[1, 1] = SR * SP * SY + CR * CY;
-            matrix[1, 2] = -SR * CP;
-            matrix[1, 3] = 0f;
+            FMatrix mRoll = new FMatrix(new float[4, 4] {
+                { 1,  0,  0,  0 },
+                { 0,  CR, SR, 0 },
+                { 0, -SR, CR, 0 },
+                { 0,  0,  0,  1 },
+            });
 
-            matrix[2, 0] = -(CR * SP * CY + SR * SY);
-            matrix[2, 1] = CY * SR - CR * SP * SY;
-            matrix[2, 2] = CR * CP;
-            matrix[2, 3] = 0f;
-
-            matrix[3, 0] = origin.X;
-            matrix[3, 1] = origin.Y;
-            matrix[3, 2] = origin.Z;
-            matrix[3, 3] = 1f;
-
-            return new ViewMatrix(matrix);
+            return mYaw * mPitch * mRoll;
         }
 
-        public static Vector2 WorldToScreen(MinimalViewInfo viewInfo, Vector3D world)
+        public static FMatrix CalculateTranslationMatrix(Vector3 translation)
         {
-            Vector3 screenLocation = Vector3.Zero;
-            Vector3 rot = viewInfo.Rotation.ToVector3();
-            Vector3 camPos = viewInfo.Location.ToVector3();
+            float[,] matrix = new float[4, 4] {
+                { 1f,            0f,            0f,            0f },
+                { 0f,            1f,            0f,            0f },
+                { 0f,            0f,            1f,            0f },
+                { translation.X, translation.Y, translation.Z, 1f }
+            };
 
-            ViewMatrix tempMatrix = CreateMatrix(rot, Vector3.Zero);
+            return new FMatrix(matrix);
+        }
 
-            Vector3 vAxisX = new Vector3(tempMatrix.matrix[0, 0], tempMatrix.matrix[0, 1], tempMatrix.matrix[0, 2]);
-            Vector3 vAxisY = new Vector3(tempMatrix.matrix[1, 0], tempMatrix.matrix[1, 1], tempMatrix.matrix[1, 2]);
-            Vector3 vAxisZ = new Vector3(tempMatrix.matrix[2, 0], tempMatrix.matrix[2, 1], tempMatrix.matrix[2, 2]);
+        //FReversedZPerspectiveMatrix
+        public static FMatrix CalculateReversedZPerspectiveMatrix(float halfFOV, float width, float height, float minZ)
+        {
+            float[,] matrix = new float[4, 4] {
+                { 1f / Single.Tan(halfFOV), 0f,                                   0f,   0f },
+                { 0f,                       width / Single.Tan(halfFOV) / height, 0f,   0f },
+                { 0f,                       0f,                                   0f,   1f },
+                { 0f,                       0f,                                   minZ, 0f }
+            };
 
-            Vector3 worldVec = world.ToVector3();
-            Vector3 vDelta = worldVec - camPos;
-            Vector3 vTransformed = new Vector3(
-                Vector3.Dot(vDelta, vAxisY),
-                Vector3.Dot(vDelta, vAxisZ),
-                Vector3.Dot(vDelta, vAxisX)
-            );
+            return new FMatrix(matrix);
+        }
 
-            if (vTransformed.Z < 1f)
-                vTransformed.Z = 1f;
+        // UGameplayStatics::CalculateViewProjectionMatricesFromMinimalView
+        public static FMatrix CalculateViewProjectionMatrix(MinimalViewInfo viewInfo)
+        {
+            FMatrix viewRotationMatrix = CalculateInverseRotationMatrix(viewInfo.Rotation.ToVector3()) * Planes;
 
-            const float FOV_DEG_TO_RAD = (float)(Math.PI / 360.0);
-            int centreX = Screen.PrimaryScreen.Bounds.Width / 2;
-            int centreY = Screen.PrimaryScreen.Bounds.Height / 2;
+            FMatrix viewMatrix = CalculateTranslationMatrix(-viewInfo.Location.ToVector3()) * viewRotationMatrix;
 
-            screenLocation.X = centreX + vTransformed.X * (centreX / (float)Math.Tan(viewInfo.FOV * FOV_DEG_TO_RAD)) / vTransformed.Z;
-            screenLocation.Y = centreY - vTransformed.Y * (centreX / (float)Math.Tan(viewInfo.FOV * FOV_DEG_TO_RAD)) / vTransformed.Z;
+            FMatrix projectionMatrix = viewInfo.CalculateProjectionMatrix();
 
-            return new Vector2(screenLocation.X, screenLocation.Y);
+            return viewMatrix * projectionMatrix;
+        }
+
+        public static Vector2 WorldToScreen(Vector3D world)
+        {
+            float w = (float)(world.X * ViewProjectionMatrix.matrix[0, 3] + world.Y * ViewProjectionMatrix.matrix[1, 3] + world.Z * ViewProjectionMatrix.matrix[2, 3] + ViewProjectionMatrix.matrix[3, 3]);
+            if (w < WorldToScreenTolerance)
+                return Vector2.Zero;
+
+            float x = (float)(world.X * ViewProjectionMatrix.matrix[0, 0] + world.Y * ViewProjectionMatrix.matrix[1, 0] + world.Z * ViewProjectionMatrix.matrix[2, 0] + ViewProjectionMatrix.matrix[3, 0]);
+            float y = (float)(world.X * ViewProjectionMatrix.matrix[0, 1] + world.Y * ViewProjectionMatrix.matrix[1, 1] + world.Z * ViewProjectionMatrix.matrix[2, 1] + ViewProjectionMatrix.matrix[3, 1]);
+
+            float invW = 1f / w;
+            float pixelX = (0.5f + x * 0.5f * invW) * ViewportRect.X;
+            float pixelY = (0.5f - y * 0.5f * invW) * ViewportRect.Y;
+
+            return new Vector2(pixelX, pixelY);
         }
     }
 }

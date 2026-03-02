@@ -597,7 +597,7 @@ namespace squad_dma
             ScatterReadRound boneInfoRound, int index, ulong actorAddr)
         {
             // Read mesh pointer - use key 20 to avoid collision with position/rotation keys (8-13)
-            var meshPtr = playerInstanceInfoRound.AddEntry<ulong>(index, 20, actorAddr + Offsets.ASQSoldier.Mesh);
+            var meshPtr = playerInstanceInfoRound.AddEntry<ulong>(index, 20, actorAddr + Offsets.ACharacter.Mesh);
             
             // Read component to world transform - use key 21
             meshRound.AddEntry<FTransform>(index, 21, meshPtr, null, Offsets.USceneComponent.ComponentToWorld);
@@ -665,15 +665,7 @@ namespace squad_dma
                 ClearESPData(actor);
                 return;
             }
-            
-            // Setup view info for world-to-screen conversion
-            var viewInfo = new MinimalViewInfo
-            {
-                Location = localPlayer.Position,
-                Rotation = localPlayer.Rotation3D,
-                FOV = Memory._game?.CurrentFOV ?? 90f
-            };
-            
+
             actor.BoneTransforms.Clear();
             bool anyBoneSuccess = false;
             
@@ -692,7 +684,7 @@ namespace squad_dma
                     Vector3D boneWorldPos3D = new Vector3D(boneWorldPos.X, boneWorldPos.Y, boneWorldPos.Z);
                     
                     // Convert to screen coordinates
-                    Vector2 screenPos = Camera.WorldToScreen(viewInfo, boneWorldPos3D);
+                    Vector2 screenPos = Camera.WorldToScreen(boneWorldPos3D);
                     actor.BoneScreenPositions[j] = screenPos;
                     
                     if (screenPos != Vector2.Zero)

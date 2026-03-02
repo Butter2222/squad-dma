@@ -278,7 +278,7 @@ namespace squad_dma
             renderTarget.EndDraw();
         }
 
-        private RawRectangleF CalculatePlayerBox(UActor actor, Vector2 screenPos, float distance, MinimalViewInfo viewInfo)
+        private RawRectangleF CalculatePlayerBox(UActor actor, Vector2 screenPos, float distance)
         {
             // Use EXACT same method as AimviewWidget - simple distance-based box
             float boxSize = Math.Max(20f, Math.Min(100f, 2000f / distance)); // Adaptive size based on distance
@@ -326,14 +326,8 @@ namespace squad_dma
                 return;
             }
 
-            var viewInfo = new MinimalViewInfo
-            {
-                Location = Game.LocalPlayer.Position,
-                Rotation = Game.LocalPlayer.Rotation3D,
-                FOV = Game.CurrentFOV
-            };
-
-            Vector3D camPos = viewInfo.Location;
+            Vector3 camPosVec = Camera.Location.ToVector3();
+            Vector3 localPlayerPosVec = Memory.LocalPlayer.Position.ToVector3();
             float maxDistance = Program.Config.EspMaxDistance;
             float vehicleMaxDistance = Program.Config.EspVehicleMaxDistance;
             bool showAllies = Program.Config.EspShowAllies;
@@ -341,8 +335,8 @@ namespace squad_dma
 
             var visibleActors = new List<(UActor actor, Vector2 screenPos, float distance)>();
 
-            long totalWtsTime = 0;
-            int wtsCalls = 0;
+            //long totalWtsTime = 0;
+            //int wtsCalls = 0;
             foreach (var actor in actors.Values)
             {
                 if (actor == null || actor.Position == Vector3D.Zero)
@@ -351,29 +345,26 @@ namespace squad_dma
                 if (actor.ActorType == ActorType.Player && !actor.IsAlive)
                     continue;
 
-                Vector3 camPosVec = camPos.ToVector3();
+                if (!showAllies && actor.IsFriendly())
+                    continue;
+
                 Vector3 actorPosVec = actor.Position.ToVector3();
                 float distance = Vector3.Distance(camPosVec, actorPosVec) / 100f;
                 bool isPlayer = actor.ActorType == ActorType.Player;
                 if (distance > (isPlayer ? maxDistance : vehicleMaxDistance))
                     continue;
 
-                Vector3 localPlayerPosVec = Memory.LocalPlayer.Position.ToVector3();
-                Vector3 actorPosVec2 = actor.Position.ToVector3();
-                if (isPlayer && Vector3.Distance(localPlayerPosVec, actorPosVec2) < 1.0f)
-                    continue;
-
-                if (!showAllies && actor.IsFriendly())
+                if (isPlayer && distance < 1.0f)
                     continue;
 
                 // Skip vehicles if not showing them
                 if (!isPlayer && !showVehicles)
                     continue;
 
-                var wtsStart = Stopwatch.StartNew();
-                Vector2 screenPos = Camera.WorldToScreen(viewInfo, actor.Position);
-                totalWtsTime += wtsStart.ElapsedMilliseconds;
-                wtsCalls++;
+                //var wtsStart = Stopwatch.StartNew();
+                Vector2 screenPos = Camera.WorldToScreen(actor.Position);
+                //totalWtsTime += wtsStart.ElapsedMilliseconds;
+                //wtsCalls++;
                 if (screenPos == Vector2.Zero)
                     continue;
 
@@ -384,7 +375,7 @@ namespace squad_dma
             {
                 if (actor.ActorType == ActorType.Player)
                 {
-                    RawRectangleF boxRect = CalculatePlayerBox(actor, screenPos, distance, viewInfo);
+                    RawRectangleF boxRect = CalculatePlayerBox(actor, screenPos, distance);
                     if ((boxRect.Left == 0 && boxRect.Top == 0 && boxRect.Right == 0 && boxRect.Bottom == 0) &&
                         Program.Config.EspBones && actor.BoneScreenPositions != null)
                     {
