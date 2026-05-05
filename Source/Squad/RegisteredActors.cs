@@ -575,40 +575,23 @@ namespace squad_dma
             }
         }
 
-        private int TryGetVehicleTeamFromSeats(ulong actorAddr)
+        #region ESP Functionality (Ready to Enable)
+        /// <summary>
+        /// Sets up ESP scatter read entries for mesh and bone data.
+        /// Call this from SetupPlayerEntries() to enable ESP.
+        /// </summary>
+        private void SetupESPEntries(ScatterReadRound playerInstanceInfoRound, ScatterReadRound meshRound, 
+            ScatterReadRound boneInfoRound, int index, ulong actorAddr)
         {
-            try
-            {
-                var seatsPtr = Memory.ReadPtr(actorAddr + Offsets.ASQVehicle.VehicleSeats);
-                if (seatsPtr == 0) return -1;
-
-                var firstSeat = Memory.ReadPtr(seatsPtr);
-                if (firstSeat == 0) return -1;
-
-                var seatPawn = Memory.ReadPtr(firstSeat + Offsets.USQVehicleSeatComponent.SeatPawn);
-                if (seatPawn == 0) return -1;
-
-                var team = (ESQTeam)Memory.ReadValue<byte>(seatPawn + Offsets.ASQPawn.Team);
-                return team switch
-                {
-                    ESQTeam.Team_One => 1,
-                    ESQTeam.Team_Two => 2,
-                    ESQTeam.Team_Neutral => 0,
-                    _ => -1
-                };
-            }
-            catch { return -1; }
-        }
-
-        private void SetupESPEntries(ScatterReadRound instanceRound, ScatterReadRound meshRound,
-            ScatterReadRound boneRound, int index, ulong actorAddr)
-        {
-            var meshPtr = instanceRound.AddEntry<ulong>(index, 20, actorAddr + Offsets.ACharacter.Mesh);
+            // Read mesh pointer - use key 20 to avoid collision with position/rotation keys (8-13)
+            var meshPtr = playerInstanceInfoRound.AddEntry<ulong>(index, 20, actorAddr + Offsets.ACharacter.Mesh);
+            
+            // Read component to world transform - use key 21
             meshRound.AddEntry<FTransform>(index, 21, meshPtr, null, Offsets.USceneComponent.ComponentToWorld);
             var boneArrayPtr = meshRound.AddEntry<ulong>(index, 22, meshPtr, null, 0x5B8);
 
             for (int j = 0; j < _boneIds.Length; j++)
-                boneRound.AddEntry<FTransform>(index, 50 + j, boneArrayPtr, null, (uint)(_boneIds[j] * 0x30));
+                boneInfoRound.AddEntry<FTransform>(index, 50 + j, boneArrayPtr, null, (uint)(_boneIds[j] * 0x30));
         }
 
         private void UpdatePlayerESPData(UActor actor, Dictionary<int, IScatterEntry> results)
@@ -645,14 +628,15 @@ namespace squad_dma
                 ClearESPData(actor);
                 return;
             }
-
+            
+            // Setup view info for world-to-screen conversion
             var viewInfo = new MinimalViewInfo
             {
                 Location = localPlayer.Position,
                 Rotation = localPlayer.Rotation3D,
                 FOV = Memory._game?.CurrentFOV ?? 90f
             };
-
+            
             actor.BoneTransforms.Clear();
             bool anyBoneSuccess = false;
 
@@ -661,9 +645,13 @@ namespace squad_dma
                 if (results.TryGetValue(50 + j, out var boneResult) && boneResult.TryGetResult<FTransform>(out var boneTransform))
                 {
                     actor.BoneTransforms[_boneIds[j]] = boneTransform;
-
-                    var worldPos = TransformToWorld(boneTransform, actor.ComponentToWorld);
-                    var screenPos = Camera.WorldToScreen(viewInfo, new Vector3D(worldPos.X, worldPos.Y, worldPos.Z));
+                    
+                    // Transform to world space
+                    Vector3 boneWorldPos = TransformToWorld(boneTransform, actor.ComponentToWorld);
+                    Vector3D boneWorldPos3D = new Vector3D(boneWorldPos.X, boneWorldPos.Y, boneWorldPos.Z);
+                    
+                    // Convert to screen coordinates
+                    Vector2 screenPos = Camera.WorldToScreen(viewInfo, boneWorldPos3D);
                     actor.BoneScreenPositions[j] = screenPos;
 
                     if (screenPos != Vector2.Zero)
@@ -703,5 +691,6 @@ namespace squad_dma
             var final = boneTransform.ToMatrix() * componentToWorld.ToMatrix();
             return new Vector3(final.M41, final.M42, final.M43);
         }
+        #endregion
     }
 }

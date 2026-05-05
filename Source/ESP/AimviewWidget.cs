@@ -158,12 +158,6 @@ namespace squad_dma
                 if (game?.LocalPlayer != null)
                 {
                     var localPlayer = game.LocalPlayer;
-                    var viewInfo = new MinimalViewInfo
-                    {
-                        Location = localPlayer.Position,
-                        Rotation = localPlayer.Rotation3D,
-                        FOV = game.CurrentFOV
-                    };
 
                     var visibleActors = new List<(UActor actor, SKPoint panelPos, float distance)>();
 
@@ -207,7 +201,7 @@ namespace squad_dma
                             continue;
 
                         // World to screen conversion
-                        Vector2 screenPos = Camera.WorldToScreen(viewInfo, actor.Position);
+                        Vector2 screenPos = Camera.WorldToScreen(actor.Position);
                         if (screenPos == Vector2.Zero)
                             continue;
 
