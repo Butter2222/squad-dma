@@ -252,7 +252,7 @@ namespace squad_dma
                 ThrowIfDMAShutdown();
                 
                 // Get new process
-                _process = vmmInstance.Process("SquadGame.exe");
+                _process = vmmInstance.Process("SquadGame-Win64-Shipping.exe");
                 if (_process is null)
                 {
                     Logger.Error("Unable to obtain PID. Game is not running.");
@@ -292,7 +292,7 @@ namespace squad_dma
                 ThrowIfDMAShutdown();
                 
                 // Get new module base
-                _squadBase = _process.GetModuleBase("SquadGame.exe");
+                _squadBase = _process.GetModuleBase("SquadGame-Win64-Shipping.exe");
                 if (_squadBase == 0)
                 {
                     Logger.Error("Unable to obtain Base Module Address. Game may not be running");
@@ -1085,4 +1085,4 @@ namespace squad_dma
         }
     }
     #endregion
-}
+}     

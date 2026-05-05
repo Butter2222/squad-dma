@@ -1,5 +1,7 @@
-namespace squad_dma {
-    public enum ActorType {
+namespace squad_dma
+{
+    public enum ActorType
+    {
         Player,
         Admin,
         FOBRadio,
@@ -10,6 +12,7 @@ namespace squad_dma {
         LoachCAS,
         LoachScout,
         Boat,
+        BoatLogistics,
         DeployableAntiAir,
         DeployableAntitank,
         DeployableAntitankGun,
@@ -45,36 +48,23 @@ namespace squad_dma {
         TruckArtillery,
         TruckLogistics,
         TruckTransport,
-        TruckTransportArmed,
-        BoatLogistics
+        TruckTransportArmed
     }
-    public enum Team {
-        RU,
-        US,
-        AU,
-        UK,
-        CA,
-        CN,
-        ME,
-        TR,
-        INS,
-        IMF,
-        WPMC,
-        Unknown,
-        GE_Wagner,
-        GE_UA,
-        GE_FI,
-        GE_IS,
-        SD_Taliban, 
-        SD_Ukraine
+
+    public enum Team
+    {
+        Unknown
     }
-    public enum GameStatus {
+
+    public enum GameStatus
+    {
         NotFound,
         Menu,
         InGame,
     }
-    
-    public enum PlayerState {
+
+    public enum PlayerState
+    {
         Unknown,
         MainMenu,
         CommandMenu,
@@ -82,4 +72,35 @@ namespace squad_dma {
         Dead
     }
 
+    public enum ESQVehicleType : byte
+    {
+        None = 0,
+        Motorcycle = 1,
+        Jeep = 2,
+        JeepTransport = 3,
+        JeepLogistics = 4,
+        JeepAntiTank = 5,
+        JeepArtillery = 6,
+        TruckTransport = 7,
+        TruckLogistics = 8,
+        TruckAntiAir = 9,
+        APC = 10,
+        APCTracked = 11,
+        AntiAirTracked = 12,
+        IFV = 13,
+        IFVTracked = 14,
+        Tank = 15,
+        HelicopterTransport = 16,
+        HelicopterAttack = 17,
+        Boat = 18,
+        MAX = 19
+    }
+
+    public enum ESQTeam : byte
+    {
+        Team_Neutral = 0,
+        Team_One = 1,
+        Team_Two = 2,
+        Team_Max = 3
+    }
 }

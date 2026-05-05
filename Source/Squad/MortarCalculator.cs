@@ -340,44 +340,32 @@ namespace squad_dma.Source.Squad
             if (string.IsNullOrEmpty(weaponName))
                 return null;
 
-            // Exact weapon name mappings
             string lowerName = weaponName.ToLower();
             
-            // Direct mapping: detected weapon name -> ballistic data
-            if (lowerName.Contains("m1937mortar"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "Mortar");
+            // Vehicle-mounted weapons (degrees-based)
+            if (lowerName.Contains("technical m252") && lowerName.Contains("m252"))
+                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "Tech.Mortar");
             
-            if (lowerName.Contains("m252mortar"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "Mortar");
-
-            if (lowerName.Contains("pp87mortar"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "Mortar");
-
-            if (lowerName.Contains("hellcannon"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "HellCannon");
-
-            if (lowerName.Contains("bm21grad"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "BM-21Grad");
-
             if (lowerName.Contains("ub32"))
                 return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "Tech.UB-32");
-
-            if (lowerName.Contains("M1064A3 M121mortar"))
+            
+            if (lowerName.Contains("bm21grad"))
+                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "BM-21Grad");
+            
+            if (lowerName.Contains("m1064") && lowerName.Contains("m121"))
                 return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "M1064M121");
-
-            // Try to find weapon by exact name match first
-            var exactMatch = WeaponDatabase.Weapons.FirstOrDefault(w => 
+            
+            // Deployable mortars (milliradians-based)
+            if (lowerName.Contains("m1937mortar") || lowerName.Contains("m252mortar") || lowerName.Contains("pp87mortar"))
+                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "Mortar");
+            
+            // Other deployables
+            if (lowerName.Contains("hellcannon"))
+                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "HellCannon");
+            
+            // Fallback: exact name match
+            return WeaponDatabase.Weapons.FirstOrDefault(w => 
                 w.Name.Equals(weaponName, StringComparison.OrdinalIgnoreCase));
-            if (exactMatch != null)
-                return exactMatch;
-
-            // Try partial name matching
-            var partialMatch = WeaponDatabase.Weapons.FirstOrDefault(w => 
-                lowerName.Contains(w.Name.ToLower()) || w.Name.ToLower().Contains(lowerName));
-            if (partialMatch != null)
-                return partialMatch;
-
-            return null;
         }
 
         /// <summary>

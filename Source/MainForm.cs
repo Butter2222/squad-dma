@@ -623,12 +623,11 @@ namespace squad_dma
                 float dx = (e.X - _lastMousePosition.X) * DRAG_SENSITIVITY;
                 float dy = (e.Y - _lastMousePosition.Y) * DRAG_SENSITIVITY;
                 
-                float zoomScale = 1.0f / (_config.DefaultZoom * 0.01f);
+                float zoomNormalizer = (_config.DefaultZoom / 100f) * 2.0f;
                 
-                _targetPanPosition.X -= dx * zoomScale;
-                _targetPanPosition.Y -= dy * zoomScale;
+                _targetPanPosition.X -= dx * zoomNormalizer;
+                _targetPanPosition.Y -= dy * zoomNormalizer;
                 
-                // Update position immediately for direct response
                 _mapPanPosition.X = (float)_targetPanPosition.X;
                 _mapPanPosition.Y = (float)_targetPanPosition.Y;
                 
@@ -1903,6 +1902,10 @@ namespace squad_dma
                 }
                 else if (Names.Vehicles.Contains(actor.ActorType))
                 {
+                    // Skip vehicles with no team or unknown team
+                    if (actor.TeamID == -1)
+                        return;
+                    
                     if (!actor.IsFriendly())
                     {
                         var dx = LocalPlayer.Position.X - actor.Position.X;

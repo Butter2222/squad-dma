@@ -266,6 +266,10 @@ namespace squad_dma
 
         public void DrawTechMarker(SKCanvas canvas, UActor actor)
         {
+            // Filter out vehicles with no health (spawners, templates, etc.)
+            if (Names.Vehicles.Contains(actor.ActorType) && actor.Health <= 0)
+                return;
+
             if (!Names.BitMaps.TryGetValue(actor.ActorType, out SKBitmap icon))
                 return;
 

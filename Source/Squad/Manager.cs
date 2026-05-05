@@ -245,7 +245,7 @@ namespace squad_dma.Source.Squad
                         // Apply features based on player state
                         ApplyFeaturesBasedOnState(currentState);
 
-                        await Task.Delay(1000, _cancellationTokenSource.Token);
+                        await Task.Delay(8, _cancellationTokenSource.Token);
                     }
                     catch (OperationCanceledException)
                     {
@@ -343,6 +343,9 @@ namespace squad_dma.Source.Squad
                 
             if (_config.NoCameraShake)
                 _noCameraShake.Apply();
+                
+            // Apply QuickZoom continuously for smooth transitions
+            _quickZoom.Apply();
         }
         
         /// <summary>

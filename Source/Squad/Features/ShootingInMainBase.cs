@@ -90,7 +90,7 @@ namespace squad_dma.Source.Squad.Features
                     return;
                 }
 
-                Memory.WriteValue<bool>(itemStaticInfo + ASQSoldier.bUsableInMainBase, false);
+                Memory.WriteValue<bool>(itemStaticInfo + USQItemStaticInfo.bUsableInMainBase, false);
                 Logger.Debug($"[{NAME}] Restored weapon at 0x{weapon:X}");
             }
             catch (Exception ex)
@@ -110,7 +110,7 @@ namespace squad_dma.Source.Squad.Features
                     return;
                 }
 
-                Memory.WriteValue<bool>(itemStaticInfo + ASQSoldier.bUsableInMainBase, Program.Config.AllowShootingInMainBase);
+                Memory.WriteValue<bool>(itemStaticInfo + USQItemStaticInfo.bUsableInMainBase, Program.Config.AllowShootingInMainBase);
                 Logger.Debug($"[{NAME}] Applied shooting in main base to weapon at 0x{weapon:X}");
             }
             catch (Exception ex)
