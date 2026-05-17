@@ -155,7 +155,7 @@
     public struct FPlayerStateDataObject
     {
         public const uint NumKills = 0x4; // int32
-        public const uint NumWoundeds = 0x14; // int32
+        public const uint NumWoundeds = 0x10; // int32
     }
 
     public struct ACharacter
