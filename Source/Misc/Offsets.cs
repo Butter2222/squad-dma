@@ -2,9 +2,9 @@
 {
     public struct GameObjects
     {
-        public const uint GObjects = 0x0D08C1B0;
-        public const uint GNames = 0x0CFBDFC0;
-        public const uint GWorld = 0x0D222EB8;
+        public const uint GObjects = 0xD139B50;
+        public const uint GNames = 0xD06B940;
+        public const uint GWorld = 0xD2D0CE8;
     }
 
     public struct World
@@ -155,7 +155,7 @@
     public struct FPlayerStateDataObject
     {
         public const uint NumKills = 0x4; // int32
-        public const uint NumWoundeds = 0x14; // int32
+        public const uint NumWoundeds = 0x10; // int32
     }
 
     public struct ACharacter
