@@ -514,8 +514,8 @@
 
     public struct UAnimMontage
     {
-        public const uint BlendInTime = 0xC8; // FAlphaBlend::BlendTime (BlendIn struct at 0xC0, BlendTime at +0x08) - UNVERIFIED (field not found in current SDK dump, value kept from previous list)
-        public const uint BlendOutTime = 0xF8; // FAlphaBlend::BlendTime (BlendOut struct at 0xF0, BlendTime at +0x08) - UNVERIFIED (field not found in current SDK dump, value kept from previous list)
+        public const uint BlendInTime = 0xC8; // FAlphaBlend::BlendTime
+        public const uint BlendOutTime = 0xF8; // FAlphaBlend::BlendTime 
         public const uint BlendOutTriggerTime = 0x120; // float
         public const uint bEnableAutoBlendOut = 0x172; // bool
     }
