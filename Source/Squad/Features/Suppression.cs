@@ -52,14 +52,14 @@ namespace squad_dma.Source.Squad.Features
             {
                 ulong soldierActor = _cachedSoldierActor;
                 if (soldierActor == 0) return;
-                
-                Memory.WriteValue<float>(soldierActor + ASQSoldier.UnderSuppressionPercentage, 0.0f);
-                Memory.WriteValue<float>(soldierActor + ASQSoldier.MaxSuppressionPercentage, 0.0f);
-                Memory.WriteValue<float>(soldierActor + ASQSoldier.SuppressionMultiplier, 0.0f);
-                Memory.WriteValue(soldierActor + ASQSoldier.bIsCameraRecoilActive, false);
-                
+
+                EnqueueWrite<float>(soldierActor + ASQSoldier.UnderSuppressionPercentage, 0.0f);
+                EnqueueWrite<float>(soldierActor + ASQSoldier.MaxSuppressionPercentage, 0.0f);
+                EnqueueWrite<float>(soldierActor + ASQSoldier.SuppressionMultiplier, 0.0f);
+                EnqueueWrite<bool>(soldierActor + ASQSoldier.bIsCameraRecoilActive, false);
+
                 Logger.Debug($"[{_featureName}] Applied suppression modifications (disabled suppression effects)");
-                
+
             }, "Suppression modifications");
         }
         

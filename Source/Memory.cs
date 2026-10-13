@@ -259,20 +259,7 @@ namespace squad_dma
                     return false;
                 }
 
-                // Simple verification that we can read from the process
-                try
-                {
-                    var scatterMap = new ScatterReadMap(1);
-                    var checkRound = scatterMap.AddRound();
-                    checkRound.AddEntry<byte>(0, 0, 0x1000, 1); // Try to read from a low address
-                    scatterMap.Execute();
-                    return true;
-                }
-                catch
-                {
-                    Logger.Error("Process verification failed - cannot read process memory");
-                    return false;
-                }
+                return true;
             }
             catch (DMAShutdown) { throw; }
             catch (Exception ex)
@@ -302,13 +289,8 @@ namespace squad_dma
                 // Verify the base is valid
                 try
                 {
-                    var scatterMap = new ScatterReadMap(1);
-                    var checkRound = scatterMap.AddRound();
-                    checkRound.AddEntry<string>(0, 0, _squadBase, 8);
-                    scatterMap.Execute();
-                    
-                    return scatterMap.Results[0][0].TryGetResult<string>(out var header) && 
-                           header.StartsWith("MZ");
+                    var buf = _process.MemRead(_squadBase, 2, Vmm.FLAG_NOCACHE);
+                    return buf.Length == 2 && buf[0] == 'M' && buf[1] == 'Z';
                 }
                 catch
                 {
@@ -384,12 +366,8 @@ namespace squad_dma
             {
                 if (_squadBase == 0) return false;
                 
-                var scatterMap = new ScatterReadMap(1);
-                var heartbeatRound = scatterMap.AddRound();
-                heartbeatRound.AddEntry<ulong>(0, 0, _squadBase + Offsets.GameObjects.GWorld);
-                scatterMap.Execute();
-                
-                return scatterMap.Results[0][0].TryGetResult<ulong>(out _);
+                var buf = _process.MemRead(_squadBase + Offsets.GameObjects.GWorld, 8, Vmm.FLAG_NOCACHE);
+                return buf.Length == 8;
             }
             catch
             {
@@ -415,13 +393,9 @@ namespace squad_dma
                 // Lightweight verification - just check if we can read from the module base
                 try
                 {
-                    var scatterMap = new ScatterReadMap(1);
-                    var baseCheckRound = scatterMap.AddRound();
-                    baseCheckRound.AddEntry<string>(0, 0, _squadBase, 8);
-                    scatterMap.Execute();
+                    var buf = _process.MemRead(_squadBase, 2, Vmm.FLAG_NOCACHE);
 
-                    if (!scatterMap.Results[0][0].TryGetResult<string>(out var moduleHeader) ||
-                        !moduleHeader.StartsWith("MZ"))
+                    if (buf.Length != 2 || buf[0] != 'M' || buf[1] != 'Z')
                     {
                         Logger.Error("Module header verification failed, attempting to reacquire module base...");
                         if (!GetModuleBase())
@@ -873,8 +847,6 @@ namespace squad_dma
 
                 if (!scatter.Execute())
                     throw new Exception("Scatter write execution failed.");
-
-                scatter.Close();
             }
         }
         #endregion

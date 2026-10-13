@@ -18,8 +18,9 @@ namespace squad_dma.Source.Squad.Features
         private bool _isAnimating = false;
         private readonly Stopwatch _zoomTimer = new Stopwatch();
 
-        private const float ZOOM_DURATION_MS = 180f;
-        private const float ZOOM_TARGET_FOV = 30.0f;
+        private const float ZOOM_IN_DURATION_MS = 220f;
+        private const float ZOOM_OUT_DURATION_MS = 160f;
+        private const float ZOOM_TARGET_FOV = 42.0f;
         private const float DEFAULT_FOV_FALLBACK = 90.0f;
 
         public QuickZoom(ulong playerController, bool inGame)
@@ -34,11 +35,22 @@ namespace squad_dma.Source.Squad.Features
             Logger.Debug($"[{NAME}] Quick Zoom {(enable ? "enabled" : "disabled")}");
         }
 
-        // Smoothstep: smooth ease-in/ease-out, no sudden velocity changes
-        private static float SmoothStep(float t)
+        // Ease-in cubic: slow start, accelerates — used for zoom-in
+        // Easing in front-loads the subtle perceptual shift before the FOV compression peaks,
+        // which reduces the disorienting "lurch" sensation at the end of the transition.
+        private static float EaseIn(float t)
         {
             t = Math.Clamp(t, 0f, 1f);
-            return t * t * (3f - 2f * t);
+            return t * t * t;
+        }
+
+        // Ease-out cubic: fast start, decelerates — used for zoom-out
+        // Eyes re-expand quickly and settle naturally; a slow start on zoom-out feels laggy.
+        private static float EaseOut(float t)
+        {
+            t = Math.Clamp(t, 0f, 1f);
+            t = 1f - t;
+            return 1f - t * t * t;
         }
 
         public override void Apply()
@@ -48,14 +60,13 @@ namespace squad_dma.Source.Squad.Features
                 if (!IsLocalPlayerValid()) return;
 
                 UpdateCachedPointers();
-                ulong cameraManager = Memory.ReadPtr(_playerController + PlayerController.PlayerCameraManager);
+                ulong cameraManager = _cachedCameraManager != 0
+                    ? _cachedCameraManager
+                    : Memory.ReadPtr(_playerController + PlayerController.PlayerCameraManager);
                 if (cameraManager == 0) return;
 
                 float currentCameraFOV = Memory.ReadValue<float>(cameraManager + PlayerCameraManager.DefaultFOV);
 
-                // State change must be checked before the idle branch so releasing the key
-                // triggers the reverse animation rather than falling into idle and corrupting
-                // _capturedOriginalFOV with the current zoomed value.
                 if (_isQuickZoomEnabled != _lastZoomState)
                 {
                     _startFOV = currentCameraFOV;
@@ -67,7 +78,6 @@ namespace squad_dma.Source.Squad.Features
                     _lastZoomState = _isQuickZoomEnabled;
                 }
 
-                // Idle: not zoomed and no animation running — track original FOV for later restore
                 if (!_isQuickZoomEnabled && !_isAnimating)
                 {
                     if (currentCameraFOV > 10.0f && currentCameraFOV < 180.0f)
@@ -77,10 +87,12 @@ namespace squad_dma.Source.Squad.Features
 
                 if (_isAnimating)
                 {
-                    float progress = Math.Min((float)_zoomTimer.ElapsedMilliseconds / ZOOM_DURATION_MS, 1f);
-                    float nextFOV = _startFOV + (_targetFOV - _startFOV) * SmoothStep(progress);
+                    float duration = _isQuickZoomEnabled ? ZOOM_IN_DURATION_MS : ZOOM_OUT_DURATION_MS;
+                    float progress = Math.Min((float)_zoomTimer.ElapsedMilliseconds / duration, 1f);
+                    float eased = _isQuickZoomEnabled ? EaseIn(progress) : EaseOut(progress);
+                    float nextFOV = _startFOV + (_targetFOV - _startFOV) * eased;
 
-                    Memory.WriteValue<float>(cameraManager + PlayerCameraManager.DefaultFOV, nextFOV);
+                    EnqueueWrite<float>(cameraManager + PlayerCameraManager.DefaultFOV, nextFOV);
 
                     if (progress >= 1f)
                     {
@@ -95,8 +107,7 @@ namespace squad_dma.Source.Squad.Features
                 }
                 else if (_isQuickZoomEnabled)
                 {
-                    // Hold zoom FOV to resist game resets (e.g. weapon raise/lower)
-                    Memory.WriteValue<float>(cameraManager + PlayerCameraManager.DefaultFOV, ZOOM_TARGET_FOV);
+                    EnqueueWrite<float>(cameraManager + PlayerCameraManager.DefaultFOV, ZOOM_TARGET_FOV);
                 }
             }
             catch (Exception ex)

@@ -49,6 +49,7 @@ namespace squad_dma
             chkMapFree = new CheckBox();
             btnApplyMapScale = new Button();
             chkHighAlert = new CheckBox();
+            chkShowObjectives = new CheckBox();
             tabSettings = new TabPage();
             grpUserInterface = new GroupBox();
             lblUIScale = new Label();
@@ -330,9 +331,22 @@ namespace squad_dma
             toolTip.SetToolTip(chkHighAlert, "Extend aimlines of enemies looking at you");
             chkHighAlert.UseVisualStyleBackColor = true;
             chkHighAlert.CheckedChanged += chkHighAlert_CheckedChanged;
-            // 
+            //
+            // chkShowObjectives
+            //
+            chkShowObjectives.AutoSize = true;
+            chkShowObjectives.Font = new Font("Segoe UI", 9F);
+            chkShowObjectives.Location = new Point(265, 100);
+            chkShowObjectives.Name = "chkShowObjectives";
+            chkShowObjectives.Size = new Size(110, 19);
+            chkShowObjectives.TabIndex = 19;
+            chkShowObjectives.Text = "Show Objectives";
+            toolTip.SetToolTip(chkShowObjectives, "Draw objective (flag) names and capture bounds on the radar");
+            chkShowObjectives.UseVisualStyleBackColor = true;
+            chkShowObjectives.CheckedChanged += chkShowObjectives_CheckedChanged;
+            //
             // tabSettings
-            // 
+            //
             tabSettings.BackColor = SystemColors.Control;
             tabSettings.Controls.Add(grpUserInterface);
             tabSettings.Controls.Add(grpRadar);
@@ -357,6 +371,7 @@ namespace squad_dma
             grpUserInterface.Controls.Add(chkShowEnemyDistance);
             grpUserInterface.Controls.Add(chkEnableAimview);
             grpUserInterface.Controls.Add(chkHighAlert);
+            grpUserInterface.Controls.Add(chkShowObjectives);
             grpUserInterface.Location = new Point(8, 6);
             grpUserInterface.Name = "grpUserInterface";
             grpUserInterface.Padding = new Padding(15);
@@ -601,6 +616,7 @@ namespace squad_dma
             chkInstantGrenade.TabIndex = 15;
             chkInstantGrenade.Text = "Instant Grenade ( Crash )";
             chkInstantGrenade.UseVisualStyleBackColor = true;
+            chkInstantGrenade.CheckedChanged += ChkInstantGrenade_CheckedChanged;
             // 
             // grpKeybinds
             // 
@@ -1219,6 +1235,7 @@ namespace squad_dma
         private Label lblThirdScopeMag;
         private TextBox txtThirdScopeMag;
         private CheckBox chkHighAlert;
+        private CheckBox chkShowObjectives;
         private CheckBox btnListVehicles;
 
         private void BtnKeybindZoomIn_Click(object sender, EventArgs e)

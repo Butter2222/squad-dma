@@ -49,10 +49,10 @@ namespace squad_dma.Source.Squad.Features
             {
                 ulong camMgr = _cachedCameraManager;
                 if (camMgr == 0) return;
-                
-                Memory.WriteValue(camMgr + PlayerCameraManager.CachedCameraShakeMod, 0UL);
+
+                EnqueueWrite<ulong>(camMgr + PlayerCameraManager.CachedCameraShakeMod, 0UL);
                 Logger.Debug($"[{_featureName}] Applied no camera shake (disabled camera shake modifier)");
-                
+
             }, "camera shake modifier nulling");
         }
 

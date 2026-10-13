@@ -24,6 +24,19 @@ namespace squad_dma.Source.Squad.Features
         {
         }
         
+        private static bool IsGrenade(ulong weapon)
+        {
+            if (weapon == 0) return false;
+            try
+            {
+                ulong weaponConfig = Memory.ReadPtr(weapon + ASQWeapon.WeaponConfig);
+                if (weaponConfig != 0) return false;
+                ulong grenadeStaticInfo = Memory.ReadPtr(weapon + (ulong)ASQGrenade.GrenadeStaticInfo);
+                return grenadeStaticInfo != 0;
+            }
+            catch { return false; }
+        }
+
         public void SetEnabled(bool enable)
         {
             if (!IsLocalPlayerValid())
@@ -31,40 +44,31 @@ namespace squad_dma.Source.Squad.Features
                 Logger.Error($"[{NAME}] Cannot enable/disable force full auto - local player is not valid");
                 return;
             }
-            
+
             _isEnabled = enable;
             Logger.Debug($"[{NAME}] Force Full Auto {(enable ? "enabled" : "disabled")}");
-            
+
             UpdateCachedPointers();
-            
+
             if (!enable)
             {
-                if (_lastWeapon != 0)
-                {
+                // Restore _lastWeapon only if it differs from _cachedCurrentWeapon to avoid double-restore
+                if (_lastWeapon != 0 && _lastWeapon != _cachedCurrentWeapon)
                     RestoreWeapon(_lastWeapon);
-                }
-                
+
                 if (_cachedCurrentWeapon != 0)
-                {
                     RestoreWeapon(_cachedCurrentWeapon);
-                }
-                
+
                 if (IsInVehicle() && _cachedVehicleWeapon != 0)
-                {
                     RestoreWeapon(_cachedVehicleWeapon);
-                }
             }
             else
             {
                 if (_cachedCurrentWeapon != 0)
-                {
                     Apply(_cachedCurrentWeapon);
-                }
-                
+
                 if (IsInVehicle() && _cachedVehicleWeapon != 0)
-                {
                     Apply(_cachedVehicleWeapon);
-                }
             }
         }
         
@@ -109,6 +113,7 @@ namespace squad_dma.Source.Squad.Features
         
         private void RestoreWeapon(ulong weapon)
         {
+            if (IsGrenade(weapon)) return;
             try
             {
                 ulong weaponConfig = weapon + ASQWeapon.WeaponConfig;
@@ -167,6 +172,7 @@ namespace squad_dma.Source.Squad.Features
         
         private void Apply(ulong weapon)
         {
+            if (IsGrenade(weapon)) return;
             try
             {
                 ulong weaponConfig = weapon + ASQWeapon.WeaponConfig;

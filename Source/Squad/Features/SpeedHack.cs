@@ -40,9 +40,9 @@ namespace squad_dma.Source.Squad.Features
         {
             SafeApplyModifications(() =>
             {
-                Memory.WriteValue<float>(_cachedSoldierActor + Actor.CustomTimeDilation, SPEED_MULTIPLIER);
+                EnqueueWrite<float>(_cachedSoldierActor + Actor.CustomTimeDilation, SPEED_MULTIPLIER);
                 Logger.Debug($"[{_featureName}] Applied speed multiplier: {SPEED_MULTIPLIER}x");
-                
+
             }, "SpeedHack time dilation modification");
         }
         

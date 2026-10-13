@@ -40,6 +40,7 @@ namespace squad_dma
 
         private GameTickets _gameTickets;
         private PlayerStats _gameStats;
+        private Objectives _objectives;
         private DebugVehicles _debugVehicles;
         private DebugTeam _debugTeam;
         private DebugSoldier _debugSoldier;
@@ -54,6 +55,7 @@ namespace squad_dma
         public Dictionary<int, int> TeamTickets => _gameTickets?.GetTickets();
         public GameTickets GameTickets => _gameTickets;
         public PlayerStats GameStats => _gameStats;
+        public Objectives Objectives => _objectives;
         public bool IsAimingDownSights => _isAimingDownSights;
         public bool HasPipScope => _hasPipScope;
         public float CurrentFOV => _currentFOV;
@@ -135,7 +137,8 @@ namespace squad_dma
                         
                         _gameTickets = new GameTickets(_gameWorld, _localUPlayer);
                         _gameStats = new PlayerStats(_playerController);
-                        
+                        _objectives = new Objectives(_gameWorld);
+
                         InitializeManagers();
                         
                         return;
@@ -161,6 +164,7 @@ namespace squad_dma
                 UpdateLocalPlayerInfo();
                 this._actors.UpdateList();
                 this._actors.UpdateAllPlayers();
+                _objectives?.Update();
 
                 //_debugVehicles?.GatherVehicleInformation();
 

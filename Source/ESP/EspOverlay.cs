@@ -257,13 +257,16 @@ namespace squad_dma
             return inGame && localPlayerExists && actorsExist;
         }
 
+        // Reused every frame: eliminates a full Dictionary copy (bucket arrays + entries) at up to 144 Hz.
+        private readonly List<UActor> _actorBuffer = new(256);
+        private readonly List<(UActor actor, Vector2 screenPos, float distance)> _visibleBuffer = new(128);
+
         private void RenderFrame()
         {
-            var frameStart = Stopwatch.StartNew();
+            // (Two unused Stopwatch.StartNew() heap allocations per frame removed.)
             renderTarget.BeginDraw();
             renderTarget.Clear(new RawColor4(0, 0, 0, 0));
 
-            Dictionary<ulong, UActor> actorsCopy;
             if (!IsReadyToRender())
             {
                 renderTarget.EndDraw();
@@ -271,10 +274,11 @@ namespace squad_dma
                 return;
             }
 
-            var copyStart = Stopwatch.StartNew();
-            actorsCopy = new Dictionary<ulong, UActor>(Game.Actors);
+            // Snapshot of the actor references for this frame; the dictionary's values are enumerated once.
+            _actorBuffer.Clear();
+            _actorBuffer.AddRange(Game.Actors.Values);
 
-            DrawEsp(actorsCopy);
+            DrawEsp(_actorBuffer);
             renderTarget.EndDraw();
         }
 
@@ -295,21 +299,32 @@ namespace squad_dma
 
         // Cache text metrics to avoid expensive TextLayout creation - MAJOR PERFORMANCE BOOST
         private Dictionary<string, (float width, float height)> _textMetricsCache = new Dictionary<string, (float width, float height)>();
-        private int _frameCacheCounter = 0;
-        
+        private const int MaxMetricsCacheEntries = 2048;
+
+        // One DirectWrite factory for the overlay's lifetime. The old code constructed (and never disposed) a new
+        // native factory on every cache miss, and the cache was cleared every 60 *lookups* rather than every 60
+        // frames, so with many actors nearly every label missed.
+        private readonly SharpDX.DirectWrite.Factory _dwFactory = new SharpDX.DirectWrite.Factory();
+
+        // "[Nm]" labels by whole meters, built once per distinct value instead of per actor per frame.
+        private static readonly string[] _bracketDistanceLabels = new string[4096];
+        private static string BracketDistance(int meters)
+        {
+            if ((uint)meters >= (uint)_bracketDistanceLabels.Length)
+                return $"[{meters}m]";
+            return _bracketDistanceLabels[meters] ??= $"[{meters}m]";
+        }
+
         private (float width, float height) GetTextMetrics(string text)
         {
-            // Clear cache every 60 frames to prevent memory buildup
-            if (_frameCacheCounter++ > 60)
-            {
-                _textMetricsCache.Clear();
-                _frameCacheCounter = 0;
-            }
-            
             if (_textMetricsCache.TryGetValue(text, out var cached))
                 return cached;
-            
-            using (var textLayout = new TextLayout(new SharpDX.DirectWrite.Factory(), text, textFormat, 1000f, 100f))
+
+            // Bound memory by size (metrics for a given string never change), not by a lookup counter.
+            if (_textMetricsCache.Count >= MaxMetricsCacheEntries)
+                _textMetricsCache.Clear();
+
+            using (var textLayout = new TextLayout(_dwFactory, text, textFormat, 1000f, 100f))
             {
                 var metrics = (textLayout.Metrics.Width, textLayout.Metrics.Height);
                 _textMetricsCache[text] = metrics;
@@ -317,9 +332,15 @@ namespace squad_dma
             }
         }
 
-        private void DrawEsp(Dictionary<ulong, UActor> actors)
+        // Squad / friendly / enemy brush, resolved once per actor per frame (was 3-5 IsInMySquad/IsFriendly calls per actor).
+        private SolidColorBrush TeamBrush(UActor actor)
         {
-            var espStart = Stopwatch.StartNew();
+            return actor.IsInMySquad() ? squadBrush :
+                   actor.IsFriendly() ? friendlyBrush : enemyPlayerBrush;
+        }
+
+        private void DrawEsp(List<UActor> actors)
+        {
             if (Game == null || Game.LocalPlayer == null || actors == null || actors.Count < 1)
             {
                 Program.Log("DrawEsp: Game, LocalPlayer, or actors not initialized.");
@@ -333,11 +354,15 @@ namespace squad_dma
             bool showAllies = Program.Config.EspShowAllies;
             bool showVehicles = Program.Config.EspShowVehicles;
 
-            var visibleActors = new List<(UActor actor, Vector2 screenPos, float distance)>();
+            // Reused list: eliminates a per-frame List allocation (and its growth reallocations).
+            var visibleActors = _visibleBuffer;
+            visibleActors.Clear();
 
-            //long totalWtsTime = 0;
-            //int wtsCalls = 0;
-            foreach (var actor in actors.Values)
+            // Players whose anchor is far outside the screen cannot have a visible box/label/bones.
+            // The margin is generous because close players span far more pixels than their anchor offset.
+            float cullW = Width + 1000f, cullH = Height + 1000f;
+
+            foreach (var actor in actors)
             {
                 if (actor == null || actor.Position == Vector3D.Zero)
                     continue;
@@ -361,11 +386,12 @@ namespace squad_dma
                 if (!isPlayer && !showVehicles)
                     continue;
 
-                //var wtsStart = Stopwatch.StartNew();
                 Vector2 screenPos = Camera.WorldToScreen(actor.Position);
-                //totalWtsTime += wtsStart.ElapsedMilliseconds;
-                //wtsCalls++;
                 if (screenPos == Vector2.Zero)
+                    continue;
+
+                // Eliminates box / text-metric / brush work for every off-screen player.
+                if (isPlayer && (screenPos.X < -1000f || screenPos.X > cullW || screenPos.Y < -1000f || screenPos.Y > cullH))
                     continue;
 
                 visibleActors.Add((actor, screenPos, distance));
@@ -385,13 +411,11 @@ namespace squad_dma
                     if (boxRect.Left == 0 && boxRect.Top == 0 && boxRect.Right == 0 && boxRect.Bottom == 0)
                         continue;
 
+                    // Squad / friendly / enemy brush resolved once for box, name, distance and bones.
+                    var teamBrush = TeamBrush(actor);
+
                     if (Program.Config.EspShowBox)
-                    {
-                        // Use squad, friendly, or enemy brush based on actor status
-                        var boxBrush = actor.IsInMySquad() ? squadBrush : 
-                                       actor.IsFriendly() ? friendlyBrush : enemyPlayerBrush;
-                        renderTarget.DrawRectangle(boxRect, boxBrush);
-                    }
+                        renderTarget.DrawRectangle(boxRect, teamBrush);
 
                     float boxCenterX = (boxRect.Left + boxRect.Right) / 2f;
                     float boxWidth = boxRect.Right - boxRect.Left;
@@ -405,30 +429,26 @@ namespace squad_dma
                             boxCenterX - rectWidth / 2f, boxRect.Top - textHeight - 5f,
                             boxCenterX + rectWidth / 2f, boxRect.Top - 5f
                         );
-                        var textBrush = actor.IsInMySquad() ? squadBrush : 
-                                       actor.IsFriendly() ? friendlyBrush : enemyPlayerBrush;
-                        renderTarget.DrawText(nameText, textFormat, nameRect, textBrush);
+                        renderTarget.DrawText(nameText, textFormat, nameRect, teamBrush);
                     }
 
                     if (Program.Config.EspShowDistance)
                     {
-                        string distanceText = $"[{(int)distance}m]";
+                        string distanceText = BracketDistance((int)distance);
                         var (textWidth, textHeight) = GetTextMetrics(distanceText);
                         float rectWidth = Math.Max(boxWidth, textWidth);
                         RawRectangleF distanceRect = new RawRectangleF(
                             boxCenterX - rectWidth / 2f, boxRect.Bottom + 5f,
                             boxCenterX + rectWidth / 2f, boxRect.Bottom + textHeight + 5f
                         );
-                        var distBrush = actor.IsInMySquad() ? squadBrush : 
-                                       actor.IsFriendly() ? friendlyBrush : enemyPlayerBrush;
-                        renderTarget.DrawText(distanceText, textFormat, distanceRect, distBrush);
+                        renderTarget.DrawText(distanceText, textFormat, distanceRect, teamBrush);
                     }
 
                     if (Program.Config.EspShowHealth && actor.Health >= 0)
                         DrawHealthBar(boxRect, actor.Health);
 
                     if (Program.Config.EspBones && actor.BoneScreenPositions != null)
-                        DrawBoneLines(actor, actor.BoneScreenPositions);
+                        DrawBoneLines(teamBrush, actor.BoneScreenPositions);
                 }
                 else if (IsVehicle(actor))
                 {
@@ -442,7 +462,7 @@ namespace squad_dma
             string name = actor.ActorType == ActorType.Player
                 ? (Program.Config.EspShowNames ? actor.Name : "")
                 : (ActorTypeNames.TryGetValue(actor.ActorType, out var typeName) ? typeName : "");
-            string wdistance = Program.Config.EspShowDistance ? $"[{(int)distance}m]" : "";
+            string wdistance = Program.Config.EspShowDistance ? BracketDistance((int)distance) : "";
             string whealth = Program.Config.EspShowHealth && actor.Health >= 0 ? $"[{(int)actor.Health}❤]" : "";
             return $"{name}{(string.IsNullOrEmpty(name) ? "" : " ")}{wdistance}{(string.IsNullOrEmpty(wdistance) ? "" : " ")}{whealth}";
         }
@@ -502,6 +522,12 @@ namespace squad_dma
                 screenPos.X + boxWidth / 2f, screenPos.Y + boxHeight / 2f
             );
 
+            // Eliminates the rectangle draw, string build and text-metrics lookup for fully off-screen vehicles
+            // (text sits just above the box and is at most a few hundred px wide, hence the margin).
+            if (vehicleRect.Right < -400f || vehicleRect.Left > Width + 400f ||
+                vehicleRect.Bottom < -100f || vehicleRect.Top > Height + 100f)
+                return;
+
             renderTarget.DrawRectangle(vehicleRect, vehicleBrush);
 
             string vehicleText = GetEspText(actor, distance);
@@ -515,30 +541,27 @@ namespace squad_dma
             renderTarget.DrawText(vehicleText, textFormat, textRect, vehicleBrush);
         }
 
-        void DrawBoneLines(UActor actor, Vector2[] screenPositions)
+        // Static: eliminates a List<(int,int)> and an unused int[] allocated per player per frame.
+        private static readonly (int, int)[] BoneConnections =
+        {
+            (0, 2), (2, 3), (3, 4), (2, 5), (5, 6), (6, 7), (7, 8),
+            (2, 9), (9, 10), (10, 11), (11, 12), (4, 13), (13, 14),
+            (14, 15), (15, 16), (4, 17), (17, 18), (18, 19), (19, 20),
+        };
+
+        void DrawBoneLines(SolidColorBrush lineBrush, Vector2[] screenPositions)
         {
             if (screenPositions == null || screenPositions.Length == 0)
                 return;
 
-            int[] boneIds = { 11, 9, 8, 7, 5, 14, 15, 16, 17, 38, 39, 40, 41, 68, 63, 64, 66, 69, 70, 71, 73 };
-
-            var boneConnections = new List<(int, int)>
-            {
-                (0, 2), (2, 3), (3, 4), (2, 5), (5, 6), (6, 7), (7, 8),
-                (2, 9), (9, 10), (10, 11), (11, 12), (4, 13), (13, 14),
-                (14, 15), (15, 16), (4, 17), (17, 18), (18, 19), (19, 20),
-            };
-
-            foreach (var (startIndex, endIndex) in boneConnections)
+            // Brush is resolved once by the caller instead of two team lookups per bone segment.
+            foreach (var (startIndex, endIndex) in BoneConnections)
             {
                 if (startIndex < 0 || startIndex >= screenPositions.Length ||
                     endIndex < 0 || endIndex >= screenPositions.Length ||
                     screenPositions[startIndex] == Vector2.Zero || screenPositions[endIndex] == Vector2.Zero)
                     continue;
 
-                // Use squad, friendly, or enemy brush based on actor status
-                var lineBrush = actor.IsInMySquad() ? squadBrush : 
-                               actor.IsFriendly() ? friendlyBrush : enemyPlayerBrush;
                 renderTarget.DrawLine(
                     screenPositions[startIndex].ToRawVector2(),
                     screenPositions[endIndex].ToRawVector2(),
@@ -600,6 +623,7 @@ namespace squad_dma
             friendlyVehicleBrush.Dispose();
             healthBrush.Dispose();
             textFormat.Dispose();
+            _dwFactory.Dispose();
             renderTarget.Dispose();
             base.OnClosed(e);
         }

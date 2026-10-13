@@ -25,6 +25,24 @@ namespace squad_dma.Source.Squad
         protected ulong _cachedVehicleWeapon = 0;
         protected ulong _cachedCameraManager = 0;
         protected DateTime _lastPointerUpdate = DateTime.MinValue;
+
+        // Per-tick write batch — all features enqueue here; flushed once per loop iteration
+        [ThreadStatic]
+        private static List<IScatterWriteEntry> _pendingWrites;
+
+        protected void EnqueueWrite<T>(ulong addr, T value) where T : unmanaged
+        {
+            _pendingWrites ??= new List<IScatterWriteEntry>(128);
+            _pendingWrites.Add(new ScatterWriteDataEntry<T>(addr, value));
+        }
+
+        private void FlushPendingWrites()
+        {
+            if (_pendingWrites == null || _pendingWrites.Count == 0) return;
+            try { Memory.WriteScatter(_pendingWrites); }
+            catch (Exception ex) { Logger.Error($"[Manager] Scatter flush error: {ex.Message}"); }
+            finally { _pendingWrites.Clear(); }
+        }
         
         // Modules
         private Suppression _suppression;
@@ -285,33 +303,31 @@ namespace squad_dma.Source.Squad
         {
             // Always call StateAwareFeature instances so they can handle their own state transitions
             ApplyStateAwareFeatures();
-            
+
             switch (playerState)
             {
                 case PlayerState.MainMenu:
-                    // No additional features for main menu
                     break;
-                    
+
                 case PlayerState.CommandMenu:
-                    // Limited features for command menu state
                     break;
-                    
+
                 case PlayerState.Alive:
-                    // Apply legacy features that need manual state management
                     ApplyAliveStateFeatures();
                     break;
-                    
+
                 case PlayerState.Dead:
-                    // Apply limited legacy features when dead
                     ApplyDeadStateFeatures();
                     break;
-                    
+
                 case PlayerState.Unknown:
                 default:
-                    // Apply legacy features for unknown states
                     ApplyAliveStateFeatures();
                     break;
             }
+
+            // Flush all enqueued writes from this tick in a single DMA scatter call
+            FlushPendingWrites();
         }
         
         /// <summary>
@@ -356,9 +372,12 @@ namespace squad_dma.Source.Squad
             // Legacy features that need manual state management
             if (_config.SetInteractionDistances && _interactionDistances.IsEnabled)
                 _interactionDistances.Apply();
-                
+
             if (_config.AllowShootingInMainBase && _shootingInMainBase.IsEnabled)
                 _shootingInMainBase.Apply();
+
+            if (_instantGrenade.IsEnabled)
+                _instantGrenade.Apply();
         }
         
         /// <summary>

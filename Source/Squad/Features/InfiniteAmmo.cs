@@ -164,11 +164,24 @@ namespace squad_dma.Source.Squad.Features
             }
         }
         
+        private static bool IsGrenade(ulong weapon)
+        {
+            if (weapon == 0) return false;
+            try
+            {
+                ulong weaponConfig = Memory.ReadPtr(weapon + ASQWeapon.WeaponConfig);
+                if (weaponConfig != 0) return false;
+                ulong grenadeStaticInfo = Memory.ReadPtr(weapon + (ulong)ASQGrenade.GrenadeStaticInfo);
+                return grenadeStaticInfo != 0;
+            }
+            catch { return false; }
+        }
+
         private void ApplyToWeapon(ulong weapon)
         {
             try
             {
-                if (weapon == 0) return;
+                if (weapon == 0 || IsGrenade(weapon)) return;
                     
                 ulong weaponConfigOffset = weapon + ASQWeapon.WeaponConfig;
                 

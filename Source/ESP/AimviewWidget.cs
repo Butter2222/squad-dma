@@ -134,6 +134,32 @@ namespace squad_dma
                 RenderAimviewWidget(canvas, ClientRectangle);
         }
 
+        private readonly List<AimviewEntry> _enemyPlayers = new(32);
+        private readonly List<AimviewEntry> _allyPlayers = new(32);
+        private readonly List<AimviewEntry> _enemyVehicles = new(16);
+        private readonly List<AimviewEntry> _allyVehicles = new(16);
+
+        private readonly SKPaint _boxPaint = new() { Style = SKPaintStyle.Stroke, StrokeWidth = 1.0f, IsAntialias = true };
+        private readonly SKPaint _dotPaint = new() { Style = SKPaintStyle.Fill, IsAntialias = true };
+        private readonly SKPaint _labelPaint = new() { TextSize = 9.0f, IsAntialias = true, Typeface = CustomFonts.SKFontFamilyRegular };
+        private readonly SKPaint _healthPaint = new() { Style = SKPaintStyle.Fill };
+        private readonly SKPaint _crosshairPaint = new()
+        {
+            Color = new SKColor(255, 255, 255, (byte)(0.8f * 255)), // Semi-transparent white
+            StrokeWidth = 1.0f,
+            Style = SKPaintStyle.Stroke,
+            IsAntialias = true
+        };
+
+        private static readonly Dictionary<ActorType, string> _vehicleNameCache = new();
+
+        private struct AimviewEntry
+        {
+            public ActorFrameData Data;
+            public SKPoint PanelPos;
+            public float Distance;
+        }
+
         /// <summary>
         /// Perform Aimview (Mini-ESP) Rendering with sophisticated distance-based opacity fading.
         /// </summary>
@@ -154,121 +180,144 @@ namespace squad_dma
             _espCanvas.Clear(SKColors.Transparent);
             try
             {
-                var game = Game;
-                if (game?.LocalPlayer != null)
+                // Read from the frame snapshot MainForm built for this frame instead of re-enumerating the live
+                // actor dictionary with per-actor locked Position reads and repeated team lookups.
+                var frame = _parentForm.FrameSnapshot;
+                var localPlayer = frame.LocalPlayer;
+                if (localPlayer != null)
                 {
-                    var localPlayer = game.LocalPlayer;
+                    // Hoisted out of the per-actor loop: these never change within a frame.
+                    Vector3 localPlayerPosVec = localPlayer.Position.ToVector3();
+                    float maxPlayerDistance = Program.Config.EspMaxDistance;
+                    float maxVehicleDistance = Program.Config.EspVehicleMaxDistance;
+                    bool showAllies = Program.Config.EspShowAllies;
+                    bool showVehicles = Program.Config.EspShowVehicles;
+                    bool showBox = Program.Config.EspShowBox;
+                    bool showBones = Program.Config.EspBones;
+                    var screenBounds = Screen.PrimaryScreen?.Bounds ?? new System.Drawing.Rectangle(0, 0, 1920, 1080);
+                    float scaleX = _espBitmap.Width / (float)screenBounds.Width;
+                    float scaleY = _espBitmap.Height / (float)screenBounds.Height;
+                    float bmpW = _espBitmap.Width, bmpH = _espBitmap.Height;
 
-                    var visibleActors = new List<(UActor actor, SKPoint panelPos, float distance)>();
+                    _enemyPlayers.Clear();
+                    _allyPlayers.Clear();
+                    _enemyVehicles.Clear();
+                    _allyVehicles.Clear();
 
-                    // Process all actors and collect visible ones
-                    foreach (var kvp in game.Actors)
+                    // Single pass: filter AND bucket by type/team (replaces 4 LINQ Where/OrderBy/ToList passes).
+                    var items = frame.Items;
+                    for (int i = 0; i < items.Count; i++)
                     {
-                        var actor = kvp.Value;
-                        if (actor == null || actor.Position == Vector3D.Zero)
-                            continue;
+                        var data = items[i];
+                        var actor = data.Actor;
 
                         // Skip local player
                         if (actor == localPlayer)
                             continue;
 
-                        // Skip dead players
-                        if (actor.ActorType == ActorType.Player && !actor.IsAlive)
+                        if (data.Position == Vector3D.Zero)
                             continue;
 
-                        // Calculate distance
-                        Vector3 localPlayerPosVec = localPlayer.Position.ToVector3();
-                        Vector3 actorPosVec = actor.Position.ToVector3();
+                        bool isPlayer = data.Type == ActorType.Player;
+
+                        // Skip dead players
+                        if (isPlayer && !data.IsAlive)
+                            continue;
+
+                        bool isVehicle = IsVehicle(data.Type);
+
+                        // Only players and vehicles are ever drawn below; skipping the rest here avoids a
+                        // world-to-screen projection for every mine / deployable / spawner in range.
+                        if (!isPlayer && !isVehicle)
+                            continue;
+
+                        Vector3 actorPosVec = data.Position.ToVector3();
                         float distance = Vector3.Distance(localPlayerPosVec, actorPosVec) / 100f;
-                        
+
                         // Apply distance limits based on actor type
-                        bool isPlayer = actor.ActorType == ActorType.Player;
-                        bool isVehicle = IsVehicle(actor.ActorType);
-                        float maxDistance = isPlayer ? Program.Config.EspMaxDistance : Program.Config.EspVehicleMaxDistance;
-                        if (distance > maxDistance)
+                        if (distance > (isPlayer ? maxPlayerDistance : maxVehicleDistance))
                             continue;
 
                         // Skip allies if not showing them
-                        if (!Program.Config.EspShowAllies && actor.IsFriendly())
+                        if (!showAllies && data.IsFriendly)
                             continue;
 
                         // Skip vehicles if not showing them
-                        if (isVehicle && !Program.Config.EspShowVehicles)
+                        if (isVehicle && !showVehicles)
                             continue;
 
                         // Skip unclaimed vehicles (don't show them at all)
-                        if (isVehicle && actor.TeamID == -1)
+                        if (isVehicle && data.TeamID == -1)
                             continue;
 
                         // World to screen conversion
-                        Vector2 screenPos = Camera.WorldToScreen(actor.Position);
+                        Vector2 screenPos = Camera.WorldToScreen(data.Position);
                         if (screenPos == Vector2.Zero)
                             continue;
 
-                        // Convert screen coordinates to panel coordinates 
-                        // Simple direct scaling - let's see if this fixes the bunching issue
-                        Vector2 panelPos = new Vector2(
-                            (screenPos.X / (Screen.PrimaryScreen?.Bounds.Width ?? 1920)) * _espBitmap.Width,
-                            (screenPos.Y / (Screen.PrimaryScreen?.Bounds.Height ?? 1080)) * _espBitmap.Height
-                        );
+                        // Convert screen coordinates to panel coordinates (direct scaling)
+                        float panelX = screenPos.X * scaleX;
+                        float panelY = screenPos.Y * scaleY;
 
-                        // Skip if outside panel bounds (with margin for partially visible elements)
-                        if (panelPos.X < -50 || panelPos.X > _espBitmap.Width + 50 || 
-                            panelPos.Y < -50 || panelPos.Y > _espBitmap.Height + 50)
+                        // Cull before bucketing: skip if outside panel bounds (with margin for partially visible elements)
+                        if (panelX < -50 || panelX > bmpW + 50 || panelY < -50 || panelY > bmpH + 50)
                             continue;
-                            
+
                         // Skip if coordinates are invalid
-                        if (float.IsNaN(panelPos.X) || float.IsNaN(panelPos.Y) || 
-                            float.IsInfinity(panelPos.X) || float.IsInfinity(panelPos.Y))
+                        if (float.IsNaN(panelX) || float.IsNaN(panelY) || float.IsInfinity(panelX) || float.IsInfinity(panelY))
                             continue;
 
-                        visibleActors.Add((actor, new SKPoint(panelPos.X, panelPos.Y), distance));
+                        var entry = new AimviewEntry { Data = data, PanelPos = new SKPoint(panelX, panelY), Distance = distance };
+                        if (isPlayer)
+                            (data.IsFriendly ? _allyPlayers : _enemyPlayers).Add(entry);
+                        else
+                            (data.IsFriendly ? _allyVehicles : _enemyVehicles).Add(entry);
                     }
 
-                    // Separate players and vehicles, then by friendly status for sophisticated opacity rendering
-                    var enemyPlayers = visibleActors.Where(x => x.actor.ActorType == ActorType.Player && !x.actor.IsFriendly()).OrderBy(x => x.distance).ToList();
-                    var allyPlayers = visibleActors.Where(x => x.actor.ActorType == ActorType.Player && x.actor.IsFriendly()).ToList();
-                    var enemyVehicles = visibleActors.Where(x => IsVehicle(x.actor.ActorType) && !x.actor.IsFriendly()).OrderBy(x => x.distance).ToList();
-                    var allyVehicles = visibleActors.Where(x => IsVehicle(x.actor.ActorType) && x.actor.IsFriendly()).ToList();
+                    // Enemies are ranked by distance (stable) for the FOV-based opacity falloff.
+                    InsertionSortByDistance(_enemyPlayers);
+                    InsertionSortByDistance(_enemyVehicles);
 
                     // Draw enemy players with sophisticated FOV-based distance opacity
-                    for (int i = 0; i < enemyPlayers.Count; i++)
+                    for (int i = 0; i < _enemyPlayers.Count; i++)
                     {
-                        var (actor, panelPos, distance) = enemyPlayers[i];
-                        float opacity = CalculateFieldOfViewOpacity(i, enemyPlayers.Count, distance);
-                        
-                        if (Program.Config.EspShowBox)
-                            DrawPlayerBox(actor, panelPos, distance, opacity);
-                        if (Program.Config.EspBones)
-                            DrawPlayerBones(actor, panelPos, opacity);
+                        var e = _enemyPlayers[i];
+                        float opacity = CalculateFieldOfViewOpacity(i, _enemyPlayers.Count, e.Distance);
+
+                        if (showBox)
+                            DrawPlayerBox(e.Data, e.PanelPos, e.Distance, opacity);
+                        if (showBones)
+                            DrawPlayerBones(e.Data, e.PanelPos, opacity);
                     }
 
                     // Draw ally players with full opacity (no distance fading)
-                    foreach (var (actor, panelPos, distance) in allyPlayers)
+                    for (int i = 0; i < _allyPlayers.Count; i++)
                     {
-                        if (Program.Config.EspShowBox)
-                            DrawPlayerBox(actor, panelPos, distance, 1.0f);
-                        if (Program.Config.EspBones)
-                            DrawPlayerBones(actor, panelPos, 1.0f);
+                        var e = _allyPlayers[i];
+                        if (showBox)
+                            DrawPlayerBox(e.Data, e.PanelPos, e.Distance, 1.0f);
+                        if (showBones)
+                            DrawPlayerBones(e.Data, e.PanelPos, 1.0f);
                     }
 
                     // Draw enemy vehicles with FOV-based distance opacity
-                    for (int i = 0; i < enemyVehicles.Count; i++)
+                    for (int i = 0; i < _enemyVehicles.Count; i++)
                     {
-                        var (actor, panelPos, distance) = enemyVehicles[i];
-                        float opacity = CalculateFieldOfViewOpacity(i, enemyVehicles.Count, distance);
-                        
-                        if (Program.Config.EspShowBox)
-                            DrawVehicleBox(actor, panelPos, distance, opacity);
+                        var e = _enemyVehicles[i];
+                        float opacity = CalculateFieldOfViewOpacity(i, _enemyVehicles.Count, e.Distance);
+
+                        if (showBox)
+                            DrawVehicleBox(e.Data, e.PanelPos, e.Distance, opacity);
                     }
 
                     // Draw ally vehicles with full opacity (no distance fading)
-                    if (Program.Config.EspShowAllies)
+                    if (showAllies)
                     {
-                        foreach (var (actor, panelPos, distance) in allyVehicles)
+                        for (int i = 0; i < _allyVehicles.Count; i++)
                         {
-                            if (Program.Config.EspShowBox)
-                                DrawVehicleBox(actor, panelPos, distance, 1.0f);
+                            var e = _allyVehicles[i];
+                            if (showBox)
+                                DrawVehicleBox(e.Data, e.PanelPos, e.Distance, 1.0f);
                         }
                     }
 
@@ -285,43 +334,31 @@ namespace squad_dma
             parent.DrawBitmap(_espBitmap, dest, SharedPaints.PaintBitmap);
         }
 
+        /// <summary>Stable in-place sort; lists here hold only on-screen targets so insertion sort beats LINQ OrderBy.</summary>
+        private static void InsertionSortByDistance(List<AimviewEntry> list)
+        {
+            for (int i = 1; i < list.Count; i++)
+            {
+                var key = list[i];
+                int j = i - 1;
+                while (j >= 0 && list[j].Distance > key.Distance)
+                {
+                    list[j + 1] = list[j];
+                    j--;
+                }
+                list[j + 1] = key;
+            }
+        }
+
         private void DrawCrosshair()
         {
             if (_espCanvas == null) return;
 
-            try
-            {
-                // Calculate center of the content panel
-                float centerX = _espBitmap.Width / 2.0f;
-                float centerY = _espBitmap.Height / 2.0f;
+            float centerX = _espBitmap.Width / 2.0f;
+            float centerY = _espBitmap.Height / 2.0f;
 
-                // Crosshair brush (semi-transparent white)
-                using var crosshairBrush = new SKPaint
-                {
-                    Color = new SKColor(255, 255, 255, (byte)(0.8f * 255)), // Semi-transparent white
-                    StrokeWidth = 1.0f,
-                    Style = SKPaintStyle.Stroke,
-                    IsAntialias = true
-                };
-
-                // Draw vertical line (center X)
-                _espCanvas.DrawLine(
-                    new SKPoint(centerX, 0),
-                    new SKPoint(centerX, _espBitmap.Height),
-                    crosshairBrush
-                );
-
-                // Draw horizontal line (center Y)
-                _espCanvas.DrawLine(
-                    new SKPoint(0, centerY),
-                    new SKPoint(_espBitmap.Width, centerY),
-                    crosshairBrush
-                );
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Crosshair draw error: {ex.Message}");
-            }
+            _espCanvas.DrawLine(centerX, 0, centerX, _espBitmap.Height, _crosshairPaint); // vertical
+            _espCanvas.DrawLine(0, centerY, _espBitmap.Width, centerY, _crosshairPaint);  // horizontal
         }
 
         private float CalculateFieldOfViewOpacity(int visibleEnemyIndex, int totalVisibleEnemies, float distance)
@@ -330,71 +367,45 @@ namespace squad_dma
             // This is different from global closest - it's the closest enemy you're actually looking at
             if (visibleEnemyIndex == 0)
                 return 1.0f;
-            
+
             // Calculate opacity based on visible enemy ranking (only enemies in your field of view)
             // Each subsequent visible enemy gets progressively more transparent
             float rankOpacity = Math.Max(0.2f, 1.0f - (visibleEnemyIndex * 0.12f));
-            
+
             // Additional distance-based opacity reduction for very far enemies
             // Enemies beyond 100m get additional transparency
             float distanceOpacity = distance <= 100f ? 1.0f : Math.Max(0.3f, 1.0f - ((distance - 100f) / 300f));
-            
+
             // Combine both factors, ensuring reasonable minimum visibility
             return Math.Max(0.2f, rankOpacity * distanceOpacity);
         }
 
-        private void DrawPlayerBones(UActor actor, SKPoint panelPos, float opacity = 1.0f)
+        /// <summary>Squad / friendly / enemy color, with distance-based alpha applied.</summary>
+        private static SKColor PlayerColor(in ActorFrameData data, float opacity)
         {
-            // Minimal center dot indicator 
-            float dotSize = 1.5f;
-            var dotRect = new SKRect(
-                panelPos.X - dotSize, 
-                panelPos.Y - dotSize, 
-                panelPos.X + dotSize, 
-                panelPos.Y + dotSize);
-            
-            // Create brush with distance-based opacity for bones - using updated color scheme
-            SKPaint dotBrush;
-            if (actor.IsInMySquad())
-            {
-                // Squad members = Green
-                dotBrush = new SKPaint
-                {
-                    Color = SKPaints.Squad.WithAlpha((byte)(255 * opacity)),
-                    Style = SKPaintStyle.Fill,
-                    IsAntialias = true
-                };
-            }
-            else if (actor.IsFriendly())
-            {
-                // Friendly players = SKPaints.Friendly (light blue)
-                dotBrush = new SKPaint
-                {
-                    Color = SKPaints.Friendly.WithAlpha((byte)(255 * opacity)),
-                    Style = SKPaintStyle.Fill,
-                    IsAntialias = true
-                };
-            }
-            else
-            {
-                // Enemy players = White
-                dotBrush = new SKPaint
-                {
-                    Color = SKPaints.EnemyPlayer.WithAlpha((byte)(255 * opacity)),
-                    Style = SKPaintStyle.Fill,
-                    IsAntialias = true
-                };
-            }
-            
-            _espCanvas.DrawRect(dotRect, dotBrush);
-            
-            // Dispose dynamic brush to prevent memory leaks
-            dotBrush.Dispose();
+            var color = data.IsInMySquad ? SKPaints.Squad      // Squad members = Green
+                      : data.IsFriendly ? SKPaints.Friendly    // Friendly players = light blue
+                      : SKPaints.EnemyPlayer;                  // Enemy players = White
+            return color.WithAlpha((byte)(255 * opacity));
         }
 
-        private void DrawPlayerBox(UActor actor, SKPoint panelPos, float distance, float opacity = 1.0f)
+        private void DrawPlayerBones(in ActorFrameData data, SKPoint panelPos, float opacity = 1.0f)
         {
-            // Use a simple fixed-size box based on distance 
+            // Minimal center dot indicator
+            float dotSize = 1.5f;
+            var dotRect = new SKRect(
+                panelPos.X - dotSize,
+                panelPos.Y - dotSize,
+                panelPos.X + dotSize,
+                panelPos.Y + dotSize);
+
+            _dotPaint.Color = PlayerColor(data, opacity);
+            _espCanvas.DrawRect(dotRect, _dotPaint);
+        }
+
+        private void DrawPlayerBox(in ActorFrameData data, SKPoint panelPos, float distance, float opacity = 1.0f)
+        {
+            // Use a simple fixed-size box based on distance
             float boxSize = Math.Max(20f, Math.Min(100f, 2000f / distance)); // Adaptive size based on distance
             float boxWidth = boxSize * 0.6f; // Narrower width for player aspect ratio
             float boxHeight = boxSize;
@@ -406,86 +417,35 @@ namespace squad_dma
                 panelPos.Y + boxHeight / 2f
             );
 
-            // Create brush with distance-based opacity - using updated color scheme
-            SKPaint boxBrush;
-            if (actor.IsInMySquad())
-            {
-                // Squad members = Green
-                boxBrush = new SKPaint
-                {
-                    Color = SKPaints.Squad.WithAlpha((byte)(255 * opacity)),
-                    Style = SKPaintStyle.Stroke,
-                    StrokeWidth = 1.0f,
-                    IsAntialias = true
-                };
-            }
-            else if (actor.IsFriendly())
-            {
-                // Friendly players = SKPaints.Friendly (light blue)
-                boxBrush = new SKPaint
-                {
-                    Color = SKPaints.Friendly.WithAlpha((byte)(255 * opacity)),
-                    Style = SKPaintStyle.Stroke,
-                    StrokeWidth = 1.0f,
-                    IsAntialias = true
-                };
-            }
-            else
-            {
-                // Enemy players = White
-                boxBrush = new SKPaint
-                {
-                    Color = SKPaints.EnemyPlayer.WithAlpha((byte)(255 * opacity)),
-                    Style = SKPaintStyle.Stroke,
-                    StrokeWidth = 1.0f,
-                    IsAntialias = true
-                };
-            }
-            
-            _espCanvas.DrawRect(rect, boxBrush);
+            var color = PlayerColor(data, opacity);
+            _boxPaint.Color = color;
+            _espCanvas.DrawRect(rect, _boxPaint);
 
             // Draw health bar
-            DrawHealthBar(actor, rect, opacity);
+            DrawHealthBar(data.Health, rect, opacity);
 
-            // Draw player info text (name and/or distance) 
-            var textParts = new List<string>();
-            
-            if (Program.Config.EspShowNames && !string.IsNullOrEmpty(actor.Name))
+            // Draw player info text (name and/or distance)
+            string name = Program.Config.EspShowNames && !string.IsNullOrEmpty(data.Actor.Name) ? data.Actor.Name : null;
+            string dist = Program.Config.EspShowDistance ? DistanceLabels.ForMeters(RoundedMeters(distance)) : null;
+            string text = name != null && dist != null ? string.Concat(name, " ", dist) : name ?? dist;
+
+            if (text != null)
             {
-                textParts.Add(actor.Name);
-            }
-            
-            if (Program.Config.EspShowDistance)
-            {
-                textParts.Add($"{distance:F0}m");
-            }
-            
-            if (textParts.Count > 0)
-            {
-                var text = string.Join(" ", textParts);
-                
                 // Draw text using same color as box
-                using var textPaint = new SKPaint
-                {
-                    Color = boxBrush.Color,
-                    TextSize = 9.0f,
-                    IsAntialias = true,
-                    Typeface = CustomFonts.SKFontFamilyRegular
-                };
-                
-                _espCanvas.DrawText(text, new SKPoint(rect.Left, rect.Bottom + 15), textPaint);
+                _labelPaint.Color = color;
+                _espCanvas.DrawText(text, rect.Left, rect.Bottom + 15, _labelPaint);
             }
-            
-            // Dispose dynamic brush to prevent memory leaks
-            boxBrush.Dispose();
         }
 
-        private void DrawHealthBar(UActor actor, SKRect rect, float opacity = 1.0f)
+        // Matches the old "{distance:F0}" formatting (round half away from zero)
+        private static int RoundedMeters(float distance) => (int)MathF.Round(distance, MidpointRounding.AwayFromZero);
+
+        private void DrawHealthBar(float health, SKRect rect, float opacity = 1.0f)
         {
-            if (!Program.Config.EspShowHealth || actor.Health <= 0)
+            if (!Program.Config.EspShowHealth || health <= 0)
                 return;
 
-            float healthPercent = actor.Health / 100.0f;
+            float healthPercent = health / 100.0f;
             float barWidth = rect.Right - rect.Left;
             float barHeight = 2.0f; // Thinner health bar
 
@@ -495,42 +455,34 @@ namespace squad_dma
                 rect.Left + (barWidth * healthPercent),
                 rect.Top - 1);
 
-            // Color based on health percentage with opacity 
-            // Health bar color like EspOverlay - red to green gradient
-            byte healthAlpha = (byte)(255 * opacity);
-            var healthColor = new SKColor(
-                (byte)(255 * (1.0f - (actor.Health / 100f))), // Red component (high when low health)
-                (byte)(255 * (actor.Health / 100f)),          // Green component (high when high health)  
-                0,                                             // Blue component (always 0)
-                healthAlpha);
-
-            using var healthPaint = new SKPaint
-            {
-                Color = healthColor,
-                Style = SKPaintStyle.Fill
-            };
-            _espCanvas.DrawRect(healthRect, healthPaint);
+            // Health bar color like EspOverlay - red to green gradient, with opacity
+            _healthPaint.Color = new SKColor(
+                (byte)(255 * (1.0f - (health / 100f))), // Red component (high when low health)
+                (byte)(255 * (health / 100f)),          // Green component (high when high health)
+                0,                                       // Blue component (always 0)
+                (byte)(255 * opacity));
+            _espCanvas.DrawRect(healthRect, _healthPaint);
         }
 
-        private void DrawVehicleBox(UActor actor, SKPoint panelPos, float distance, float opacity = 1.0f)
+        private void DrawVehicleBox(in ActorFrameData data, SKPoint panelPos, float distance, float opacity = 1.0f)
         {
             // Skip unclaimed vehicles - they should not be shown at all
-            if (actor.TeamID == -1)
+            if (data.TeamID == -1)
                 return;
 
-            // Vehicle-type-based sizing with reduced base size 
+            // Vehicle-type-based sizing with reduced base size
             float baseSize = 480f; // Reduced by 60% (1200 * 0.4)
             float minSize = 50f;    // Minimum size to ensure visibility in aimview
             float maxSize = 2000f;  // Maximum size for very large vehicles
-            
+
             // Get vehicle-specific size multiplier
-            float sizeMultiplier = GetVehicleSizeMultiplier(actor.ActorType);
+            float sizeMultiplier = GetVehicleSizeMultiplier(data.Type);
             float vehicleBaseSize = baseSize * sizeMultiplier;
-            
+
             // Distance-based scaling with better curve
             float distanceScale = Math.Max(1f, distance / 10f); // Scale factor based on distance
             float boxSize = Math.Max(minSize, Math.Min(maxSize, vehicleBaseSize / distanceScale));
-            
+
             // Aspect ratio similar to 1204x754 (approximately 1.6:1)
             float boxWidth = boxSize * 1.6f;  // Width based on 1204x754 aspect ratio
             float boxHeight = boxSize * 1.0f; // Height maintains the calculated box size
@@ -542,63 +494,20 @@ namespace squad_dma
                 panelPos.Y + boxHeight / 2f
             );
 
-            // Create brush with distance-based opacity - using updated color scheme
-            SKPaint vehBrush;
-            if (actor.IsFriendly())
-            {
-                // Friendly vehicles = SKPaints.FriendlyVehicle (friendly blue color)
-                vehBrush = new SKPaint
-                {
-                    Color = SKPaints.FriendlyVehicle.WithAlpha((byte)(255 * opacity)),
-                    Style = SKPaintStyle.Stroke,
-                    StrokeWidth = 1.0f,
-                    IsAntialias = true
-                };
-            }
-            else
-            {
-                // Enemy vehicles = Yellow
-                vehBrush = new SKPaint
-                {
-                    Color = SKPaints.EnemyVehicle.WithAlpha((byte)(255 * opacity)), // Yellow
-                    Style = SKPaintStyle.Stroke,
-                    StrokeWidth = 1.0f,
-                    IsAntialias = true
-                };
-            }
-            
-            _espCanvas.DrawRect(rect, vehBrush);
+            // Friendly vehicles = friendly blue, enemy vehicles = yellow, both with distance-based opacity
+            var color = (data.IsFriendly ? SKPaints.FriendlyVehicle : SKPaints.EnemyVehicle).WithAlpha((byte)(255 * opacity));
+            _boxPaint.Color = color;
+            _espCanvas.DrawRect(rect, _boxPaint);
 
-            // Draw vehicle info text if enabled 
-            var textParts = new List<string>();
-            
-            // Always show vehicle name
-            var vehicleName = ActorTypeNames.ContainsKey(actor.ActorType) ? ActorTypeNames[actor.ActorType] : actor.ActorType.ToString();
-            textParts.Add(vehicleName);
-            
-            if (Program.Config.EspShowDistance)
-            {
-                textParts.Add($"{distance:F0}m");
-            }
-            
-            if (textParts.Count > 0)
-            {
-                var text = string.Join(" ", textParts);
-                
-                // Draw text using same brush as vehicle box
-                using var textPaint = new SKPaint
-                {
-                    Color = vehBrush.Color,
-                    TextSize = 9.0f,
-                    IsAntialias = true,
-                    Typeface = CustomFonts.SKFontFamilyRegular
-                };
-                
-                _espCanvas.DrawText(text, new SKPoint(rect.Left, rect.Bottom + 15), textPaint);
-            }
-            
-            // Dispose dynamic brush to prevent memory leaks (AFTER using it)
-            vehBrush.Dispose();
+            // Vehicle name always shown, distance if enabled
+            string vehicleName = GetVehicleName(data.Type);
+            string text = Program.Config.EspShowDistance
+                ? string.Concat(vehicleName, " ", DistanceLabels.ForMeters(RoundedMeters(distance)))
+                : vehicleName;
+
+            // Draw text using same color as vehicle box
+            _labelPaint.Color = color;
+            _espCanvas.DrawText(text, rect.Left, rect.Bottom + 15, _labelPaint);
         }
 
         private bool IsVehicle(ActorType type)
@@ -610,7 +519,7 @@ namespace squad_dma
         {
             if (!VehicleSizes.TryGetValue(vehicleType, out VehicleSize size))
                 return 1.0f; // Default size for unknown vehicles
-            
+
             return size switch
             {
                 VehicleSize.Small => 0.7f,        // 70% of base size (motorcycles)
@@ -623,7 +532,13 @@ namespace squad_dma
 
         private string GetVehicleName(ActorType type)
         {
-            return ActorTypeNames.ContainsKey(type) ? ActorTypeNames[type] : type.ToString();
+            // Enum.ToString() allocates; resolve each type's name once.
+            if (!_vehicleNameCache.TryGetValue(type, out var name))
+            {
+                name = ActorTypeNames.TryGetValue(type, out var known) ? known : type.ToString();
+                _vehicleNameCache[type] = name;
+            }
+            return name;
         }
 
 
@@ -641,6 +556,11 @@ namespace squad_dma
         {
             _espBitmap?.Dispose();
             _espCanvas?.Dispose();
+            _boxPaint.Dispose();
+            _dotPaint.Dispose();
+            _labelPaint.Dispose();
+            _healthPaint.Dispose();
+            _crosshairPaint.Dispose();
             base.Dispose();
         }
 

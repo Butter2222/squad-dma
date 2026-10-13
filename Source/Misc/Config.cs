@@ -96,6 +96,9 @@ namespace squad_dma
         [JsonPropertyName("espBones")]
         public bool EspBones { get; set; } = true;
 
+        [JsonPropertyName("showObjectives")]
+        public bool ShowObjectives { get; set; } = true;
+
         [JsonPropertyName("espShowAllies")]
         public bool EspShowAllies { get; set; } = false;
 
@@ -262,7 +265,7 @@ namespace squad_dma
         public Dictionary<string, float> OriginalGrenadeAnimValues { get; set; } = new Dictionary<string, float>();
 
         [JsonPropertyName("originalGrenadeItemValues")]
-        public Dictionary<string, byte> OriginalGrenadeItemValues { get; set; } = new Dictionary<string, byte>();
+        public Dictionary<string, int> OriginalGrenadeItemValues { get; set; } = new Dictionary<string, int>();
 
         /// <summary>
         /// Clears all cached feature values to ensure a clean state on game/app restart.
@@ -283,7 +286,7 @@ namespace squad_dma
             OriginalNoSwayWeaponValues = new Dictionary<string, float>();
             OriginalGrenadeValues = new Dictionary<string, float>();
             OriginalGrenadeAnimValues = new Dictionary<string, float>();
-            OriginalGrenadeItemValues = new Dictionary<string, byte>();
+            OriginalGrenadeItemValues = new Dictionary<string, int>();
             OriginalTimeBetweenShots = 0.0f;
             OriginalTimeBetweenSingleShots = 0.0f;
             OriginalVehicleTimeBetweenShots = 0.0f;
@@ -349,6 +352,12 @@ namespace squad_dma
         private static readonly object _lock = new();
 
         [JsonIgnore]
+        private static readonly System.Diagnostics.Stopwatch _saveCooldown = System.Diagnostics.Stopwatch.StartNew();
+
+        [JsonIgnore]
+        private const int SAVE_DEBOUNCE_MS = 1000;
+
+        [JsonIgnore]
         private const string SettingsDirectory = "Configuration";
         #endregion
 
@@ -356,6 +365,7 @@ namespace squad_dma
         public Config()
         {
             HighAlert = true;
+            ShowObjectives = true;
             ShowEnemyDistance = true;
             EnableAimview = true;
             DefaultZoom = 100;
@@ -426,16 +436,20 @@ namespace squad_dma
         /// Saves the configuration to disk.
         /// </summary>
         /// <param name="config">The configuration to save.</param>
-        public static void SaveConfig(Config config)
+        public static void SaveConfig(Config config, bool force = false)
         {
             lock (_lock)
             {
+                if (!force && _saveCooldown.ElapsedMilliseconds < SAVE_DEBOUNCE_MS)
+                    return;
+
                 try
                 {
                     Directory.CreateDirectory(SettingsDirectory);
                     var settingsPath = Path.Combine(SettingsDirectory, "Settings.json");
                     var json = JsonSerializer.Serialize(config, _jsonOptions);
                     File.WriteAllText(settingsPath, json);
+                    _saveCooldown.Restart();
                     Logger.Info($"Successfully saved config to {settingsPath}");
                 }
                 catch (Exception ex)
@@ -456,7 +470,7 @@ namespace squad_dma
             {
                 config.ClearFeatureCaches();
                 Logger.Info("Cleared caches");
-                SaveConfig(config);
+                SaveConfig(config, force: true);
             }
         }
         #endregion

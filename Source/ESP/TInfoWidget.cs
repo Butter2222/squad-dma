@@ -10,6 +10,21 @@ namespace squad_dma
         #region Fields
         private readonly MainForm _mainForm;
         private List<TargetMarkerInfo> _markerInfos = new List<TargetMarkerInfo>();
+
+        // Input signature of the last row build (see UpdateMarkerInfo)
+        private readonly List<MainForm.PointOfInterest> _lastMarkers = new();
+        private double _lastPlayerX, _lastPlayerY;
+        private object _lastWeaponData;
+        private bool _inputsValid;
+
+        // Layout values that only change when rows or UI scale change
+        private static readonly string[] Headers = { "Mark", "Distance", "Bearing", "Range" };
+        private static readonly float[] BaseColumnWidths = { 40, 80, 80, 80 };
+        private readonly float[] _columnWidths = new float[4];
+        private float _layoutScale = float.NaN;
+        private float _rowHeight;
+        private float _totalWidth;
+        private bool _sizeDirty = true;
         #endregion
 
         #region Properties
@@ -39,11 +54,17 @@ namespace squad_dma
             // Update marker information
             UpdateMarkerInfo();
             
-            // Calculate required size and adjust
-            var requiredSize = CalculateRequiredSize();
-            if (Size.Width != requiredSize.Width || Size.Height != requiredSize.Height)
+            // Eliminates recomputing column widths (LINQ Select/ToArray/Sum) and re-applying the size
+            // (locked setter + resize-triangle rebuild) every frame: only when rows or scale changed.
+            EnsureLayout();
+            if (_sizeDirty)
             {
-                Size = requiredSize;
+                var requiredSize = CalculateRequiredSize();
+                if (Size.Width != requiredSize.Width || Size.Height != requiredSize.Height)
+                {
+                    Size = requiredSize;
+                }
+                _sizeDirty = false;
             }
 
             // Draw custom background with 80% opacity
@@ -77,65 +98,74 @@ namespace squad_dma
         #region Private Methods
         private void UpdateMarkerInfo()
         {
-            _markerInfos.Clear();
-
             var markers = _mainForm.GetPointsOfInterest();
             var localPlayer = _mainForm.GetLocalPlayer();
-            
+
             if (localPlayer == null || markers == null)
+            {
+                _markerInfos.Clear();
+                _inputsValid = false;
+                return;
+            }
+
+            var playerPos = localPlayer.Position; // single locked read
+            var weaponData = Memory._game?._soldierManager?.WeaponDetector?.CurrentWeaponData;
+
+            // Eliminates rebuilding every row (reflection lookups, trig, string formatting, ranging-table lookups)
+            // on every frame: rows only change when the player moved, the weapon changed, or the marker list changed.
+            if (_inputsValid &&
+                playerPos.X == _lastPlayerX && playerPos.Y == _lastPlayerY &&
+                ReferenceEquals(weaponData, _lastWeaponData) &&
+                MarkersUnchanged(markers))
                 return;
 
+            _inputsValid = true;
+            _lastPlayerX = playerPos.X;
+            _lastPlayerY = playerPos.Y;
+            _lastWeaponData = weaponData;
+            _lastMarkers.Clear();
+
+            _markerInfos.Clear();
             for (int i = 0; i < markers.Count && i < 5; i++)
             {
                 var marker = markers[i];
-                var info = CalculateMarkerInfo(marker, localPlayer, i + 1);
+                _lastMarkers.Add(marker);
+                var info = CalculateMarkerInfo(marker, playerPos, i + 1);
                 if (info != null)
                     _markerInfos.Add(info);
             }
+            _sizeDirty = true;
         }
 
-        private TargetMarkerInfo CalculateMarkerInfo(object marker, object localPlayer, int markerNumber)
+        private bool MarkersUnchanged(List<MainForm.PointOfInterest> markers)
+        {
+            int count = Math.Min(markers.Count, 5);
+            if (count != _lastMarkers.Count)
+                return false;
+            for (int i = 0; i < count; i++)
+                if (!ReferenceEquals(markers[i], _lastMarkers[i]))
+                    return false;
+            return true;
+        }
+
+        private TargetMarkerInfo CalculateMarkerInfo(MainForm.PointOfInterest marker, Vector3D playerPos, int markerNumber)
         {
             try
             {
-                // Get marker position using reflection (since we don't have direct access to PointOfInterest class)
-                var positionProp = marker.GetType().GetProperty("Position");
-                var nameProp = marker.GetType().GetProperty("Name");
-                
-                if (positionProp?.GetValue(marker) is not Vector3D markerPos || 
-                    nameProp?.GetValue(marker) is not string markerName)
-                    return null;
+                // Typed access replaces two reflection GetProperty/GetValue pairs per marker per frame.
+                var markerPos = marker.Position;
 
-                // Get local player position
-                var playerPosProp = localPlayer.GetType().GetProperty("Position");
-                if (playerPosProp?.GetValue(localPlayer) is not Vector3D playerPos)
-                    return null;
+                // Both positions carry the same absolute offset, which cancels in every delta below,
+                // so the MainForm round-trip through GetAbsoluteLocation() is not needed.
+                var dx = markerPos.X - playerPos.X;
+                var dy = markerPos.Y - playerPos.Y;
 
-                // Use the same position calculation as MainForm (with AbsoluteLocation adjustment)
-                var absoluteLocation = _mainForm.GetAbsoluteLocation();
-                var localPlayerPos = new Vector3D(
-                    playerPos.X + absoluteLocation.X,
-                    playerPos.Y + absoluteLocation.Y,
-                    playerPos.Z + absoluteLocation.Z
-                );
-                
-                var poiRenderPos = new Vector3D(
-                    markerPos.X + absoluteLocation.X,
-                    markerPos.Y + absoluteLocation.Y,
-                    markerPos.Z + absoluteLocation.Z
-                );
-
-                // Calculate 2D distance on flat ground (ignore Z height differences)
-                var dx = poiRenderPos.X - localPlayerPos.X;
-                var dy = poiRenderPos.Y - localPlayerPos.Y;
+                // 2D distance on flat ground (ignore Z height differences)
                 var distance = Math.Sqrt(dx * dx + dy * dy);
                 int distanceMeters = (int)Math.Round(distance / 100);
 
-                // Calculate bearing using the exact working formula with adjusted positions
-                double deltaX = poiRenderPos.X - localPlayerPos.X;
-                double deltaY = localPlayerPos.Y - poiRenderPos.Y;
-
-                double radians = Math.Atan2(deltaY, deltaX);
+                // Bearing using the exact working formula
+                double radians = Math.Atan2(-dy, dx);
                 double degrees = radians * (180.0 / Math.PI);
                 degrees = 90.0 - degrees;
 
@@ -152,7 +182,11 @@ namespace squad_dma
                     Distance = distanceMeters,
                     Bearing = bearing,
                     RangingInfo = rangingInfo,
-                    Name = markerName
+                    Name = marker.Name,
+                    // Formatted once when the row is rebuilt, not once per cell per frame.
+                    NumberText = markerNumber.ToString(),
+                    DistanceText = $"{distanceMeters}m",
+                    BearingText = $"{bearing:F1}°"
                 };
             }
             catch
@@ -201,17 +235,31 @@ namespace squad_dma
             }
         }
 
+        private float _layoutTextSize = float.NaN;
+
+        private void EnsureLayout()
+        {
+            if (_layoutScale == ScaleFactor && _layoutTextSize == TextPaint.TextSize)
+                return;
+
+            _layoutScale = ScaleFactor;
+            _layoutTextSize = TextPaint.TextSize;
+            _totalWidth = 0f;
+            for (int i = 0; i < _columnWidths.Length; i++)
+            {
+                _columnWidths[i] = BaseColumnWidths[i] * ScaleFactor;
+                _totalWidth += _columnWidths[i];
+            }
+            _rowHeight = (TextPaint.FontSpacing + 4f) * ScaleFactor;
+            _sizeDirty = true;
+        }
+
         private SKSize CalculateRequiredSize()
         {
             float pad = PADDING * ScaleFactor;
-            var baseColumnWidths = new float[] { 40, 80, 80, 80 };
-            var columnWidths = baseColumnWidths.Select(w => w * ScaleFactor).ToArray();
-            float totalWidth = columnWidths.Sum();
-            
-            var rowHeight = (TextPaint.FontSpacing + 4f) * ScaleFactor;
-            float totalHeight = (_markerInfos.Count + 1) * rowHeight; // +1 for header
+            float totalHeight = (_markerInfos.Count + 1) * _rowHeight; // +1 for header
 
-            return new SKSize(totalWidth + pad * 2, totalHeight + pad * 2);
+            return new SKSize(_totalWidth + pad * 2, totalHeight + pad * 2);
         }
 
         private void DrawCustomBackground(SKCanvas canvas)
@@ -263,25 +311,17 @@ namespace squad_dma
             float textOffsetX = TEXT_OFFSET_X * ScaleFactor;
             float textOffsetY = TEXT_OFFSET_Y * ScaleFactor;
 
+            // Layout (column widths / row height / total width) comes from the cache built in EnsureLayout();
+            // the size was already applied in Draw(), so it is not recomputed or re-set here.
+            float rowHeight = _rowHeight;
+            float totalWidth = _totalWidth;
+
             var origin = new SKPoint(ClientRectangle.Left + pad, ClientRectangle.Top + pad);
-
-            // Column headers
-            var headers = new[] { "Mark", "Distance", "Bearing", "Range" };
-            var baseColumnWidths = new float[] { 40, 80, 80, 80 };
-            var columnWidths = baseColumnWidths.Select(w => w * ScaleFactor).ToArray();
-
-            var rowHeight = (TextPaint.FontSpacing + 4f) * ScaleFactor;
-            float totalWidth = columnWidths.Sum();
-            float totalHeight = (_markerInfos.Count + 1) * rowHeight; // +1 for header
-
-            // Auto-size the widget
-            Size = new SKSize(totalWidth + pad * 2, totalHeight + pad * 2);
 
             if (_markerInfos.Count == 0)
             {
                 // Draw standby message
-                string standbyMsg = "No markers placed";
-                canvas.DrawText(standbyMsg, origin.X + textOffsetX, origin.Y + rowHeight - textOffsetY, TextPaint);
+                canvas.DrawText("No markers placed", origin.X + textOffsetX, origin.Y + rowHeight - textOffsetY, TextPaint);
                 return;
             }
 
@@ -289,33 +329,34 @@ namespace squad_dma
             float x = origin.X;
             float y = origin.Y;
 
-            for (int i = 0; i < headers.Length; i++)
+            for (int i = 0; i < Headers.Length; i++)
             {
-                canvas.DrawText(headers[i], x + textOffsetX, y + rowHeight - textOffsetY, TextPaint);
-                x += columnWidths[i];
+                canvas.DrawText(Headers[i], x + textOffsetX, y + rowHeight - textOffsetY, TextPaint);
+                x += _columnWidths[i];
             }
 
             // Draw header separator line
             canvas.DrawLine(origin.X, y + rowHeight, origin.X + totalWidth, y + rowHeight, BorderPaint);
             y += rowHeight;
 
-            // Draw marker data rows
-            foreach (var info in _markerInfos)
+            // Draw marker data rows (cell strings were formatted when the row was built; no per-frame arrays)
+            for (int r = 0; r < _markerInfos.Count; r++)
             {
-                var values = new[]
-                {
-                    info.Number.ToString(),
-                    $"{info.Distance}m",
-                    $"{info.Bearing:F1}°",
-                    info.RangingInfo
-                };
+                var info = _markerInfos[r];
 
                 x = origin.X;
-                for (int i = 0; i < values.Length; i++)
+                for (int i = 0; i < _columnWidths.Length; i++)
                 {
-                    canvas.DrawText(values[i], x + textOffsetX, y + rowHeight - textOffsetY, TextPaint);
+                    string cell = i switch
+                    {
+                        0 => info.NumberText,
+                        1 => info.DistanceText,
+                        2 => info.BearingText,
+                        _ => info.RangingInfo
+                    };
+                    canvas.DrawText(cell, x + textOffsetX, y + rowHeight - textOffsetY, TextPaint);
                     canvas.DrawLine(x, y - rowHeight, x, y + rowHeight, BorderPaint);
-                    x += columnWidths[i];
+                    x += _columnWidths[i];
                 }
 
                 // Draw right border and bottom separator
@@ -337,6 +378,9 @@ namespace squad_dma
             public float Bearing { get; set; }
             public string RangingInfo { get; set; } = "";
             public string Name { get; set; } = "";
+            public string NumberText { get; set; } = "";
+            public string DistanceText { get; set; } = "";
+            public string BearingText { get; set; } = "";
         }
         #endregion
 

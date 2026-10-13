@@ -24,6 +24,30 @@ namespace squad_dma
         private DarkModeCS _darkmode;
         private readonly Dictionary<UActor, Vector3D> _aaProjectileOrigins = new();
         private readonly List<PointOfInterest> _pointsOfInterest = new();
+
+        // Render-layer state. Everything below is owned and reused by the paint callback; none of it is
+        // allocated per frame.
+        private readonly RadarBatchRenderer _renderer = new();
+        private readonly ActorFrameSnapshot _frame = new();
+        private readonly List<SKPoint> _deadMarkerBuffer = new();
+        private readonly List<ActorFrameData> _projectileAABuffer = new();
+        private readonly List<PoiTrajectoryCacheEntry> _poiTrajectoryCache = new();
+        private string _lastMapNameChecked;
+        private Map _lastSelectedMapChecked;
+        private string _rocketBarrageWeaponName;
+        private bool _isRocketBarrageWeapon;
+        private (double X, double Y, double Z) _lastMapSetupPos;
+        private bool _mapSetupTextIsLive;
+
+        private sealed class PoiTrajectoryCacheEntry
+        {
+            public object WeaponData;
+            public float ShooterX, ShooterY, TargetX, TargetY;
+            public BallisticSolution Solution;
+        }
+
+        /// <summary>Snapshot built at the start of the current frame; read-only for widgets drawn in the same pass.</summary>
+        internal ActorFrameSnapshot FrameSnapshot => _frame;
         private System.Windows.Forms.Timer _panTimer;
         private GameStatus _previousGameStatus = GameStatus.NotFound;
         private EspOverlay _espOverlay;
@@ -731,14 +755,24 @@ namespace squad_dma
                 {
                     lock (_renderLock)
                     {
-                        var deadMarkers = new List<SKPoint>();
-                        var projectileAAs = new List<UActor>();
+                        // Eliminates 5 redundant GetMapLocation() calls (each allocating MapParameters and running
+                        // AspectFill) plus one per AA projectile: map parameters are computed once per frame.
+                        var mapParams = GetMapLocation();
 
-                        DrawMap(canvas);
-                        DrawActors(canvas, deadMarkers, projectileAAs);
-                        DrawPOIs(canvas);
-                        DrawToolTips(canvas);
-                        DrawTopMost(canvas, deadMarkers, projectileAAs);
+                        // Eliminates live per-entity reads (locked Position getters, repeated team lookups) and the
+                        // three separate dictionary enumerations: actors are copied once into a reusable snapshot.
+                        _frame.Build(AllActors, LocalPlayer);
+
+                        // Eliminates per-frame List allocations for the dead-marker / AA lists.
+                        _deadMarkerBuffer.Clear();
+                        _projectileAABuffer.Clear();
+
+                        DrawMap(canvas, mapParams);
+                        DrawObjectives(canvas, mapParams);
+                        DrawActors(canvas, mapParams, _deadMarkerBuffer, _projectileAABuffer);
+                        DrawPOIs(canvas, mapParams);
+                        DrawToolTips(canvas, mapParams);
+                        DrawTopMost(canvas, mapParams, _deadMarkerBuffer, _projectileAABuffer);
                         
                         // Draw aimview widget
                         _aimviewWidget?.Draw(canvas);
@@ -864,7 +898,7 @@ namespace squad_dma
         {
             SKPaints.LoadColorsFromConfig(_config.RadarColors);
             // Refresh tech marker paints to apply new colors immediately
-            MapPosition.RefreshTechMarkerPaints();
+            _renderer.RefreshTechPaints();
         }
 
         #region Color Configuration Methods
@@ -1097,7 +1131,7 @@ namespace squad_dma
                 hexLabel.Text = ColorToHex(newColor.ToDrawingColor());
                 
                 // Refresh tech marker paints to apply new colors immediately
-                MapPosition.RefreshTechMarkerPaints();
+                _renderer.RefreshTechPaints();
             });
 
             rowPanel.Click += (s, e) => openColorPicker();
@@ -1168,6 +1202,7 @@ namespace squad_dma
             chkShowEnemyDistance.Checked = _config.ShowEnemyDistance;
             chkEnableAimview.Checked = _config.EnableAimview;
             chkHighAlert.Checked = _config.HighAlert;
+            chkShowObjectives.Checked = _config.ShowObjectives;
 
             trkAimLength.Value = _config.PlayerAimLineLength;
             trkUIScale.Value = _config.UIScale;
@@ -1514,6 +1549,14 @@ namespace squad_dma
         private void UpdateSelectedMap()
         {
             string currentMap = MapName;
+
+            // Eliminates a LINQ Any() + closure allocation every frame: the map match can only change when the
+            // level name or the selected map changes (or when no map is selected yet), so skip the search while both
+            // are unchanged. A manual map swap changes _selectedMap, which still triggers the full check.
+            if (_selectedMap is not null && ReferenceEquals(currentMap, _lastMapNameChecked) && ReferenceEquals(_selectedMap, _lastSelectedMapChecked))
+                return;
+            _lastMapNameChecked = currentMap;
+
             if (_selectedMap is null || !_selectedMap.ConfigFile.MapID.Any(id => id.Equals(currentMap, StringComparison.OrdinalIgnoreCase)))
             {
                 // First try exact match
@@ -1540,6 +1583,8 @@ namespace squad_dma
                     LogUnmappedMapName(currentMap);
                 }
             }
+
+            _lastSelectedMapChecked = _selectedMap;
         }
 
         private void LoadMapBitmaps()
@@ -1694,29 +1739,34 @@ namespace squad_dma
             }
         }
 
-        private void DrawMap(SKCanvas canvas)
+        private void DrawMap(SKCanvas canvas, MapParameters mapParams)
         {
             if (grpMapSetup.Visible)
             {
-                var localPlayerPos = new Vector3D(
-                    LocalPlayer.Position.X + AbsoluteLocation.X,
-                    LocalPlayer.Position.Y + AbsoluteLocation.Y,
-                    LocalPlayer.Position.Z + AbsoluteLocation.Z
-                );
-                grpMapSetup.Text = $"Map Setup - X,Y,Z: {localPlayerPos.X}, {localPlayerPos.Y}, {localPlayerPos.Z}";
+                var lp = LocalPlayer.Position;
+                var abs = AbsoluteLocation;
+                var pos = (X: lp.X + abs.X, Y: lp.Y + abs.Y, Z: lp.Z + abs.Z);
+
+                // Eliminates a string allocation + WinForms Text assignment (and repaint request) every frame:
+                // the caption is only rebuilt when the coordinates actually change.
+                if (!_mapSetupTextIsLive || pos != _lastMapSetupPos)
+                {
+                    grpMapSetup.Text = $"Map Setup - X,Y,Z: {pos.X}, {pos.Y}, {pos.Z}";
+                    _lastMapSetupPos = pos;
+                    _mapSetupTextIsLive = true;
+                }
             }
-            else if (grpMapSetup.Text != "Map Setup" && !grpMapSetup.Visible)
+            else if (_mapSetupTextIsLive || grpMapSetup.Text != "Map Setup")
             {
                 grpMapSetup.Text = "Map Setup";
+                _mapSetupTextIsLive = false;
             }
 
-            var mapParams = GetMapLocation();
-            
             if (mapParams == null)
             {
-                return; 
+                return;
             }
-            
+
             var mapCanvasBounds = new SKRect
             {
                 Left = _mapCanvas.Left,
@@ -1733,512 +1783,150 @@ namespace squad_dma
             );
         }
 
-        private void DrawActors(SKCanvas canvas, List<SKPoint> deadMarkers, List<UActor> projectileAAs)
+        private void DrawObjectives(SKCanvas canvas, MapParameters mapParams)
         {
-            if (!InGame || LocalPlayer is null)
+            var objectives = Memory._game?.Objectives;
+            if (objectives == null || mapParams == null)
                 return;
 
-            var allPlayers = AllActors?.Select(x => x.Value);
-            if (allPlayers is null)
+            // The Objectives object is created per match, so the setting is re-applied every frame.
+            objectives.Enabled = _config.ShowObjectives;
+            objectives.Draw(canvas, mapParams, _selectedMap, _uiScale);
+        }
+
+        private void DrawActors(SKCanvas canvas, MapParameters mapParams, List<SKPoint> deadMarkers, List<ActorFrameData> projectileAAs)
+        {
+            if (!InGame || LocalPlayer is null || AllActors is null || mapParams == null)
                 return;
 
-            var activeProjectiles = allPlayers.Where(a => a.ActorType == ActorType.ProjectileAA).ToList();
-            projectileAAs.AddRange(activeProjectiles);
+            _renderer.SetScale(_uiScale);
 
-            var localPlayerMapPos = LocalPlayer.Position.ToMapPos(_selectedMap);
-            var mapParams = GetMapLocation();
-            
+            // Max range circle around the player when a ballistic weapon is equipped.
+            var mortarCalculator = Memory._game?._soldierManager?.WeaponDetector;
+            if (mortarCalculator != null && mortarCalculator.HasBallisticWeapon && mortarCalculator.CurrentWeaponData != null)
+            {
+                float maxRangeMeters = mortarCalculator.CalculateMaxDistance(mortarCalculator.CurrentWeaponData);
+                float maxRangeMapUnits = maxRangeMeters * 100; // Convert to game units
+                float maxRangePixels = (float)(maxRangeMapUnits * _selectedMap.ConfigFile.Scale * mapParams.XScale);
+
+                var playerCenter = LocalPlayer.Position.ToMapPos(_selectedMap).ToZoomedPos(mapParams).GetPoint();
+
+                // Shared paint (width set once per UI scale) replaces a `using var new SKPaint` every frame.
+                canvas.DrawCircle(playerCenter.X, playerCenter.Y, maxRangePixels, _renderer.RangeCirclePaint);
+            }
+
+            // All entity drawing is bucketed by type and flushed in batched passes inside the renderer.
+            _renderer.DrawActors(
+                canvas, _frame, mapParams, _selectedMap,
+                trkAimLength.Value, _config.HighAlert, _config.ShowEnemyDistance,
+                _uiScale, DateTime.Now, deadMarkers, projectileAAs);
+        }
+
+        private void DrawTopMost(SKCanvas canvas, MapParameters mapParams, List<SKPoint> deadMarkers, List<ActorFrameData> projectileAAs)
+        {
             if (mapParams == null)
-            {
                 return;
-            }
-            
-            var localPlayerZoomedPos = localPlayerMapPos.ToZoomedPos(mapParams);
 
-            localPlayerZoomedPos.DrawPlayerMarker(canvas, LocalPlayer, trkAimLength.Value);
-            
-            // Draw max range circle around player if ballistic weapon is equipped
-            if (Memory._game?._soldierManager?.WeaponDetector != null)
-            {
-                var mortarCalculator = Memory._game._soldierManager.WeaponDetector;
-                if (mortarCalculator.HasBallisticWeapon && mortarCalculator.CurrentWeaponData != null)
-                {
-                    // Calculate max range using proper ballistic formula
-                    float maxRangeMeters = mortarCalculator.CalculateMaxDistance(mortarCalculator.CurrentWeaponData);
-                    float maxRangeMapUnits = maxRangeMeters * 100; // Convert to game units
-                    float maxRangePixels = (float)(maxRangeMapUnits * _selectedMap.ConfigFile.Scale * mapParams.XScale);
-
-                    var playerCenter = localPlayerZoomedPos.GetPoint();
-                    
-                    // Draw max range circle
-                    using var maxRangePaint = new SKPaint
-                    {
-                        Color = SKColors.Black, // Black color
-                        Style = SKPaintStyle.Stroke,
-                        StrokeWidth = 2 * _uiScale, // Original thinner line width
-                        IsAntialias = true
-                    };
-
-                    canvas.DrawCircle(playerCenter.X, playerCenter.Y, maxRangePixels, maxRangePaint);
-                }
-            }
-
-            foreach (var actor in allPlayers)
-            {
-                if (actor.ActorType == ActorType.Projectile || actor.ActorType == ActorType.ProjectileAA || actor.ActorType == ActorType.ProjectileSmall)
-                    continue;
-
-                var actorPos = new Vector3D(
-                    actor.Position.X + AbsoluteLocation.X,
-                    actor.Position.Y + AbsoluteLocation.Y,
-                    actor.Position.Z + AbsoluteLocation.Z
-                );
-                if (Math.Abs(actorPos.X - AbsoluteLocation.X) + Math.Abs(actorPos.Y - AbsoluteLocation.Y) + Math.Abs(actorPos.Z - AbsoluteLocation.Z) < 1.0)
-                    continue;
-
-                var actorMapPos = actorPos.ToMapPos(_selectedMap);
-                var actorZoomedPos = actorMapPos.ToZoomedPos(mapParams);
-                actor.ZoomedPosition = new Vector2D(actorZoomedPos.X, actorZoomedPos.Y);
-
-                if (actor.ActorType == ActorType.Player && !actor.IsAlive)
-                {
-                    HandleDeadPlayer(canvas, actor, deadMarkers, mapParams);
-                    continue;
-                }
-
-                int aimlineLength = actor == LocalPlayer ? 0 : 15;
-                DrawActor(canvas, actor, actorZoomedPos, aimlineLength, localPlayerMapPos);
-            }
-
-            foreach (var actor in allPlayers)
-            {
-                if (actor.ActorType != ActorType.Projectile && actor.ActorType != ActorType.ProjectileSmall)
-                    continue;
-
-                var actorPos = new Vector3D(actor.Position.X + AbsoluteLocation.X, actor.Position.Y + AbsoluteLocation.Y, actor.Position.Z + AbsoluteLocation.Z);
-                if (Math.Abs(actorPos.X - AbsoluteLocation.X) + Math.Abs(actorPos.Y - AbsoluteLocation.Y) + Math.Abs(actorPos.Z - AbsoluteLocation.Z) < 1.0)
-                    continue;
-
-                var actorMapPos = actorPos.ToMapPos(_selectedMap);
-                var actorZoomedPos = actorMapPos.ToZoomedPos(mapParams);
-                actorZoomedPos.DrawProjectile(canvas, actor);
-            }
+            _renderer.DrawTopMost(canvas, mapParams, _selectedMap, _uiScale, deadMarkers, projectileAAs, _aaProjectileOrigins);
         }
 
-        private void HandleDeadPlayer(SKCanvas canvas, UActor actor, List<SKPoint> deadMarkers, MapParameters mapParams)
+        private static readonly string[] PoiNumberStrings = Enumerable.Range(0, 100).Select(i => i.ToString()).ToArray();
+
+        private void DrawPOIs(SKCanvas canvas, MapParameters mapParams)
         {
-            if (actor.DeathPosition.X != 0 || actor.DeathPosition.Y != 0 || actor.DeathPosition.Z != 0)
+            if (mapParams == null)
+                return;
+
+            _renderer.SetScale(_uiScale);
+
+            var cfg = _selectedMap.ConfigFile;
+            var lp = LocalPlayer.Position; // one locked read per frame (was ~9 per POI)
+            float shooterX = (float)lp.X, shooterY = (float)lp.Y;
+
+            // Projection constants hoisted out of the POI loop. POI world position + absolute offset is
+            // reduced by the absolute offset again inside ToMapPos, so the offset cancels.
+            double bx = (cfg.X - mapParams.Bounds.Left) * mapParams.XScale;
+            double by = (cfg.Y - mapParams.Bounds.Top) * mapParams.YScale;
+            double sx = cfg.Scale * mapParams.XScale;
+            double sy = cfg.Scale * mapParams.YScale;
+
+            var mortarCalculator = Memory._game?._soldierManager?.WeaponDetector;
+            bool ballistic = mortarCalculator != null && mortarCalculator.HasBallisticWeapon;
+            var weaponData = ballistic ? mortarCalculator.CurrentWeaponData : null;
+
+            // Eliminates a ToLower() string allocation + two Contains scans per POI per frame:
+            // orientation only changes when the equipped weapon name changes.
+            if (ballistic)
             {
-                var timeSinceDeath = DateTime.Now - actor.TimeOfDeath;
-                if (timeSinceDeath.TotalSeconds <= 8)
+                string weaponName = mortarCalculator.CurrentWeaponName;
+                if (!ReferenceEquals(weaponName, _rocketBarrageWeaponName))
                 {
-                    var deathPosAdjusted = new Vector3D(
-                        actor.DeathPosition.X + AbsoluteLocation.X,
-                        actor.DeathPosition.Y + AbsoluteLocation.Y,
-                        actor.DeathPosition.Z + AbsoluteLocation.Z
-                    );
-                    var deathPosMap = deathPosAdjusted.ToMapPos(_selectedMap);
-                    var deathZoomedPos = deathPosMap.ToZoomedPos(mapParams);
-                    deadMarkers.Add(deathZoomedPos.GetPoint());
-                }
-                else
-                {
-                    actor.DeathPosition = Vector3D.Zero;
-                    actor.TimeOfDeath = DateTime.MinValue;
+                    string lower = weaponName?.ToLower() ?? "";
+                    _isRocketBarrageWeapon = lower.Contains("ub32") || lower.Contains("ub-32");
+                    _rocketBarrageWeaponName = weaponName;
                 }
             }
-        }
 
-        private void DrawActor(SKCanvas canvas, UActor actor, MapPosition actorZoomedPos, int aimlineLength, MapPosition localPlayerMapPos)
-        {
-            if (this.InGame && this.LocalPlayer is not null)
-            {
-                var height = actorZoomedPos.Height - localPlayerMapPos.Height;
+            while (_poiTrajectoryCache.Count < _pointsOfInterest.Count)
+                _poiTrajectoryCache.Add(new PoiTrajectoryCacheEntry());
 
-                if (actor.ActorType == ActorType.Player)
-                {
-                    var color = actor.IsInMySquad() ? SKPaints.Squad : actor.GetActorPaint().Color;
-                    
-                    if (actor != LocalPlayer && _config.HighAlert && this.InGame && actor.IsLookingAtPlayer(LocalPlayer))
-                        aimlineLength = 9999;
-                    
-                    actorZoomedPos.DrawPlayerMarker(canvas, actor, aimlineLength, color);
-
-                    if (!actor.IsFriendly() && _config.ShowEnemyDistance)
-                    {
-                        var dx = LocalPlayer.Position.X - actor.Position.X;
-                        var dy = LocalPlayer.Position.Y - actor.Position.Y;
-                        var dz = LocalPlayer.Position.Z - actor.Position.Z;
-                        var dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-                        if (dist > 50 * 100)
-                        {
-                            string distanceText = $"{(int)Math.Round(dist / 100)}m";
-                            actorZoomedPos.DrawPlayerDistance(canvas, actor, distanceText);
-                        }
-                    }
-                }
-                else if (actor.ActorType == ActorType.Projectile)
-                {
-                    actorZoomedPos.DrawProjectile(canvas, actor);
-                }
-                else if (actor.ActorType == ActorType.ProjectileSmall)
-                {
-                    actorZoomedPos.DrawProjectile(canvas, actor);
-                }
-                else if (actor.ActorType == ActorType.ProjectileAA)
-                {
-                    if (!_aaProjectileOrigins.ContainsKey(actor))
-                        _aaProjectileOrigins[actor] = new Vector3D(
-                            actor.Position.X + AbsoluteLocation.X,
-                            actor.Position.Y + AbsoluteLocation.Y,
-                            actor.Position.Z + AbsoluteLocation.Z
-                        );
-
-                    actorZoomedPos.DrawProjectileAA(canvas, actor);
-                }
-                else if (actor.ActorType == ActorType.Admin)
-                {
-                    DrawAdmin(canvas, actor, actorZoomedPos);
-                }
-                else if (Names.Vehicles.Contains(actor.ActorType))
-                {
-                    // Skip vehicles with no team or unknown team
-                    if (actor.TeamID == -1)
-                        return;
-                    
-                    if (!actor.IsFriendly())
-                    {
-                        var dx = LocalPlayer.Position.X - actor.Position.X;
-                        var dy = LocalPlayer.Position.Y - actor.Position.Y;
-                        var dz = LocalPlayer.Position.Z - actor.Position.Z;
-                        var dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-                        if (dist > 50 * 100)
-                        {
-                            string distanceText = $"{(int)Math.Round(dist / 100)}m";
-                            actorZoomedPos.DrawVehicleDistance(canvas, actor, distanceText);
-                        }
-                    }
-                    actorZoomedPos.DrawTechMarker(canvas, actor);
-                }
-                else
-                {
-                    actorZoomedPos.DrawTechMarker(canvas, actor);
-                }
-            }
-        }
-
-        private void DrawAdmin(SKCanvas canvas, UActor admin, MapPosition position)
-        {
-            int adminAimlineLength = 9999;
-
-            position.DrawPlayerMarker(canvas, admin, adminAimlineLength, SKPaints.AdminMarker);
-
-            string adminText = "ADMIN";
-            float textSize = 12 * _uiScale;
-            float textOffset = 15 * _uiScale;
-
-            using (var textFill = new SKPaint
-            {
-                Color = SKPaints.AdminMarker,
-                TextSize = textSize,
-                IsAntialias = true,
-                Typeface = SKTypeface.FromFamilyName("Arial")
-            })
-            using (var textOutline = new SKPaint
-            {
-                Color = SKColors.Black,
-                TextSize = textSize,
-                StrokeWidth = 2 * _uiScale,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                Typeface = SKTypeface.FromFamilyName("Arial")
-            })
-            {
-                SKRect textBounds = new SKRect();
-                textFill.MeasureText(adminText, ref textBounds);
-
-                float textX = (float)(position.X - (textBounds.Width / 2));
-                float textY = (float)(position.Y + textOffset + (textBounds.Height / 2));
-
-                canvas.DrawText(adminText, textX, textY, textOutline);
-                canvas.DrawText(adminText, textX, textY, textFill);
-            }
-        }
-
-        private void DrawTopMost(SKCanvas canvas, List<SKPoint> deadMarkers, List<UActor> projectileAAs)
-        {
-            foreach (var pos in deadMarkers)
-            {
-                DrawDead(canvas, pos, SKColors.Black, SKPaints.DeadMarker, 5 * _uiScale);
-            }
-
-            foreach (var projectile in projectileAAs)
-            {
-                var actorPos = new Vector3D(
-                    projectile.Position.X + AbsoluteLocation.X,
-                    projectile.Position.Y + AbsoluteLocation.Y,
-                    projectile.Position.Z + AbsoluteLocation.Z
-                );
-                var actorMapPos = actorPos.ToMapPos(_selectedMap);
-                var mapParams = GetMapLocation();
-                var actorZoomedPos = actorMapPos.ToZoomedPos(mapParams);
-
-                actorZoomedPos.DrawProjectileAA(canvas, projectile);
-
-                if (_aaProjectileOrigins.TryGetValue(projectile, out var startPos))
-                {
-                    var startMapPos = startPos.ToMapPos(_selectedMap);
-                    var startZoomedPos = startMapPos.ToZoomedPos(mapParams);
-                    DrawAAStartMarker(canvas, startZoomedPos);
-                }
-            }
-        }
-
-        private void DrawAAStartMarker(SKCanvas canvas, MapPosition startPos)
-        {
-            float size = 8 * _uiScale;
-            float thickness = 2 * _uiScale;
-
-            using (var outlinePaint = new SKPaint
-            {
-                Color = SKColors.Black,
-                StrokeWidth = thickness + 2 * _uiScale,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                StrokeCap = SKStrokeCap.Round
-            })
-            using (var xPaint = new SKPaint
-            {
-                Color = SKColors.Yellow,
-                StrokeWidth = thickness,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                StrokeCap = SKStrokeCap.Round
-            })
-            {
-                canvas.DrawLine(
-                    (float)(startPos.X - size), (float)(startPos.Y - size),
-                    (float)(startPos.X + size), (float)(startPos.Y + size),
-                    outlinePaint
-                );
-                canvas.DrawLine(
-                    (float)(startPos.X + size), (float)(startPos.Y - size),
-                    (float)(startPos.X - size), (float)(startPos.Y + size),
-                    outlinePaint
-                );
-
-                canvas.DrawLine(
-                    (float)(startPos.X - size), (float)(startPos.Y - size),
-                    (float)(startPos.X + size), (float)(startPos.Y + size),
-                    xPaint
-                );
-                canvas.DrawLine(
-                    (float)(startPos.X + size), (float)(startPos.Y - size),
-                    (float)(startPos.X - size), (float)(startPos.Y + size),
-                    xPaint
-                );
-            }
-
-            string text = "AA";
-            float textSize = 12 * _uiScale;
-            float textOffset = size + 4 * _uiScale;
-
-            using (var outlinePaint = new SKPaint
-            {
-                Color = SKColors.Black,
-                TextSize = textSize,
-                IsAntialias = true,
-                TextAlign = SKTextAlign.Left,
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = 2 * _uiScale,
-                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
-            })
-            using (var textPaint = new SKPaint
-            {
-                Color = SKColors.Yellow,
-                TextSize = textSize,
-                IsAntialias = true,
-                TextAlign = SKTextAlign.Left,
-                Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
-            })
-            {
-                SKRect textBounds = new SKRect();
-                textPaint.MeasureText(text, ref textBounds);
-
-                float textX = (float)(startPos.X + textOffset);
-                float textY = (float)(startPos.Y + (textBounds.Height / 2));
-
-                canvas.DrawText(text, textX, textY, outlinePaint);
-                canvas.DrawText(text, textX, textY, textPaint);
-            }
-        }
-
-        private void DrawDead(SKCanvas canvas, SKPoint position, SKColor outlineColor, SKColor fillColor, float size)
-        {
-            using var outlinePaint = new SKPaint
-            {
-                Color = outlineColor,
-                StrokeWidth = 4 * _uiScale,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                StrokeCap = SKStrokeCap.Round
-            };
-
-            using var fillPaint = new SKPaint
-            {
-                Color = fillColor,
-                StrokeWidth = 2 * _uiScale,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                StrokeCap = SKStrokeCap.Round
-            };
-
-            float x1 = position.X - size;
-            float y1 = position.Y - size;
-            float x2 = position.X + size;
-            float y2 = position.Y + size;
-
-            canvas.DrawLine(x1, y1, x2, y2, outlinePaint);
-            canvas.DrawLine(x2, y1, x1, y2, outlinePaint);
-
-            canvas.DrawLine(x1, y1, x2, y2, fillPaint);
-            canvas.DrawLine(x2, y1, x1, y2, fillPaint);
-        }
-
-        private void DrawPOIs(SKCanvas canvas)
-        {
-            if (!IsReadyToRender()) return;
-
-            var mapParams = GetMapLocation();
-            var localPlayerPos = new Vector3D(
-                LocalPlayer.Position.X + AbsoluteLocation.X,
-                LocalPlayer.Position.Y + AbsoluteLocation.Y,
-                LocalPlayer.Position.Z + AbsoluteLocation.Z
-            );
-
-            using var crosshairPaint = new SKPaint
-            {
-                Color = SKColors.Red,
-                StrokeWidth = 1.5f,
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke
-            };
+            var crosshairPaint = _renderer.PoiCrosshairPaint;
+            const float crossSize = 3; // Fixed small size for precise center marking
 
             for (int i = 0; i < _pointsOfInterest.Count; i++)
             {
                 var poi = _pointsOfInterest[i];
-                var poiRenderPos = new Vector3D(poi.Position.X + AbsoluteLocation.X, poi.Position.Y + AbsoluteLocation.Y, poi.Position.Z + AbsoluteLocation.Z);
-                var poiMapPos = poiRenderPos.ToMapPos(_selectedMap);
-                var poiZoomedPos = poiMapPos.ToZoomedPos(mapParams);
+                var poiPos = poi.Position;
+                var center = new SKPoint((float)(bx + poiPos.X * sx), (float)(by + poiPos.Y * sy));
 
-                var center = poiZoomedPos.GetPoint();
-                float crossSize = 3; // Fixed small size for precise center marking
-
-                // Draw damage radius circle if ballistic weapon is equipped
-                if (Memory._game?._soldierManager?.WeaponDetector != null)
+                // Draw damage radius ellipse if ballistic weapon is equipped
+                if (ballistic)
                 {
-                    var mortarCalculator = Memory._game._soldierManager.WeaponDetector;
-                    if (mortarCalculator.HasBallisticWeapon)
+                    // Eliminates re-running the ballistic solver (several trig/iteration steps) for every POI on every
+                    // frame: the solution only depends on weapon data and the two flat positions, which are
+                    // unchanged between frames while the player stands still.
+                    var cache = _poiTrajectoryCache[i];
+                    float targetX = (float)poiPos.X, targetY = (float)poiPos.Y;
+                    if (!ReferenceEquals(cache.WeaponData, weaponData) ||
+                        cache.ShooterX != shooterX || cache.ShooterY != shooterY ||
+                        cache.TargetX != targetX || cache.TargetY != targetY)
                     {
                         // Use flat ground assumption - both positions at same height
-                        var playerPos = new Vector3((float)LocalPlayer.Position.X, (float)LocalPlayer.Position.Y, 0f);
-                        var targetPos = new Vector3((float)poi.Position.X, (float)poi.Position.Y, 0f);
-                        
-                        var solution = mortarCalculator.CalculateTrajectory(targetPos, playerPos);
-                        if (solution != null && solution.SpreadEllipse != null)
-                        {
-                            // Calculate elliptical spread dimensions in pixels
-                            float horizontalSpreadMeters = solution.SpreadEllipse.Horizontal;
-                            float verticalSpreadMeters = solution.SpreadEllipse.Vertical;
-                            
-                            float horizontalSpreadMapUnits = horizontalSpreadMeters * 100; // Convert to game units
-                            float verticalSpreadMapUnits = verticalSpreadMeters * 100; // Convert to game units
-                            
-                            float horizontalSpreadPixels = (float)(horizontalSpreadMapUnits * _selectedMap.ConfigFile.Scale * mapParams.XScale);
-                            float verticalSpreadPixels = (float)(verticalSpreadMapUnits * _selectedMap.ConfigFile.Scale * mapParams.YScale);
+                        cache.Solution = mortarCalculator.CalculateTrajectory(
+                            new Vector3(targetX, targetY, 0f), new Vector3(shooterX, shooterY, 0f));
+                        cache.WeaponData = weaponData;
+                        cache.ShooterX = shooterX; cache.ShooterY = shooterY;
+                        cache.TargetX = targetX; cache.TargetY = targetY;
+                    }
 
-                            // Draw elliptical spread (NOT a perfect circle!)
-                            using var spreadEllipsePaint = new SKPaint
-                            {
-                                Color = new SKColor(255, 0, 0, 60), // Transparent red fill
-                                Style = SKPaintStyle.Fill,
-                                IsAntialias = true
-                            };
-                            
-                            using var spreadEllipseStrokePaint = new SKPaint
-                            {
-                                Color = new SKColor(255, 0, 0, 180), // Red outline
-                                Style = SKPaintStyle.Stroke,
-                                StrokeWidth = 2 * _uiScale,
-                IsAntialias = true
-            };
+                    var solution = cache.Solution;
+                    if (solution != null && solution.SpreadEllipse != null)
+                    {
+                        // Calculate elliptical spread dimensions in pixels (meters -> game units -> pixels)
+                        float horizontalSpreadPixels = (float)(solution.SpreadEllipse.Horizontal * 100 * cfg.Scale * mapParams.XScale);
+                        float verticalSpreadPixels = (float)(solution.SpreadEllipse.Vertical * 100 * cfg.Scale * mapParams.YScale);
 
-                            // Create ellipse path with proper orientation relative to local player
-                            using var ellipsePath = new SKPath();
-                            
-                            // Calculate the bearing from local player to target
-                            var localPlayerWorldPos = new Vector3D(
-                                LocalPlayer.Position.X + AbsoluteLocation.X,
-                                LocalPlayer.Position.Y + AbsoluteLocation.Y,
-                                LocalPlayer.Position.Z + AbsoluteLocation.Z
-                            );
-                            var poiWorldPos = new Vector3D(
-                                poi.Position.X + AbsoluteLocation.X,
-                                poi.Position.Y + AbsoluteLocation.Y,
-                                poi.Position.Z + AbsoluteLocation.Z
-                            );
-                            
-                            // Calculate bearing angle in radians (FROM local player TO target)
-                            // This is the direction the projectiles are traveling
-                            double deltaX = poiWorldPos.X - localPlayerWorldPos.X;
-                            double deltaY = poiWorldPos.Y - localPlayerWorldPos.Y;
-                            double bearingRadians = Math.Atan2(deltaY, deltaX);
-                            
-                            // Determine spread orientation based on weapon type
-                            string currentWeaponName = mortarCalculator.CurrentWeaponName?.ToLower() ?? "";
-                            
-                            // For rocket barrages (UB-32, Tech.UB-32), the spread should be perpendicular to the bearing
-                            // This creates a linear spread aligned horizontally relative to the player
-                            if (currentWeaponName.Contains("ub32") || currentWeaponName.Contains("ub-32"))
-                            {
-                                // Add 90 degrees to make the ellipse perpendicular to the firing direction
-                                bearingRadians += Math.PI / 2;
-                            }
-                            // For mortars, the spread should point toward the player (current behavior)
-                            // No rotation needed for mortars
-                            
-                            // Create ellipse rectangle (centered on POI)
-                            // Create a standard horizontal ellipse first
-                            var ellipseRect = new SKRect(
-                                center.X - horizontalSpreadPixels / 2,  // Width = horizontal spread
-                                center.Y - verticalSpreadPixels / 2,   // Height = vertical spread
-                                center.X + horizontalSpreadPixels / 2,
-                                center.Y + verticalSpreadPixels / 2
-                            );
-                            
-                            // Add ellipse to path
-                            ellipsePath.AddOval(ellipseRect);
-                            
-                            // Save the current canvas state
-                            canvas.Save();
-                            
-                            // Translate to the center of the ellipse
-                            canvas.Translate(center.X, center.Y);
-                            
-                            // Rotate the canvas by the bearing angle
-                            // This aligns the ellipse so vertical spread points toward local player
-                            canvas.RotateDegrees((float)(bearingRadians * 180.0 / Math.PI));
-                            
-                            // Translate back to draw the ellipse at the correct position
-                            canvas.Translate(-center.X, -center.Y);
-                            
-                            // Draw the rotated elliptical spread
-                            canvas.DrawPath(ellipsePath, spreadEllipsePaint);
-                            canvas.DrawPath(ellipsePath, spreadEllipseStrokePaint);
-                            
-                            // Restore the canvas state
-                            canvas.Restore();
-                        }
+                        // Bearing from the local player to the target = direction the projectiles travel
+                        double bearingRadians = Math.Atan2(poiPos.Y - lp.Y, poiPos.X - lp.X);
+
+                        // Rocket barrages: spread is perpendicular to the bearing. Mortars: points toward the player.
+                        if (_isRocketBarrageWeapon)
+                            bearingRadians += Math.PI / 2;
+
+                        var ellipseRect = new SKRect(
+                            center.X - horizontalSpreadPixels / 2,  // Width = horizontal spread
+                            center.Y - verticalSpreadPixels / 2,   // Height = vertical spread
+                            center.X + horizontalSpreadPixels / 2,
+                            center.Y + verticalSpreadPixels / 2
+                        );
+
+                        // One rotate-about-point replaces Translate/Rotate/Translate, and DrawOval replaces
+                        // building an SKPath per POI per frame; both paints are shared (width set per UI scale).
+                        canvas.Save();
+                        canvas.RotateDegrees((float)(bearingRadians * 180.0 / Math.PI), center.X, center.Y);
+                        canvas.DrawOval(ellipseRect, _renderer.SpreadFillPaint);
+                        canvas.DrawOval(ellipseRect, _renderer.SpreadStrokePaint);
+                        canvas.Restore();
                     }
                 }
 
@@ -2254,97 +1942,39 @@ namespace squad_dma
                     crosshairPaint);
 
                 // Draw marker number instead of text
-                DrawPOINumber(canvas, center, i + 1, crossSize);
+                DrawPOINumber(canvas, center, i + 1);
             }
-            
+
             // Draw minimum distance circle if ballistic weapon is equipped and has minimum distance
-            if (Memory._game?._soldierManager?.WeaponDetector != null)
+            if (ballistic && weaponData != null && mortarCalculator.CurrentWeaponData.MinDistance > 0)
             {
-                var mortarCalculator = Memory._game._soldierManager.WeaponDetector;
-                
-                if (mortarCalculator.HasBallisticWeapon && 
-                    mortarCalculator.CurrentWeaponData != null && 
-                    mortarCalculator.CurrentWeaponData.MinDistance > 0)
-                {
-                    float minDistanceMeters = mortarCalculator.CurrentWeaponData.MinDistance;
-                    float minDistanceMapUnits = minDistanceMeters * 100; // Convert to game units
-                    float minDistancePixels = (float)(minDistanceMapUnits * _selectedMap.ConfigFile.Scale * mapParams.XScale);
-                    
-                    // Create minimum distance circle paints
-                    using var minDistanceFillPaint = new SKPaint
-                    {
-                        Color = new SKColor(64, 64, 64, 77), // Dark grey with 30% opacity (77/255 ≈ 30%)
-                        Style = SKPaintStyle.Fill,
-                        IsAntialias = true
-                    };
-                    
-                    using var minDistanceStrokePaint = new SKPaint
-                    {
-                        Color = new SKColor(0, 0, 0, 255), // Black outline
-                        Style = SKPaintStyle.Stroke,
-                        StrokeWidth = 2 * _uiScale,
-                        IsAntialias = true
-                    };
-                    
-                    // Draw minimum distance circle centered on local player
-                    var localPlayerWorldPos = new Vector3D(
-                        LocalPlayer.Position.X + AbsoluteLocation.X,
-                        LocalPlayer.Position.Y + AbsoluteLocation.Y,
-                        LocalPlayer.Position.Z + AbsoluteLocation.Z
-                    );
-                    var localPlayerMapPos = localPlayerWorldPos.ToMapPos(_selectedMap).ToZoomedPos(mapParams).GetPoint();
-                    canvas.DrawCircle(localPlayerMapPos.X, localPlayerMapPos.Y, minDistancePixels, minDistanceFillPaint);
-                    canvas.DrawCircle(localPlayerMapPos.X, localPlayerMapPos.Y, minDistancePixels, minDistanceStrokePaint);
-                }
+                float minDistanceMapUnits = mortarCalculator.CurrentWeaponData.MinDistance * 100; // Convert to game units
+                float minDistancePixels = (float)(minDistanceMapUnits * cfg.Scale * mapParams.XScale);
+
+                // Draw minimum distance circle centered on local player
+                float cx = (float)(bx + lp.X * sx);
+                float cy = (float)(by + lp.Y * sy);
+                canvas.DrawCircle(cx, cy, minDistancePixels, _renderer.MinDistanceFillPaint);
+                canvas.DrawCircle(cx, cy, minDistancePixels, _renderer.MinDistanceStrokePaint);
             }
         }
 
-        private void DrawPOINumber(SKCanvas canvas, SKPoint center, int markerNumber, float crosshairSize)
+        private void DrawPOINumber(SKCanvas canvas, SKPoint center, int markerNumber)
         {
-            // Calculate position - top right of damage radius circle
-            float numberSize = 10 * _uiScale;
-            float offsetX = 15 * _uiScale; // Distance from center
-            float offsetY = -15 * _uiScale; // Above center
-            
-            var numberPosition = new SKPoint(center.X + offsetX, center.Y + offsetY);
-            
-            // Use same styling as player/vehicle distance text
-            using var outlinePaint = new SKPaint
-            {
-                Color = SKColors.Black,
-                TextSize = numberSize,
-                TextAlign = SKTextAlign.Center,
-                Typeface = CustomFonts.SKFontFamilyRegular,
-                IsAntialias = true,
-                SubpixelText = true,
-                FilterQuality = SKFilterQuality.High,
-                StrokeWidth = 2.8f * _uiScale,
-                Style = SKPaintStyle.Stroke
-            };
-            
-            using var textPaint = new SKPaint
-            {
-                Color = SKColors.White,
-                TextSize = numberSize,
-                TextAlign = SKTextAlign.Center,
-                Typeface = CustomFonts.SKFontFamilyRegular,
-                IsAntialias = true,
-                SubpixelText = true,
-                FilterQuality = SKFilterQuality.High,
-                Style = SKPaintStyle.Fill
-            };
-            
-            // Draw number text with black outline and white fill
-            float textY = numberPosition.Y + (textPaint.FontMetrics.Descent - textPaint.FontMetrics.Ascent) / 2;
-            canvas.DrawText(markerNumber.ToString(), numberPosition.X, textY, outlinePaint);
-            canvas.DrawText(markerNumber.ToString(), numberPosition.X, textY, textPaint);
+            // Top right of the damage radius circle, same styling as the distance text.
+            // Paints/typeface/baseline offset are built once per UI scale instead of two new SKPaints per POI per frame.
+            float x = center.X + 15 * _uiScale;
+            float y = center.Y - 15 * _uiScale + _renderer.PoiNumberBaselineOffset;
+            string text = (uint)markerNumber < (uint)PoiNumberStrings.Length ? PoiNumberStrings[markerNumber] : markerNumber.ToString();
+
+            canvas.DrawText(text, x, y, _renderer.PoiNumberOutline);
+            canvas.DrawText(text, x, y, _renderer.PoiNumberFill);
         }
         
 
-        private void DrawToolTips(SKCanvas canvas)
+        private void DrawToolTips(SKCanvas canvas, MapParameters mapParams)
         {
             var localPlayer = this.LocalPlayer;
-            var mapParams = GetMapLocation();
 
             if (mapParams == null)
             {
@@ -2723,6 +2353,19 @@ namespace squad_dma
         private void chkHighAlert_CheckedChanged(object sender, EventArgs e)
         {
             _config.HighAlert = chkHighAlert.Checked;
+            Config.SaveConfig(_config);
+        }
+
+        private void chkShowObjectives_CheckedChanged(object sender, EventArgs e)
+        {
+            // LoadConfig() sets Checked during construction, before the map canvas exists, so bail out until it does.
+            if (_mapCanvas == null)
+                return;
+
+            _config.ShowObjectives = chkShowObjectives.Checked;
+            var objectives = Memory._game?.Objectives;
+            if (objectives != null) objectives.Enabled = _config.ShowObjectives;
+            _mapCanvas.Invalidate();
             Config.SaveConfig(_config);
         }
 

@@ -4,345 +4,298 @@ using squad_dma.Source.Misc;
 
 namespace squad_dma.Source.Squad.Features
 {
-    public class InstantGrenade : Weapon
+    public class InstantGrenade : Manager, Weapon
     {
         public const string NAME = "InstantGrenade";
-        private readonly ulong _playerController;
-        private readonly bool _inGame;
-        private bool _isEnabled;
-        private ulong _currentWeapon;
-        private readonly Config _config;
+        private bool _isEnabled = false;
+        private ulong _lastAppliedWeapon = 0;
 
         private Dictionary<ulong, float> _originalGrenadeValues = new Dictionary<ulong, float>();
         private Dictionary<ulong, float> _originalAnimValues = new Dictionary<ulong, float>();
+        private Dictionary<ulong, bool> _originalAnimBoolValues = new Dictionary<ulong, bool>();
+        private int _originalItemCount;
+        private int _originalMaxItemCount;
 
-        private Dictionary<string, float> _configGrenadeValues = new Dictionary<string, float>();
-        private Dictionary<string, float> _configAnimValues = new Dictionary<string, float>();
-        private Dictionary<string, byte> _configItemValues = new Dictionary<string, byte>();
-
-        private byte _originalItemCount;
-        private byte _originalMaxItemCount;
-
-        private readonly List<IScatterWriteDataEntry<float>> _instantGrenadeEntries = new List<IScatterWriteDataEntry<float>>
+        private static readonly (uint offset, float value)[] GrenadeTimingFields =
         {
-            new ScatterWriteDataEntry<float>(0 + FSQGrenadeData.ThrowReadyTime, 0.0f),
-            new ScatterWriteDataEntry<float>(0 + FSQGrenadeData.OverhandThrowTime, 0.0f),
-            new ScatterWriteDataEntry<float>(0 + FSQGrenadeData.UnderhandThrowTime, 0.0f),
-            new ScatterWriteDataEntry<float>(0 + FSQGrenadeData.OverhandThrowDuration, 0.0f),
-            new ScatterWriteDataEntry<float>(0 + FSQGrenadeData.UnderhandThrowDuration, 0.0f),
-            new ScatterWriteDataEntry<float>(0 + FSQGrenadeData.ThrowModeTransitionTime, 0.0f),
-            new ScatterWriteDataEntry<float>(0 + FSQGrenadeData.ReloadTime, 0.0f)
+            (FSQGrenadeData.ThrowReadyTime, 0f),
+            (FSQGrenadeData.OverhandThrowTime, 0f),
+            (FSQGrenadeData.UnderhandThrowTime, 0f),
+            (FSQGrenadeData.OverhandThrowDuration, 0f),
+            (FSQGrenadeData.UnderhandThrowDuration, 0f),
+            (FSQGrenadeData.ThrowModeTransitionTime, 0f),
+            (FSQGrenadeData.ReloadTime, 0f),
         };
 
-        private readonly List<IScatterWriteDataEntry<float>> _instantAnimEntries = new List<IScatterWriteDataEntry<float>>
+        private static readonly (uint offset, float value)[] MontageFloatFields =
         {
-            new ScatterWriteDataEntry<float>(0 + UAnimSequenceBase.SequenceLength, 0.0f),
-            new ScatterWriteDataEntry<float>(0 + UAnimSequenceBase.RateScale, 1000.0f),
-            new ScatterWriteDataEntry<float>(0 + UAnimMontage.BlendInTime, 0.0f),
-            new ScatterWriteDataEntry<float>(0 + UAnimMontage.blendOutTime, 0.0f),
-            new ScatterWriteDataEntry<float>(0 + UAnimMontage.BlendOutTriggerTime, 0.0f)
+            (UAnimSequenceBase.SequenceLength, 0f),
+            (UAnimSequenceBase.RateScale, 1000f),
+            (UAnimMontage.BlendInTime, 0f),
+            (UAnimMontage.BlendOutTime, 0f),
+            (UAnimMontage.BlendOutTriggerTime, 0f),
         };
 
-        private readonly List<IScatterWriteDataEntry<bool>> _instantAnimBoolEntries = new List<IScatterWriteDataEntry<bool>>
+        private static readonly uint[] StaticInfoMontageOffsets =
         {
-            new ScatterWriteDataEntry<bool>(0 + UAnimMontage.bEnableAutoBlendOut, false)
+            USQGrenadeStaticInfo.WeaponOverhandPinpull1pMontage,
+            USQGrenadeStaticInfo.WeaponOverhandPinpull3pMontage,
+            USQGrenadeStaticInfo.OverhandPinpull1pMontage,
+            USQGrenadeStaticInfo.OverhandPinpull3pMontage,
+            USQGrenadeStaticInfo.WeaponOverhandThrow1pMontage,
+            USQGrenadeStaticInfo.WeaponOverhandThrow3pMontage,
+            USQGrenadeStaticInfo.OverhandThrow1pMontage,
+            USQGrenadeStaticInfo.OverhandThrow3pMontage,
+            USQGrenadeStaticInfo.WeaponUnderhandPinpull1pMontage,
+            USQGrenadeStaticInfo.WeaponUnderhandPinpull3pMontage,
+            USQGrenadeStaticInfo.UnderhandPinpull1pMontage,
+            USQGrenadeStaticInfo.UnderhandPinpull3pMontage,
+            USQGrenadeStaticInfo.WeaponUnderhandThrow1pMontage,
+            USQGrenadeStaticInfo.WeaponUnderhandThrow3pMontage,
+            USQGrenadeStaticInfo.UnderhandThrow1pMontage,
+            USQGrenadeStaticInfo.UnderhandThrow3pMontage,
+        };
+
+        private static readonly uint[] ActorMontageOffsets =
+        {
+            ASQGrenade.ActorWeaponOverhandPinpull1pMontage,
+            ASQGrenade.ActorWeaponOverhandPinpull3pMontage,
+            ASQGrenade.ActorOverhandPinpull1pMontage,
+            ASQGrenade.ActorOverhandPinpull3pMontage,
+            ASQGrenade.ActorWeaponOverhandThrow1pMontage,
+            ASQGrenade.ActorWeaponOverhandThrow3pMontage,
+            ASQGrenade.ActorOverhandThrow1pMontage,
+            ASQGrenade.ActorOverhandThrow3pMontage,
+            ASQGrenade.ActorWeaponUnderhandPinpull1pMontage,
+            ASQGrenade.ActorWeaponUnderhandPinpull3pMontage,
+            ASQGrenade.ActorUnderhandPinpull1pMontage,
+            ASQGrenade.ActorUnderhandPinpull3pMontage,
+            ASQGrenade.ActorWeaponUnderhandThrow1pMontage,
+            ASQGrenade.ActorWeaponUnderhandThrow3pMontage,
+            ASQGrenade.ActorUnderhandThrow1pMontage,
+            ASQGrenade.ActorUnderhandThrow3pMontage,
         };
 
         public bool IsEnabled => _isEnabled;
 
         public InstantGrenade(ulong playerController, bool inGame)
+            : base(playerController, inGame)
         {
-            _playerController = playerController;
-            _inGame = inGame;
-            _isEnabled = false;
-            _currentWeapon = 0;
-            _config = Program.Config;
         }
 
         public void SetEnabled(bool enable)
         {
             if (_isEnabled == enable) return;
+
             _isEnabled = enable;
-            
-            Logger.Debug($"[{NAME}] {(enable ? "Enabled" : "Disabled")} instant grenade");
-            
-            if (enable)
+
+            if (!enable)
             {
-                // Get current weapon through player state -> soldier -> inventory
-                try
-                {
-                    ulong playerState = Memory.ReadPtr(_playerController + Controller.PlayerState);
-                    if (playerState != 0)
-                    {
-                        ulong soldierActor = Memory.ReadPtr(playerState + ASQPlayerState.Soldier);
-                        if (soldierActor != 0)
-                        {
-                            ulong inventoryComponent = Memory.ReadPtr(soldierActor + ASQSoldier.InventoryComponent);
-                            if (inventoryComponent != 0)
-                            {
-                                _currentWeapon = Memory.ReadPtr(inventoryComponent + USQPawnInventoryComponent.CurrentWeapon);
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"[{NAME}] Error getting current weapon: {ex.Message}");
-                }
-                
-                Apply();
+                RecoverGrenade(_lastAppliedWeapon);
+                _lastAppliedWeapon = 0;
             }
             else
             {
-                Recover();
+                ulong weapon = GetCurrentWeapon();
+                if (weapon != 0 && IsGrenade(weapon))
+                    ApplyGrenade(weapon);
             }
         }
 
         public void OnWeaponChanged(ulong newWeapon, ulong oldWeapon)
         {
-            if (oldWeapon != 0 && _isEnabled)
+            if (_isEnabled && oldWeapon != 0)
+                RecoverGrenade(oldWeapon);
+
+            ClearOriginals();
+            _lastAppliedWeapon = 0;
+
+            if (_isEnabled && newWeapon != 0 && IsGrenade(newWeapon))
+                ApplyGrenade(newWeapon);
+        }
+
+        public override void Apply()
+        {
+            if (!_isEnabled) return;
+
+            ulong weapon = _cachedCurrentWeapon != 0 ? _cachedCurrentWeapon : GetCurrentWeapon();
+            if (weapon == 0 || !IsGrenade(weapon)) return;
+
+            ApplyGrenade(weapon);
+        }
+
+        private static bool IsGrenade(ulong equipableItem)
+        {
+            if (equipableItem == 0) return false;
+            try
             {
-                Recover();
+                ulong weaponConfig = Memory.ReadPtr(equipableItem + ASQWeapon.WeaponConfig);
+                if (weaponConfig != 0) return false;
+
+                ulong grenadeStaticInfo = Memory.ReadPtr(equipableItem + (ulong)ASQGrenade.GrenadeStaticInfo);
+                return grenadeStaticInfo != 0;
             }
-            
-            _currentWeapon = newWeapon;
-            if (_isEnabled)
+            catch
             {
-                Apply();
+                return false;
             }
         }
 
-        public void Apply()
+        private ulong GetCurrentWeapon()
         {
             try
             {
-                if (!_inGame || _playerController == 0 || _currentWeapon == 0) return;
+                UpdateCachedPointers();
+                if (_cachedCurrentWeapon != 0)
+                    return _cachedCurrentWeapon;
 
-                // Verify it's actually a grenade by checking the class name
-                string weaponClassName = Memory.GetActorClassName(_currentWeapon);
-                if (!weaponClassName.Contains("Grenade") && 
-                    !weaponClassName.Contains("Frag") && 
-                    !weaponClassName.Contains("Smoke") && 
-                    !weaponClassName.Contains("Flash"))
+                ulong playerState = Memory.ReadPtr(_playerController + Controller.PlayerState);
+                if (playerState == 0) return 0;
+
+                ulong soldier = Memory.ReadPtr(playerState + ASQPlayerState.Soldier);
+                if (soldier == 0) return 0;
+
+                ulong inventory = Memory.ReadPtr(soldier + ASQSoldier.InventoryComponent);
+                if (inventory == 0) return 0;
+
+                return Memory.ReadPtr(inventory + USQPawnInventoryComponent.CurrentWeapon);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private void ApplyGrenade(ulong weapon)
+        {
+            try
+            {
+                ulong grenadeStaticInfoPtr = Memory.ReadPtr(weapon + (ulong)ASQGrenade.GrenadeStaticInfo);
+                if (grenadeStaticInfoPtr == 0) return;
+
+                if (_lastAppliedWeapon != weapon)
                 {
-                    return;
+                    ClearOriginals();
+                    _lastAppliedWeapon = weapon;
                 }
 
-                Logger.Debug($"[{NAME}] Applying instant grenade to {weaponClassName} at 0x{_currentWeapon:X}");
-
-                var grenadeConfigPtr = _currentWeapon + (ulong)ASQGrenade.GrenadeConfig;
-                if (grenadeConfigPtr == 0) return;
-
-                if (_originalItemCount == 0 && _originalMaxItemCount == 0)
-                {
-                    _originalItemCount = Memory.ReadValue<byte>(_currentWeapon + (ulong)ASQEquipableItem.ItemCount);
-                    _originalMaxItemCount = Memory.ReadValue<byte>(_currentWeapon + (ulong)ASQEquipableItem.MaxItemCount);
-                    
-                    _configItemValues["ItemCount"] = _originalItemCount;
-                    _configItemValues["MaxItemCount"] = _originalMaxItemCount;
-                    
-                    Logger.Debug($"[{NAME}] Stored original item count: {_originalItemCount}, max item count: {_originalMaxItemCount}");
-                    
-                    if (Config.TryLoadConfig(out var config))
-                    {
-                        config.OriginalGrenadeItemValues = _configItemValues;
-                        Config.SaveConfig(config);
-                        Logger.Debug($"[{NAME}] Saved original item values to config");
-                    }
-                }
-
-                Memory.WriteValue<byte>(_currentWeapon + (ulong)ASQEquipableItem.ItemCount, 10);
-                Memory.WriteValue<byte>(_currentWeapon + (ulong)ASQEquipableItem.MaxItemCount, 10);
-                Memory.WriteValue<bool>(grenadeConfigPtr + (ulong)FSQGrenadeData.bInfiniteAmmo, true);
+                ulong grenadeConfigPtr = weapon + (ulong)ASQGrenade.GrenadeConfig;
 
                 if (_originalGrenadeValues.Count == 0)
                 {
-                    foreach (var entry in _instantGrenadeEntries)
-                    {
-                        float originalValue = Memory.ReadValue<float>(grenadeConfigPtr + entry.Address);
-                        _originalGrenadeValues[entry.Address] = originalValue;
-                        
-                        string configKey = $"Grenade_{entry.Address:X}";
-                        _configGrenadeValues[configKey] = originalValue;
-                        
-                        Logger.Debug($"[{NAME}] Stored original grenade value at 0x{entry.Address:X}: {originalValue}");
-                    }
-
-                    if (Config.TryLoadConfig(out var config))
-                    {
-                        config.OriginalGrenadeValues = _configGrenadeValues;
-                        Config.SaveConfig(config);
-                        Logger.Debug($"[{NAME}] Saved original grenade values to config");
-                    }
+                    _originalItemCount = Memory.ReadValue<int>(weapon + (ulong)ASQEquipableItem.ItemCount);
+                    _originalMaxItemCount = Memory.ReadValue<int>(weapon + (ulong)ASQEquipableItem.MaxItemCount);
+                    foreach (var (offset, _) in GrenadeTimingFields)
+                        _originalGrenadeValues[offset] = Memory.ReadValue<float>(grenadeConfigPtr + offset);
                 }
 
-                var grenadeEntries = _instantGrenadeEntries.Select(entry => 
-                    new ScatterWriteDataEntry<float>(grenadeConfigPtr + entry.Address, entry.Data)).ToList();
-                Memory.WriteScatter(grenadeEntries);
+                Memory.WriteValue<bool>(grenadeConfigPtr + (ulong)FSQGrenadeData.bInfiniteAmmo, true);
+                Memory.WriteValue<int>(weapon + (ulong)ASQEquipableItem.ItemCount, 10);
+                Memory.WriteValue<int>(weapon + (ulong)ASQEquipableItem.MaxItemCount, 10);
 
-                var grenadeStaticInfoPtr = Memory.ReadPtr(_currentWeapon + (ulong)ASQGrenade.GrenadeStaticInfo);
-                if (grenadeStaticInfoPtr != 0)
-                {
-                    // Modify all animation montages to be instant
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponOverhandPinpull1pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponOverhandPinpull3pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.OverhandPinpull1pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.OverhandPinpull3pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponOverhandThrow1pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponOverhandThrow3pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.OverhandThrow1pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.OverhandThrow3pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponUnderhandPinpull1pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponUnderhandPinpull3pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.UnderhandPinpull1pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.UnderhandPinpull3pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponUnderhandThrow1pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponUnderhandThrow3pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.UnderhandThrow1pMontage);
-                    ModifyAnimationMontage(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.UnderhandThrow3pMontage);
-                }
+                var grenadeWrites = GrenadeTimingFields
+                    .Select(f => new ScatterWriteDataEntry<float>(grenadeConfigPtr + f.offset, f.value))
+                    .ToList();
+                Memory.WriteScatter(grenadeWrites);
 
-                Logger.Debug($"[{NAME}] Successfully applied instant grenade modifications");
+                ModifyMontageSet(grenadeStaticInfoPtr, StaticInfoMontageOffsets);
+                ModifyMontageSet(weapon, ActorMontageOffsets);
             }
-            catch (Exception ex)
+            catch { }
+        }
+
+        private void ModifyMontageSet(ulong basePtr, uint[] offsets)
+        {
+            foreach (uint off in offsets)
             {
-                Logger.Error($"[{NAME}] Error applying instant grenade: {ex.Message}");
+                try
+                {
+                    ulong montagePtr = Memory.ReadPtr(basePtr + off);
+                    if (montagePtr == 0) continue;
+
+                    if (_originalAnimValues.Count == 0)
+                    {
+                        foreach (var (offset, _) in MontageFloatFields)
+                            _originalAnimValues[offset] = Memory.ReadValue<float>(montagePtr + offset);
+                        _originalAnimBoolValues[UAnimMontage.bEnableAutoBlendOut] =
+                            Memory.ReadValue<bool>(montagePtr + UAnimMontage.bEnableAutoBlendOut);
+                    }
+
+                    var floatWrites = MontageFloatFields
+                        .Select(f => new ScatterWriteDataEntry<float>(montagePtr + f.offset, f.value))
+                        .ToList();
+                    Memory.WriteScatter(floatWrites);
+                    Memory.WriteValue<bool>(montagePtr + UAnimMontage.bEnableAutoBlendOut, false);
+                }
+                catch { }
             }
         }
 
-        private void ModifyAnimationMontage(ulong montagePtr)
+        private void RecoverGrenade(ulong weapon)
         {
-            if (montagePtr == 0) return;
-
+            if (weapon == 0) return;
             try
             {
-                if (_originalAnimValues.Count == 0)
-                {
-                    foreach (var entry in _instantAnimEntries)
-                    {
-                        float originalValue = Memory.ReadValue<float>(montagePtr + entry.Address);
-                        _originalAnimValues[entry.Address] = originalValue;
-                        
-                        string configKey = $"Anim_{entry.Address:X}";
-                        _configAnimValues[configKey] = originalValue;
-                        
-                        Logger.Debug($"[{NAME}] Stored original anim value at 0x{entry.Address:X}: {originalValue}");
-                    }
+                ulong grenadeStaticInfoPtr = Memory.ReadPtr(weapon + (ulong)ASQGrenade.GrenadeStaticInfo);
+                if (grenadeStaticInfoPtr == 0) return;
 
-                    if (Config.TryLoadConfig(out var config))
-                    {
-                        config.OriginalGrenadeAnimValues = _configAnimValues;
-                        Config.SaveConfig(config);
-                        Logger.Debug($"[{NAME}] Saved original anim values to config");
-                    }
+                ulong grenadeConfigPtr = weapon + (ulong)ASQGrenade.GrenadeConfig;
+                Memory.WriteValue<bool>(grenadeConfigPtr + (ulong)FSQGrenadeData.bInfiniteAmmo, false);
+                Memory.WriteValue<byte>(weapon + (ulong)ASQGrenade.GrenadeState, 0);
+                Memory.WriteValue<bool>(weapon + (ulong)ASQGrenade.bCachedOverhandThrow, false);
+                Memory.WriteValue<bool>(weapon + (ulong)ASQGrenade.bCachedOverhandPinpull, false);
+                Memory.WriteValue<bool>(weapon + (ulong)ASQGrenade.bCachedReloading, false);
+
+                if (_originalItemCount != 0)
+                    Memory.WriteValue<int>(weapon + (ulong)ASQEquipableItem.ItemCount, _originalItemCount);
+                if (_originalMaxItemCount != 0)
+                    Memory.WriteValue<int>(weapon + (ulong)ASQEquipableItem.MaxItemCount, _originalMaxItemCount);
+
+                if (_originalGrenadeValues.Count > 0)
+                {
+                    var restoreWrites = _originalGrenadeValues
+                        .Select(kvp => new ScatterWriteDataEntry<float>(grenadeConfigPtr + kvp.Key, kvp.Value))
+                        .ToList();
+                    Memory.WriteScatter(restoreWrites);
                 }
 
-                var animEntries = _instantAnimEntries.Select(entry => 
-                    new ScatterWriteDataEntry<float>(montagePtr + entry.Address, entry.Data)).ToList();
-                var boolEntries = _instantAnimBoolEntries.Select(entry => 
-                    new ScatterWriteDataEntry<bool>(montagePtr + entry.Address, entry.Data)).ToList();
-                
-                Memory.WriteScatter(animEntries);
-                Memory.WriteScatter(boolEntries);
+                RestoreMontageSet(grenadeStaticInfoPtr, StaticInfoMontageOffsets);
+                RestoreMontageSet(weapon, ActorMontageOffsets);
             }
-            catch (Exception ex)
+            catch { }
+        }
+
+        private void RestoreMontageSet(ulong basePtr, uint[] offsets)
+        {
+            foreach (uint off in offsets)
             {
-                Logger.Error($"[{NAME}] Error modifying animation montage: {ex.Message}");
+                try
+                {
+                    ulong montagePtr = Memory.ReadPtr(basePtr + off);
+                    if (montagePtr == 0) continue;
+
+                    if (_originalAnimValues.Count > 0)
+                    {
+                        var restoreWrites = _originalAnimValues
+                            .Select(kvp => new ScatterWriteDataEntry<float>(montagePtr + kvp.Key, kvp.Value))
+                            .ToList();
+                        Memory.WriteScatter(restoreWrites);
+                    }
+
+                    if (_originalAnimBoolValues.TryGetValue(UAnimMontage.bEnableAutoBlendOut, out bool origBool))
+                        Memory.WriteValue<bool>(montagePtr + UAnimMontage.bEnableAutoBlendOut, origBool);
+                }
+                catch { }
             }
         }
 
-        private void Recover()
+        private void ClearOriginals()
         {
-            try
-            {
-                if (!_inGame || _playerController == 0 || _currentWeapon == 0) return;
-
-                string weaponClassName = Memory.GetActorClassName(_currentWeapon);
-                
-                // Only proceed if it's actually a grenade
-                if (!weaponClassName.Contains("Grenade") && 
-                    !weaponClassName.Contains("Frag") && 
-                    !weaponClassName.Contains("Smoke") && 
-                    !weaponClassName.Contains("Flash"))
-                {
-                    return;
-                }
-
-                Logger.Debug($"[{NAME}] Recovering original values for {weaponClassName}");
-
-                if (_originalItemCount != 0 && _originalMaxItemCount != 0)
-                {
-                    Memory.WriteValue<byte>(_currentWeapon + (ulong)ASQEquipableItem.ItemCount, _originalItemCount);
-                    Memory.WriteValue<byte>(_currentWeapon + (ulong)ASQEquipableItem.MaxItemCount, _originalMaxItemCount);
-                    Logger.Debug($"[{NAME}] Restored original item count: {_originalItemCount}, max item count: {_originalMaxItemCount}");
-                }
-
-                var grenadeConfigPtr = _currentWeapon + (ulong)ASQGrenade.GrenadeConfig;
-                if (grenadeConfigPtr != 0)
-                {
-                    if (_originalGrenadeValues.Count > 0)
-                    {
-                        var restoreEntries = _originalGrenadeValues.Select(kvp => 
-                            new ScatterWriteDataEntry<float>(grenadeConfigPtr + kvp.Key, kvp.Value)).ToList();
-                        Memory.WriteScatter(restoreEntries);
-                        Logger.Debug($"[{NAME}] Restored original grenade values");
-                    }
-
-                    Memory.WriteValue<bool>(grenadeConfigPtr + (ulong)FSQGrenadeData.bInfiniteAmmo, false);
-                }
-
-                // Restore animation montage values
-                var grenadeStaticInfoPtr = Memory.ReadPtr(_currentWeapon + (ulong)ASQGrenade.GrenadeStaticInfo);
-                if (grenadeStaticInfoPtr != 0)
-                {
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponOverhandPinpull1pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponOverhandPinpull3pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.OverhandPinpull1pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.OverhandPinpull3pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponOverhandThrow1pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponOverhandThrow3pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.OverhandThrow1pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.OverhandThrow3pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponUnderhandPinpull1pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponUnderhandPinpull3pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.UnderhandPinpull1pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.UnderhandPinpull3pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponUnderhandThrow1pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.WeaponUnderhandThrow3pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.UnderhandThrow1pMontage);
-                    RestoreAnimationMontageValues(grenadeStaticInfoPtr + (ulong)USQGrenadeStaticInfo.UnderhandThrow3pMontage);
-                }
-
-                Logger.Debug($"[{NAME}] Successfully recovered original values for {weaponClassName}");
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"[{NAME}] Error recovering original values: {ex.Message}");
-            }
-        }
-
-        private void RestoreAnimationMontageValues(ulong montagePtr)
-        {
-            if (montagePtr == 0) return;
-
-            try
-            {
-                if (_originalAnimValues.Count > 0)
-                {
-                    var restoreEntries = _originalAnimValues.Select(kvp => 
-                        new ScatterWriteDataEntry<float>(montagePtr + kvp.Key, kvp.Value)).ToList();
-                    var boolEntries = _instantAnimBoolEntries.Select(entry => 
-                        new ScatterWriteDataEntry<bool>(montagePtr + entry.Address, true)).ToList();
-                    
-                    Memory.WriteScatter(restoreEntries);
-                    Memory.WriteScatter(boolEntries);
-                    Logger.Debug($"[{NAME}] Restored original anim values at 0x{montagePtr:X}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"[{NAME}] Error restoring animation montage values: {ex.Message}");
-            }
+            _originalGrenadeValues.Clear();
+            _originalAnimValues.Clear();
+            _originalAnimBoolValues.Clear();
+            _originalItemCount = 0;
+            _originalMaxItemCount = 0;
         }
     }
-} 
+}

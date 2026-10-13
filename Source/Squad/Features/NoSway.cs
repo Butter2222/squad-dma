@@ -130,24 +130,20 @@ namespace squad_dma.Source.Squad.Features
         {
             SafeApplyModifications(() =>
             {
-                // Apply animation modifications
                 if (_lastAnimInstance != 0)
                 {
-                    var animEntries = _noSwayAnimEntries.Select(entry => 
-                        new ScatterWriteDataEntry<float>(_lastAnimInstance + entry.Address, entry.Data)).ToList();
-                    Memory.WriteScatter(animEntries);
-                    Logger.Debug($"[{_featureName}] Applied {animEntries.Count} animation modifications");
+                    foreach (var entry in _noSwayAnimEntries)
+                        EnqueueWrite<float>(_lastAnimInstance + entry.Address, entry.Data);
+                    Logger.Debug($"[{_featureName}] Enqueued {_noSwayAnimEntries.Count} animation modifications");
                 }
-                
-                // Apply weapon modifications
+
                 if (_lastWeaponStaticInfo != 0)
                 {
-                    var weaponEntries = _noSwayWeaponEntries.Select(entry => 
-                        new ScatterWriteDataEntry<float>(_lastWeaponStaticInfo + entry.Address, entry.Data)).ToList();
-                    Memory.WriteScatter(weaponEntries);
-                    Logger.Debug($"[{_featureName}] Applied {weaponEntries.Count} weapon modifications");
+                    foreach (var entry in _noSwayWeaponEntries)
+                        EnqueueWrite<float>(_lastWeaponStaticInfo + entry.Address, entry.Data);
+                    Logger.Debug($"[{_featureName}] Enqueued {_noSwayWeaponEntries.Count} weapon modifications");
                 }
-                
+
             }, "NoSway modifications (28 memory addresses)");
         }
         

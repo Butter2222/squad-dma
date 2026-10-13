@@ -138,7 +138,7 @@ namespace squad_dma
             }
 
             _initAttempts++;
-            Logger.Error("Failed to initialize keyboard handler for new Windows version");
+            Logger.Error("Failed to initialize keyboard handler. Restarting host PC may help");
             return false;
         }
 

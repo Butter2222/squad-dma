@@ -8,10 +8,11 @@ namespace squad_dma.Source.Squad.Features
     {
         public const string NAME = "ShootingInMainBase";
         private bool _isEnabled = false;
-        
+
         public bool IsEnabled => _isEnabled;
-        
+
         private ulong _lastWeapon = 0;
+        private ulong _lastAppliedWeapon = 0;
         
         public ShootingInMainBase(ulong playerController, bool inGame)
             : base(playerController, inGame)
@@ -91,6 +92,7 @@ namespace squad_dma.Source.Squad.Features
                 }
 
                 Memory.WriteValue<bool>(itemStaticInfo + USQItemStaticInfo.bUsableInMainBase, false);
+                if (_lastAppliedWeapon == weapon) _lastAppliedWeapon = 0;
                 Logger.Debug($"[{NAME}] Restored weapon at 0x{weapon:X}");
             }
             catch (Exception ex)
@@ -98,9 +100,10 @@ namespace squad_dma.Source.Squad.Features
                 Logger.Error($"[{NAME}] Error restoring weapon at 0x{weapon:X}: {ex.Message}");
             }
         }
-        
+
         private void Apply(ulong weapon)
         {
+            if (weapon == _lastAppliedWeapon) return;
             try
             {
                 ulong itemStaticInfo = Memory.ReadPtr(weapon + ASQEquipableItem.ItemStaticInfo);
@@ -111,6 +114,7 @@ namespace squad_dma.Source.Squad.Features
                 }
 
                 Memory.WriteValue<bool>(itemStaticInfo + USQItemStaticInfo.bUsableInMainBase, Program.Config.AllowShootingInMainBase);
+                _lastAppliedWeapon = weapon;
                 Logger.Debug($"[{NAME}] Applied shooting in main base to weapon at 0x{weapon:X}");
             }
             catch (Exception ex)

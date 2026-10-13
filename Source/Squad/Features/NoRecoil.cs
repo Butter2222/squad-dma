@@ -210,27 +210,22 @@ namespace squad_dma.Source.Squad.Features
         {
             SafeApplyModifications(() =>
             {
-                // Apply animation modifications
                 if (_lastAnimInstance != 0)
                 {
-                    var animEntries = _noRecoilAnimEntries.Select(entry => 
-                        new ScatterWriteDataEntry<float>(_lastAnimInstance + entry.Address, entry.Data)).ToList();
-                    Memory.WriteScatter(animEntries);
-                    Logger.Debug($"[{_featureName}] Applied {animEntries.Count} animation modifications");
+                    foreach (var entry in _noRecoilAnimEntries)
+                        EnqueueWrite<float>(_lastAnimInstance + entry.Address, entry.Data);
+                    Logger.Debug($"[{_featureName}] Enqueued {_noRecoilAnimEntries.Count} animation modifications");
                 }
-                
-                // Apply weapon modifications
+
                 if (_lastWeaponStaticInfo != 0)
                 {
-                    var weaponEntries = _noRecoilWeaponEntries.Select(entry => 
-                        new ScatterWriteDataEntry<float>(_lastWeaponStaticInfo + entry.Address, entry.Data)).ToList();
-                    Memory.WriteScatter(weaponEntries);
-                    Logger.Debug($"[{_featureName}] Applied {weaponEntries.Count} weapon modifications");
+                    foreach (var entry in _noRecoilWeaponEntries)
+                        EnqueueWrite<float>(_lastWeaponStaticInfo + entry.Address, entry.Data);
+                    Logger.Debug($"[{_featureName}] Enqueued {_noRecoilWeaponEntries.Count} weapon modifications");
                 }
-                
-                // Disable camera recoil
-                Memory.WriteValue(_cachedSoldierActor + ASQSoldier.bIsCameraRecoilActive, false);
-                
+
+                EnqueueWrite<bool>(_cachedSoldierActor + ASQSoldier.bIsCameraRecoilActive, false);
+
             }, "NoRecoil modifications (70+ memory addresses)");
         }
         

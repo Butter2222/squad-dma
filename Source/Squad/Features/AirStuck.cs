@@ -82,17 +82,16 @@ namespace squad_dma.Source.Squad.Features
             {
                 ulong characterMovement = _cachedCharacterMovement;
                 ulong soldierActor = _cachedSoldierActor;
-                
-                // Apply flying movement modifications
-                Memory.WriteValue<byte>(characterMovement + CharacterMovementComponent.MovementMode, (byte)EMovementMode.MOVE_Flying);
-                Memory.WriteValue<byte>(characterMovement + Character.ReplicatedMovementMode, (byte)EMovementMode.MOVE_Flying);
-                Memory.WriteValue<byte>(soldierActor + Actor.bReplicateMovement, 0);
-                Memory.WriteValue<float>(characterMovement + CharacterMovementComponent.MaxFlySpeed, 2000.0f);
-                Memory.WriteValue<float>(characterMovement + CharacterMovementComponent.MaxCustomMovementSpeed, 2000.0f);
-                Memory.WriteValue<float>(characterMovement + CharacterMovementComponent.MaxAcceleration, 2000.0f);
-                
+
+                EnqueueWrite<byte>(characterMovement + CharacterMovementComponent.MovementMode, (byte)EMovementMode.MOVE_Flying);
+                EnqueueWrite<byte>(characterMovement + Character.ReplicatedMovementMode, (byte)EMovementMode.MOVE_Flying);
+                EnqueueWrite<byte>(soldierActor + Actor.bReplicateMovement, 0);
+                EnqueueWrite<float>(characterMovement + CharacterMovementComponent.MaxFlySpeed, 2000.0f);
+                EnqueueWrite<float>(characterMovement + CharacterMovementComponent.MaxCustomMovementSpeed, 2000.0f);
+                EnqueueWrite<float>(characterMovement + CharacterMovementComponent.MaxAcceleration, 2000.0f);
+
                 Logger.Debug($"[{_featureName}] Applied AirStuck: Flying mode enabled for scouting");
-                
+
             }, "AirStuck flying movement modifications (6 memory addresses)");
         }
         

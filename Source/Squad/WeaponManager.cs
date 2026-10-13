@@ -30,7 +30,7 @@ namespace squad_dma.Source.Squad
         }
 
         /// <summary>
-        /// Simple, robust weapon validation - checks if item has weapon-specific offsets
+        /// Simple, robust weapon validation - accepts weapons and throwable grenades
         /// </summary>
         public static bool IsWeapon(ulong equipableItem)
         {
@@ -38,10 +38,12 @@ namespace squad_dma.Source.Squad
 
             try
             {
-                // Simple check: try to read WeaponConfig offset
-                // If this succeeds and returns a valid pointer, it's likely a weapon
                 ulong weaponConfig = Memory.ReadPtr(equipableItem + ASQWeapon.WeaponConfig);
-                return weaponConfig != 0;
+                if (weaponConfig != 0) return true;
+
+                // Grenades don't have WeaponConfig — check for GrenadeStaticInfo instead
+                ulong grenadeStaticInfo = Memory.ReadPtr(equipableItem + ASQGrenade.GrenadeStaticInfo);
+                return grenadeStaticInfo != 0;
             }
             catch
             {

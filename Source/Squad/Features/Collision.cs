@@ -97,14 +97,12 @@ namespace squad_dma.Source.Squad.Features
                 ulong soldierActor = _cachedSoldierActor;
                 ulong rootComponent = Memory.ReadPtr(soldierActor + Actor.RootComponent);
                 if (rootComponent == 0) return;
-                
+
                 ulong bodyInstanceAddr = rootComponent + UPrimitiveComponent.BodyInstance;
-                
-                // Disable collision
-                Memory.WriteValue<byte>(bodyInstanceAddr + FBodyInstance.CollisionEnabled, (byte)ECollisionEnabled.NoCollision);
-                
+                EnqueueWrite<byte>(bodyInstanceAddr + FBodyInstance.CollisionEnabled, (byte)ECollisionEnabled.NoCollision);
+
                 Logger.Debug($"[{_featureName}] Applied collision modification: NoCollision (0)");
-                
+
             }, "Collision system modification (1 physics address)");
         }
         
