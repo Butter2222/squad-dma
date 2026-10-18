@@ -405,6 +405,11 @@ namespace squad_dma
                             teamRound.AddEntry<ulong>(i, 7, pawnPlayerState, null, Offsets.ASQPlayerState.SquadState);
                         }
 
+                        // The capsule resizes with stance, so it is re-read with the rest of the actor data
+                        var capsulePtr = instanceRound.AddEntry<ulong>(i, 30, actorAddr + Offsets.Character.CapsuleComponent);
+                        instigatorRound.AddEntry<float>(i, 31, capsulePtr, null, Offsets.UCapsuleComponent.CapsuleHalfHeight);
+                        instigatorRound.AddEntry<float>(i, 32, capsulePtr, null, Offsets.UCapsuleComponent.CapsuleRadius);
+
                         // ESP bone processing disabled for performance
                         // SetupESPEntries(instanceRound, meshRound, boneRound, i, actorAddr);
                     }
@@ -485,6 +490,14 @@ namespace squad_dma
                             }
                         }
 
+                        if (r.TryGetValue(31, out var halfHeightResult) && halfHeightResult.TryGetResult<float>(out var halfHeight) &&
+                            r.TryGetValue(32, out var radiusResult) && radiusResult.TryGetResult<float>(out var radius) &&
+                            halfHeight is > 10f and < 200f && radius is > 10f and < 100f)
+                        {
+                            actor.CapsuleHalfHeight = halfHeight;
+                            actor.CapsuleRadius = radius;
+                        }
+
                         // ESP data processing disabled for performance
                         // UpdatePlayerESPData(actor, r);
                         // InitializeEmptyESPData(actor);
@@ -543,6 +556,9 @@ namespace squad_dma
                             actor.IsClaimed = false;
                             actor.ClaimingSquadID = -1;
                         }
+
+                        if (!actor.HasVehicleBounds && DateTime.Now >= actor.NextBoundsAttempt)
+                            TryReadVehicleBounds(actor);
                     }
 
                     if (r.TryGetValue(8, out var xr) && r.TryGetValue(9, out var yr) && r.TryGetValue(10, out var zr) &&
@@ -574,6 +590,48 @@ namespace squad_dma
                 Logger.Error($"CRITICAL ERROR - RegisteredActors Loop FAILED: {ex}");
             }
         }
+
+        /// <summary>
+        /// Reads the actor-local mesh bounds (FBoxSphereBounds) from the root mesh's asset. The size of a vehicle
+        /// never changes, so it is read once and retried every few seconds only while it has not been found.
+        /// </summary>
+        private static void TryReadVehicleBounds(UActor actor)
+        {
+            actor.NextBoundsAttempt = DateTime.Now.AddSeconds(5);
+
+            try
+            {
+                ulong root = Memory.ReadPtr(actor.Base + Offsets.Actor.RootComponent);
+                if (root == 0) return;
+
+                ulong boundsAddr = 0;
+                ulong skeletalMesh = Memory.ReadPtr(root + Offsets.USkinnedMeshComponent.SkeletalMesh);
+                if (skeletalMesh != 0)
+                    boundsAddr = skeletalMesh + Offsets.USkeletalMesh.ExtendedBounds;
+                else
+                {
+                    ulong staticMesh = Memory.ReadPtr(root + Offsets.UStaticMeshComponent.StaticMesh);
+                    if (staticMesh != 0)
+                        boundsAddr = staticMesh + Offsets.UStaticMesh.ExtendedBounds;
+                }
+
+                if (boundsAddr == 0) return;
+
+                var origin = Memory.ReadValue<Vector3D>(boundsAddr + Offsets.FBoxSphereBounds.Origin);
+                var extent = Memory.ReadValue<Vector3D>(boundsAddr + Offsets.FBoxSphereBounds.BoxExtent);
+
+                if (!IsPlausibleExtent(extent.X) || !IsPlausibleExtent(extent.Y) || !IsPlausibleExtent(extent.Z))
+                    return;
+
+                actor.VehicleBoundsOrigin = new Vector3((float)origin.X, (float)origin.Y, (float)origin.Z);
+                actor.VehicleHalfExtents = new Vector3((float)extent.X, (float)extent.Y, (float)extent.Z);
+                actor.HasVehicleBounds = true;
+            }
+            catch (DMAShutdown) { throw; }
+            catch { /* retried after NextBoundsAttempt */ }
+        }
+
+        private static bool IsPlausibleExtent(double halfSizeCm) => halfSizeCm is > 20 and < 3500;
 
         #region ESP Functionality (Ready to Enable)
         /// <summary>

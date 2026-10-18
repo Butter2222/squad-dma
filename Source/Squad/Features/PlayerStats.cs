@@ -13,6 +13,15 @@ namespace squad_dma.Source.Squad.Features
         
         private readonly ulong _playerController;
         private readonly ulong _gameState;
+        private bool _warned;
+
+        /// <summary>Stats are polled every UI tick, so a missing player state is logged once.</summary>
+        private void LogOnce(string message)
+        {
+            if (_warned) return;
+            _warned = true;
+            Logger.Error($"[{NAME}] {message}");
+        }
 
         /// <summary>
         /// Constructor for GameStats
@@ -40,7 +49,7 @@ namespace squad_dma.Source.Squad.Features
 
                     if (!ptrScatter.Results[0][0].TryGetResult<ulong>(out var playerState) || playerState == 0)
                     {
-                        Logger.Error($"[{NAME}] Failed to get player state for kills");
+                        LogOnce("Failed to get player state");
                         return 0;
                     }
 
@@ -86,7 +95,7 @@ namespace squad_dma.Source.Squad.Features
 
                     if (!ptrScatter.Results[0][0].TryGetResult<ulong>(out var playerState) || playerState == 0)
                     {
-                        Logger.Error($"[{NAME}] Failed to get player state for woundeds");
+                        LogOnce("Failed to get player state");
                         return 0;
                     }
 

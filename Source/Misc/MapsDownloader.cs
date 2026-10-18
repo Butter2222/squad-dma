@@ -9,13 +9,25 @@ namespace squad_dma
         private const string MAPS_DOWNLOAD_URL = "https://github.com/Butter2222/squad-dma/releases/download/Maps/Maps.zip";
         private const string MAPS_FOLDER = "Maps";
 
+        // One map pack folder per map: map.json, the base tiles and the height data
         private static readonly string[] RequiredMaps = new string[]
+        {
+            "AlBasrah", "Anvil", "Belaya", "BlackCoast", "Chora", "Fallujah",
+            "FoolsRoad", "GooseBay", "Gorodok", "Harju", "Jensen",
+            "Kamdesh", "Kohat", "Kokan", "Lashkar", "Logar",
+            "Manicouagan", "Mestia", "Mutaha", "Narva", "Narva_f", "Pacific",
+            "Sanxian", "Skorpo", "Sumari", "Tallil", "Yehorivka"
+        };
+
+        // Single-image maps from before map packs, still accepted until a Maps folder with packs replaces them
+        private static readonly string[] LegacyMaps = new string[]
         {
             "Al_Basrah", "Anvil", "Belaya", "Black_Coast", "Chora", "Fallujah",
             "Fools_Road", "GooseBay", "Gorodok", "Harju", "Jensens_Range",
             "Kamdesh", "Kohat", "Kokan", "Lashkar", "Logar_Valley",
             "Manicouagan", "Mestia", "Mutaha", "Narva", "PacificProvingGrounds",
-            "Sanxian_Islands", "Skorpo", "Sumari", "Tallil_Outskirts", "Yehorivka"
+            "Sanxian_Islands", "Skorpo", "Sumari", "Tallil_Outskirts", "Yehorivka",
+            "Al_Basrah_Old"
         };
 
         public static bool ValidateMapsFolder()
@@ -37,17 +49,29 @@ namespace squad_dma
                 return missing;
             }
 
-            foreach (var mapName in RequiredMaps)
+            // Only a folder with no map packs at all is judged as the old single-image layout
+            if (!MapPack.FindPacks(MAPS_FOLDER).Any())
             {
-                var pngFile = Path.Combine(MAPS_FOLDER, $"{mapName}.png");
-                if (!File.Exists(pngFile))
-                    missing.Add($"{mapName}.png");
+                foreach (var mapName in LegacyMaps)
+                {
+                    if (!File.Exists(Path.Combine(MAPS_FOLDER, $"{mapName}.png")))
+                        missing.Add($"{mapName}.png");
+                }
+
+                if (missing.Count == 0)
+                    return missing;
+
+                // Not a complete old set either: report what the new layout is missing
+                missing.Clear();
             }
 
-            // Check for Al_Basrah_Old.png
-            var oldBasrah = Path.Combine(MAPS_FOLDER, "Al_Basrah_Old.png");
-            if (!File.Exists(oldBasrah))
-                missing.Add("Al_Basrah_Old.png");
+            foreach (var mapName in RequiredMaps)
+            {
+                string packDirectory = Path.Combine(MAPS_FOLDER, mapName);
+                string problem = Directory.Exists(packDirectory) ? MapPack.Validate(packDirectory) : "folder missing";
+                if (problem != null)
+                    missing.Add($"{mapName}: {problem}");
+            }
 
             return missing;
         }
@@ -189,7 +213,9 @@ namespace squad_dma
                 if (!Directory.Exists(MAPS_FOLDER))
                     Directory.CreateDirectory(MAPS_FOLDER);
 
-                // Extract all files
+                string root = Path.GetFullPath(MAPS_FOLDER) + Path.DirectorySeparatorChar;
+
+                // Extract all files, keeping each map's folder structure
                 using (var archive = ZipFile.OpenRead(archivePath))
                 {
                     foreach (var entry in archive.Entries)
@@ -197,14 +223,16 @@ namespace squad_dma
                         if (string.IsNullOrEmpty(entry.Name))
                             continue;
 
-                        // Handle both "Maps/filename" and "filename" paths in the archive
-                        string fileName = entry.FullName;
-                        if (fileName.Contains("/"))
-                            fileName = fileName.Substring(fileName.LastIndexOf('/') + 1);
-                        if (fileName.Contains("\\"))
-                            fileName = fileName.Substring(fileName.LastIndexOf('\\') + 1);
+                        // The archive may or may not have a leading "Maps/" folder
+                        string relative = entry.FullName.Replace('\\', '/');
+                        if (relative.StartsWith("Maps/", StringComparison.OrdinalIgnoreCase))
+                            relative = relative.Substring("Maps/".Length);
 
-                        string destinationPath = Path.Combine(MAPS_FOLDER, fileName);
+                        string destinationPath = Path.GetFullPath(Path.Combine(MAPS_FOLDER, relative));
+                        if (!destinationPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                            throw new InvalidDataException($"Archive entry outside the Maps folder: {entry.FullName}");
+
+                        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
 
                         // Overwrite existing files
                         entry.ExtractToFile(destinationPath, true);

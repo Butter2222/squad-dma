@@ -162,6 +162,11 @@ namespace squad_dma
         #endregion
 
         #region Color Configuration Methods
+        private static int _colorVersion;
+
+        /// <summary>Changes every time the colors are reloaded from the config, so renderers that cache brushes know when to refresh them.</summary>
+        public static int ColorVersion => Volatile.Read(ref _colorVersion);
+
         /// <summary>
         /// Loads colors from configuration settings.
         /// </summary>
@@ -182,6 +187,8 @@ namespace squad_dma
             VehicleDistanceText = config.VehicleDistanceText.ToSKColor();
             DeadMarker = config.DeadMarkers.ToSKColor();
             AdminMarker = config.AdminMarkers.ToSKColor();
+
+            Interlocked.Increment(ref _colorVersion); // last, so a reader that sees the new version also sees the new colors
         }
 
         /// <summary>

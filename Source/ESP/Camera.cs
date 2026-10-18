@@ -170,20 +170,66 @@ namespace squad_dma
             return new Vector2(pixelX, pixelY);
         }
 
-        public static Vector2 WorldToScreen(Vector3D world)
-        {
-            float w = (float)(world.X * ViewProjectionMatrix.matrix[0, 3] + world.Y * ViewProjectionMatrix.matrix[1, 3] + world.Z * ViewProjectionMatrix.matrix[2, 3] + ViewProjectionMatrix.matrix[3, 3]);
-            if (w < WorldToScreenTolerance)
-                return Vector2.Zero;
+        /// <summary>
+        /// Scope view of the weapon or vehicle sight the player is currently aimed through. The PIP capture renders
+        /// from the aim point with its own square FOV, so it reuses the main camera's position and rotation.
+        /// </summary>
+        public static bool OpticActive;
+        public static float OpticFOV;
+        public static float MainFOV = 90f;
+        public static FMatrix OpticViewProjectionMatrix;
 
-            float x = (float)(world.X * ViewProjectionMatrix.matrix[0, 0] + world.Y * ViewProjectionMatrix.matrix[1, 0] + world.Z * ViewProjectionMatrix.matrix[2, 0] + ViewProjectionMatrix.matrix[3, 0]);
-            float y = (float)(world.X * ViewProjectionMatrix.matrix[0, 1] + world.Y * ViewProjectionMatrix.matrix[1, 1] + world.Z * ViewProjectionMatrix.matrix[2, 1] + ViewProjectionMatrix.matrix[3, 1]);
+        public static void SetOptic(MinimalViewInfo mainView, float opticFov)
+        {
+            OpticActive = opticFov > 0f;
+            OpticFOV = opticFov;
+            if (!OpticActive)
+                return;
+
+            mainView.FOV = opticFov;
+            mainView.AspectRatio = 1f;
+            OpticViewProjectionMatrix = CalculateViewProjectionMatrix(mainView);
+        }
+
+        /// <summary>
+        /// Projects a world position into normalized device coordinates (-1..1, +Y up) through the main view,
+        /// or through the optic view when <paramref name="optic"/> is set. Returns false behind the camera.
+        /// </summary>
+        public static bool TryProject(Vector3D world, bool optic, out Vector2 ndc, out float w)
+        {
+            var m = optic ? OpticViewProjectionMatrix.matrix : ViewProjectionMatrix.matrix;
+            ndc = default;
+            w = 0f;
+            if (m == null)
+                return false;
+
+            w = (float)(world.X * m[0, 3] + world.Y * m[1, 3] + world.Z * m[2, 3] + m[3, 3]);
+            if (w < WorldToScreenTolerance)
+                return false;
+
+            float x = (float)(world.X * m[0, 0] + world.Y * m[1, 0] + world.Z * m[2, 0] + m[3, 0]);
+            float y = (float)(world.X * m[0, 1] + world.Y * m[1, 1] + world.Z * m[2, 1] + m[3, 1]);
 
             float invW = 1f / w;
-            float pixelX = (0.5f + x * 0.5f * invW) * ViewportRect.X;
-            float pixelY = (0.5f - y * 0.5f * invW) * ViewportRect.Y;
+            ndc = new Vector2(x * invW, y * invW);
+            return true;
+        }
 
-            return new Vector2(pixelX, pixelY);
+        /// <summary>Horizontal focal scale of the view: lateral cm at depth w map to cm * scale / w in NDC.</summary>
+        public static float LateralScale(bool optic)
+        {
+            float fov = optic ? OpticFOV : MainFOV;
+            return 1f / Single.Tan(Single.DegreesToRadians(Math.Max(0.001f, fov) * 0.5f));
+        }
+
+        public static Vector2 NdcToViewport(Vector2 ndc)
+        {
+            return new Vector2((0.5f + ndc.X * 0.5f) * ViewportRect.X, (0.5f - ndc.Y * 0.5f) * ViewportRect.Y);
+        }
+
+        public static Vector2 WorldToScreen(Vector3D world)
+        {
+            return TryProject(world, false, out var ndc, out _) ? NdcToViewport(ndc) : Vector2.Zero;
         }
     }
 }

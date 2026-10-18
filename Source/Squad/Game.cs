@@ -26,11 +26,20 @@ namespace squad_dma
         private DateTime _lastTeamCheck = DateTime.MinValue;
         private const int TeamCheckInterval = 1000;
 
+        // The pointers resolved in WaitForGame are only good for one map. They're re-checked against the live
+        // GWorld so a map change is noticed instead of the loop running on freed memory.
+        private ulong _persistentLevel;
+        private DateTime _lastWorldCheck = DateTime.MinValue;
+        private int _worldCheckFailures;
+        private const int WorldCheckInterval = 500;
+        private const int WorldCheckFailuresToEnd = 3;
+
         private ulong _currentWeaponPtr;
         private ulong _lastNoRecoilWeaponPtr;
         private bool _isAimingDownSights;
         private bool _hasPipScope;
         private float _currentFOV;
+        private float _opticFOV; // FOV of the PIP scope capture while aimed through one, otherwise 0
         private int _magnificationIndex;
         private bool _isFiring = false;
         private PlayerState _currentPlayerState = PlayerState.Unknown;
@@ -48,6 +57,7 @@ namespace squad_dma
 
         #region Properties
         public bool InGame => _inGame;
+        public ulong PersistentLevel => _persistentLevel;
         public string MapName => _currentLevel;
         public UActor LocalPlayer => _localUPlayer;
         public ReadOnlyDictionary<ulong, UActor> Actors => _actors?.Actors;
@@ -87,13 +97,15 @@ namespace squad_dma
         public void SetRapidFire(bool enable) => _soldierManager?.SetRapidFire(enable);
         public void SetInfiniteAmmo(bool enable) => _soldierManager?.SetInfiniteAmmo(enable);
         public void SetQuickSwap(bool enable) => _soldierManager?.SetQuickSwap(enable);
+        public void SetQuickAds(bool enable) => _soldierManager?.SetQuickAds(enable);
+        public void SetFireSupport(bool enable) => _soldierManager?.SetFireSupport(enable);
         public void SetForceFullAuto(bool enable) => _soldierManager?.SetFullAuto(enable);
         public void SetNoCameraShake(bool enable) => _soldierManager?.SetNoCameraShake(enable);
         public void SetNoSpread(bool enable) => _soldierManager?.SetNoSpread(enable);
         public void SetNoRecoil(bool enable) => _soldierManager?.SetNoRecoil(enable);
         public void SetNoSway(bool enable) => _soldierManager?.SetNoSway(enable);
         public void SetInstantGrenade(bool enable) => _soldierManager?.SetInstantGrenade(enable);
-        
+
         public PlayerState GetPlayerState() => _currentPlayerState;
         
         public void LogVehicles(bool force = false) => _debugVehicles?.LogVehicles(force);
@@ -113,7 +125,7 @@ namespace squad_dma
                         throw new GameNotRunningException("Process terminated during wait");
                     }
 
-                    if (GetGameWorld() && GetGameInstance() && GetCurrentLevel() && InitActors() && GetLocalPlayer())
+                    if (GetGameWorld() && GetGameInstance() && GetCurrentLevel() && InitActors() && GetLocalPlayer() && IsWorldReady())
                     {
                         if (!Memory.GetModuleBase())
                         {
@@ -121,6 +133,11 @@ namespace squad_dma
                         }
 
                         Thread.Sleep(1000);
+
+                        // Still the same world after the settle delay? Otherwise this was a map still loading.
+                        if (Memory.ReadPtr(_squadBase + Offsets.GameObjects.GWorld) != _gameWorld)
+                            continue;
+
                         Logger.Info("Game has started!!");
                         
                         if (!string.IsNullOrEmpty(_currentLevel))
@@ -161,6 +178,7 @@ namespace squad_dma
                     throw new GameEnded("Game has ended!");
                 }
 
+                ValidateWorld();
                 UpdateLocalPlayerInfo();
                 this._actors.UpdateList();
                 this._actors.UpdateAllPlayers();
@@ -187,7 +205,7 @@ namespace squad_dma
         #region Private Methods
         private void InitializeManagers()
         {
-            _soldierManager = new Source.Squad.Manager(_playerController, _inGame, _actors, this);
+            _soldierManager = new Source.Squad.Manager(_playerController, _inGame, this);
 
             _debugVehicles = new DebugVehicles(_playerController, _inGame, _actors);
             _debugTeam = new DebugTeam(_inGame, _localUPlayer, _actors?.Actors);
@@ -204,24 +222,130 @@ namespace squad_dma
             catch { return false; }
         }
 
+        /// <summary>
+        /// Throws <see cref="GameEnded"/> once the world this instance was built for is gone: a map change
+        /// replaces GWorld, the game instance's local player and the player controller.
+        /// A few bad reads in a row are required, a single DMA hiccup must not end the game.
+        /// </summary>
+        private void ValidateWorld()
+        {
+            if ((DateTime.UtcNow - _lastWorldCheck).TotalMilliseconds < WorldCheckInterval)
+                return;
+            _lastWorldCheck = DateTime.UtcNow;
+
+            string problem = FindWorldProblem();
+            if (problem == null)
+            {
+                _worldCheckFailures = 0;
+                return;
+            }
+
+            if (++_worldCheckFailures >= WorldCheckFailuresToEnd)
+                throw new GameEnded(problem);
+        }
+
+        private string FindWorldProblem()
+        {
+            ulong world = Memory.ReadPtr(_squadBase + Offsets.GameObjects.GWorld);
+            if (world == 0) return "GWorld is null";
+            if (world != _gameWorld) return "GWorld changed";
+            if (Memory.ReadPtr(world + Offsets.World.PersistentLevel) != _persistentLevel) return "PersistentLevel changed";
+
+            ulong gameInstance = Memory.ReadPtr(world + Offsets.World.OwningGameInstance);
+            if (gameInstance != _gameInstance) return "GameInstance changed";
+
+            ulong localPlayers = Memory.ReadPtr(gameInstance + Offsets.GameInstance.LocalPlayers);
+            if (Memory.ReadPtr(localPlayers) != _localPlayer) return "LocalPlayer changed";
+            if (Memory.ReadPtr(_localPlayer + Offsets.UPlayer.PlayerController) != _playerController) return "PlayerController changed";
+
+            ulong gameState = Memory.ReadPtr(world + Offsets.World.GameState);
+            if (gameState == 0) return "GameState is null";
+
+            // The server is about to travel, everything cached for this map is going away.
+            if (ReadMatchState(gameState) == "LeavingMap") return "Match state is LeavingMap";
+
+            return null;
+        }
+
+        private static string ReadMatchState(ulong gameState)
+        {
+            try
+            {
+                uint nameId = Memory.ReadValue<uint>(gameState + Offsets.AGameState.MatchState);
+                if (nameId == 0) return null;
+                return Memory.GetNamesById([nameId]).TryGetValue(nameId, out var name) ? name : null;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// The world pointers resolve as soon as the map starts loading, long before the match exists. Only
+        /// start once the game state, teams, local player state and actors are all there.
+        /// </summary>
+        private bool IsWorldReady() =>
+            TryExecute(() =>
+            {
+                if (_playerController == 0) throw new InvalidOperationException("no player controller");
+                if (Memory.ReadPtr(_playerController + Offsets.Controller.PlayerState) == 0) throw new InvalidOperationException("no player state");
+
+                ulong gameState = Memory.ReadPtr(_gameWorld + Offsets.World.GameState);
+                if (gameState == 0) throw new InvalidOperationException("no game state");
+
+                bool hasTeams = false;
+                foreach (var arrayOffset in new[] { Offsets.ASQGameState.IndexedTeamStates, Offsets.ASQGameState.TeamStates })
+                {
+                    if (Memory.ReadPtr(gameState + arrayOffset) != 0 && Memory.ReadValue<int>(gameState + arrayOffset + 0x8) >= 2)
+                    {
+                        hasTeams = true;
+                        break;
+                    }
+                }
+                if (!hasTeams) throw new InvalidOperationException("no teams");
+
+                if (Memory.ReadValue<int>(_persistentLevel + Offsets.Level.Actors + 0x8) < 1) throw new InvalidOperationException("no actors");
+
+                if (ReadMatchState(gameState) == "LeavingMap") throw new InvalidOperationException("leaving map");
+            });
+
+        /// <summary>
+        /// Stops everything that was started for this map. The feature manager runs its own 8ms loop and
+        /// would otherwise keep writing to pointers of a map that no longer exists.
+        /// </summary>
+        private void EndSession()
+        {
+            this._inGame = false;
+
+            var manager = _soldierManager;
+            _soldierManager = null;
+            try { manager?.Dispose(); }
+            catch (Exception ex) { Logger.Error($"Error disposing feature manager: {ex.Message}"); }
+
+            _gameTickets = null;
+            _gameStats = null;
+            _objectives = null;
+            _debugVehicles = null;
+            _debugTeam = null;
+            _debugSoldier = null;
+        }
+
         private void HandleDMAShutdown()
         {
             Logger.Info("DMA shutdown");
-            this._inGame = false;
+            EndSession();
         }
 
         private void HandleGameEnded(GameEnded e)
         {
-            Logger.Info("Game has ended!");
-            this._inGame = false;
+            Logger.Info($"Game has ended! ({e.Message})");
+            EndSession();
             Memory.GameStatus = GameStatus.Menu;
-            Memory.Restart();
         }
 
         private void HandleUnexpectedException(Exception ex)
         {
             Logger.Error($"CRITICAL ERROR - Game ended due to unhandled exception: {ex}");
-            this._inGame = false;
+            EndSession();
+            Memory.GameStatus = GameStatus.Menu;
         }
 
         private bool GetGameWorld() => 
@@ -242,6 +366,8 @@ namespace squad_dma
         private bool InitActors() => 
             TryExecute(() => 
             {
+                _persistentLevel = Memory.ReadPtr(_gameWorld + Offsets.World.PersistentLevel);
+                if (_persistentLevel == 0) throw new InvalidOperationException("no persistent level");
                 _actors = new RegisteredActors(_gameWorld);
             });
   
@@ -330,6 +456,11 @@ namespace squad_dma
                 cameraInfoRound.AddEntry<double>(0, 18, povPtr + 0x20); // Yaw
                 cameraInfoRound.AddEntry<double>(0, 19, povPtr + 0x28); // Roll
 
+                // Final FOV the engine renders with (already includes ADS, sprint and vehicle sight zoom)
+                cameraInfoRound.AddEntry<float>(0, 20, povPtr + Offsets.FMinimalViewInfo.FOV);
+                cameraInfoRound.AddEntry<float>(0, 21, povPtr + Offsets.FMinimalViewInfo.AspectRatio);
+                cameraInfoRound.AddEntry<byte>(0, 22, povPtr + Offsets.FMinimalViewInfo.bConstrainAspectRatio);
+
                 cameraInfoScatterMap.Execute();
 
                 if (cameraInfoScatterMap.Results[0][11].TryGetResult<double>(out var absoluteX) &&
@@ -387,16 +518,26 @@ namespace squad_dma
 
                 Camera.Location = _localUPlayer.Position;
                 Camera.ViewportRect = new Vector2(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height);
-                
+
+                float viewportAspect = Camera.ViewportRect.X / Camera.ViewportRect.Y;
+                float povFov = cameraInfoScatterMap.Results[0][20].TryGetResult<float>(out var fov) && fov is > 5f and < 170f ? fov : _currentFOV;
+                bool constrained = cameraInfoScatterMap.Results[0][22].TryGetResult<byte>(out var constrainFlags) && (constrainFlags & 1) != 0;
+                float aspect = constrained &&
+                               cameraInfoScatterMap.Results[0][21].TryGetResult<float>(out var povAspect) && povAspect is > 0.5f and < 4f
+                    ? povAspect
+                    : viewportAspect;
+
                 var viewInfo = new MinimalViewInfo
                 {
                     Location = _localUPlayer.Position,
                     Rotation = _localUPlayer.Rotation3D,
-                    FOV = Memory._game?.CurrentFOV ?? 90f,
-                    AspectRatio = Camera.ViewportRect.X / Camera.ViewportRect.Y
+                    FOV = povFov,
+                    AspectRatio = aspect
                 };
-                
+
+                Camera.MainFOV = povFov;
                 Camera.ViewProjectionMatrix = Camera.CalculateViewProjectionMatrix(viewInfo);
+                Camera.SetOptic(viewInfo, _opticFOV);
 
                 return true;
             }
@@ -419,12 +560,14 @@ namespace squad_dma
             string pawnClassName = Memory.GetActorClassName(pawnPtr);
             bool isInVehicle = !pawnClassName.Contains("BP_Soldier");
             float cameraFOV = ReadCameraFOV();
+            _opticFOV = 0f;
 
             if (isInVehicle)
             {
                 _currentFOV = cameraFOV;
                 _isAimingDownSights = false;
                 _hasPipScope = false;
+                _opticFOV = ReadVehicleOpticFOV(pawnPtr);
                 return true;
             }
 
@@ -480,17 +623,40 @@ namespace squad_dma
             _isFiring = scatterMap.Results[0][4].TryGetResult<byte>(out byte firing) && firing == 1;
 
             float finalFOV = cameraFOV;
+            _opticFOV = 0f;
             if (_isAimingDownSights)
             {
                 finalFOV = weaponFOV;
                 if (_hasPipScope && pipScopePtr != 0)
                 {
                     UpdateScopeMagnification(pipScopePtr, weaponFOV, ref finalFOV);
+                    _opticFOV = ReadCaptureFOV(pipScopePtr, finalFOV);
                 }
             }
 
             _currentFOV = finalFOV;
             return true;
+        }
+
+        // The capture component's own FOV follows every zoom step; the configured magnification is the fallback.
+        private static float ReadCaptureFOV(ulong pipScopePtr, float fallback)
+        {
+            float captureFov = Memory.ReadValue<float>(pipScopePtr + Offsets.USceneCaptureComponent2D.FOVAngle);
+            return captureFov is > 0.5f and < 120f ? captureFov : fallback;
+        }
+
+        /// <summary>Scope FOV of the vehicle weapon while its sight is a PIP capture, otherwise 0.</summary>
+        private float ReadVehicleOpticFOV(ulong seatPawn)
+        {
+            ulong inventory = Memory.ReadPtr(seatPawn + Offsets.ASQVehicleSeat.VehicleInventory);
+            if (inventory == 0) return 0f;
+
+            ulong weapon = Memory.ReadPtr(inventory + Offsets.USQPawnInventoryComponent.CurrentWeapon);
+            if (weapon == 0) return 0f;
+
+            bool ads = Memory.ReadValue<byte>(weapon + Offsets.ASQWeapon.bAimingDownSights) == 1;
+            ulong pipScope = ads ? Memory.ReadPtr(weapon + Offsets.ASQWeapon.CachedPipScope) : 0;
+            return pipScope == 0 ? 0f : ReadCaptureFOV(pipScope, 0f);
         }
 
         private void UpdateScopeMagnification(ulong pipScopePtr, float weaponFOV, ref float fov)
@@ -525,6 +691,7 @@ namespace squad_dma
             _hasPipScope = false;
             _isFiring = false;
             _currentFOV = 90f;
+            _opticFOV = 0f;
             _currentWeaponPtr = 0;
             _lastNoRecoilWeaponPtr = 0;
         }

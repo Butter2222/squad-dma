@@ -55,6 +55,8 @@ namespace squad_dma
 
         private readonly SKPaint _deadOutline = new() { Color = SKColors.Black, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
         private readonly SKPaint _deadFill = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
+        private readonly SKPaint _impactOutline = new() { Color = SKColors.Black, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
+        private readonly SKPaint _impactFill = new() { Color = new SKColor(80, 255, 120), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
 
         private readonly SKPaint _aaMarkOutline = new() { Color = SKColors.Black, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
         private readonly SKPaint _aaMarkFill = new() { Color = SKColors.Yellow, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
@@ -99,6 +101,7 @@ namespace squad_dma
         private readonly SKPath _projOutlinePath = new();
         private readonly SKPath[] _projFillPaths = { new(), new() };
         private readonly SKPath _deadOutlinePath = new();
+        private readonly SKPath _impactPath = new();
         private readonly SKPath _aaMarkPath = new();
 
         private readonly List<PointLabel> _playerLabels = new(64);
@@ -158,6 +161,8 @@ namespace squad_dma
 
             _deadOutline.StrokeWidth = 4f * ui;
             _deadFill.StrokeWidth = 2f * ui;
+            _impactOutline.StrokeWidth = 4f * ui;
+            _impactFill.StrokeWidth = 2f * ui;
 
             _aaMarkOutline.StrokeWidth = 2f * ui + 2f * ui;
             _aaMarkFill.StrokeWidth = 2f * ui;
@@ -461,6 +466,30 @@ namespace squad_dma
             }
         }
 
+        /// <summary>
+        /// Fire Support impact marks: a green "+" with a black outline, the same stroke style as the dead markers.
+        /// The points are in canvas pixels. All of them are drawn as one path per layer.
+        /// </summary>
+        public void DrawImpactMarkers(SKCanvas canvas, List<SKPoint> points, float ui)
+        {
+            if (points.Count == 0)
+                return;
+
+            SetScale(ui);
+
+            float arm = 5f * ui;
+            _impactPath.Rewind();
+            foreach (var p in points)
+            {
+                _impactPath.MoveTo(p.X - arm, p.Y);
+                _impactPath.LineTo(p.X + arm, p.Y);
+                _impactPath.MoveTo(p.X, p.Y - arm);
+                _impactPath.LineTo(p.X, p.Y + arm);
+            }
+            canvas.DrawPath(_impactPath, _impactOutline);
+            canvas.DrawPath(_impactPath, _impactFill); // identical geometry: reuse the path
+        }
+
         /// <summary>Dead markers + AA projectiles, drawn above everything else.</summary>
         public void DrawTopMost(
             SKCanvas canvas,
@@ -675,7 +704,7 @@ namespace squad_dma
         public void Dispose()
         {
             foreach (var p in new[] { _bodyOutline, _bodyFill, _aimOutline, _aimFill, _projectileOutline, _projectileFill, _labelFill, _labelOutline,
-                _aaFill, _aaOutline, _adminFill, _adminOutline, _deadOutline, _deadFill, _aaMarkOutline, _aaMarkFill,
+                _aaFill, _aaOutline, _adminFill, _adminOutline, _deadOutline, _deadFill, _impactOutline, _impactFill, _aaMarkOutline, _aaMarkFill,
                 _aaMarkTextOutline, _aaMarkText, RangeCirclePaint, PoiCrosshairPaint, SpreadFillPaint, SpreadStrokePaint,
                 MinDistanceFillPaint, MinDistanceStrokePaint, PoiNumberOutline, PoiNumberFill })
                 p.Dispose();
@@ -687,6 +716,7 @@ namespace squad_dma
             _projOutlinePath.Dispose();
             foreach (var p in _projFillPaths) p.Dispose();
             _deadOutlinePath.Dispose();
+            _impactPath.Dispose();
             _aaMarkPath.Dispose();
         }
     }

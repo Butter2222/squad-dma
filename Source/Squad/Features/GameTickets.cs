@@ -14,6 +14,16 @@ namespace squad_dma.Source.Squad.Features
         
         private readonly ulong _gameWorld;
         private readonly UActor _localUPlayer;
+        private string _lastWarning;
+        private const int MaxTeamStates = 8;
+
+        /// <summary>Logs a problem once until it clears, the tickets are polled every UI tick.</summary>
+        private void Warn(string key, string message)
+        {
+            if (_lastWarning == key) return;
+            _lastWarning = key;
+            Logger.Error($"[{NAME}] {message}");
+        }
 
         /// <summary>
         /// Constructor for GameTickets
@@ -42,49 +52,26 @@ namespace squad_dma.Source.Squad.Features
                     return teamTickets;
                 }
 
-                var scatterMap = new ScatterReadMap(1);
-                var round = scatterMap.AddRound();
-
-                round.AddEntry<ulong>(0, 0, gameState + ASQGameState.TeamStates); // TeamStates array ptr
-                round.AddEntry<int>(0, 1, gameState + ASQGameState.TeamStates + 0x8); // TeamCount
-
-                scatterMap.Execute();
-
-                if (!scatterMap.Results[0][0].TryGetResult<ulong>(out var teamStatesArray) || teamStatesArray == 0)
+                // The arrays can hold more than the two playing teams (IndexedTeamStates is indexed by team ID,
+                // so slot 0 is the neutral team and the real teams follow). Walk all of them and keep the real ones.
+                foreach (var arrayOffset in new[] { ASQGameState.IndexedTeamStates, ASQGameState.TeamStates })
                 {
-                    return teamTickets;
-                }
-                if (!scatterMap.Results[0][1].TryGetResult<int>(out var teamCount) || teamCount < 2)
-                {
-                    return teamTickets;
-                }
+                    ulong arrayPtr = Memory.ReadPtr(gameState + arrayOffset);
+                    int count = arrayPtr == 0 ? 0 : Memory.ReadValue<int>(gameState + arrayOffset + 0x8);
+                    if (count < 1 || count > MaxTeamStates) continue;
 
-                var teamScatter = new ScatterReadMap(2);
-                var teamRound = teamScatter.AddRound();
+                    for (int i = 0; i < count; i++)
+                    {
+                        ulong team = Memory.ReadPtr(arrayPtr + (uint)(i * 0x8));
+                        if (team == 0) continue;
 
-                teamRound.AddEntry<ulong>(0, 0, teamStatesArray); // Team1
-                teamRound.AddEntry<ulong>(1, 1, teamStatesArray + 0x8); // Team2
+                        int teamId = Memory.ReadValue<int>(team + ASQTeamState.ID);
+                        if (teamId <= 0 || teamTickets.ContainsKey(teamId)) continue;
 
-                teamScatter.Execute();
+                        teamTickets[teamId] = Memory.ReadValue<int>(team + ASQTeamState.Tickets);
+                    }
 
-                if (teamScatter.Results[0][0].TryGetResult<ulong>(out var team1) && team1 != 0)
-                {
-                    int team1Id = Memory.ReadValue<int>(team1 + ASQTeamState.ID);
-                    int team1Tickets = Memory.ReadValue<int>(team1 + ASQTeamState.Tickets);
-                    teamTickets[team1Id] = team1Tickets;
-                }
-                else
-                {
-                }
-
-                if (teamScatter.Results[1][1].TryGetResult<ulong>(out var team2) && team2 != 0)
-                {
-                    int team2Id = Memory.ReadValue<int>(team2 + ASQTeamState.ID);
-                    int team2Tickets = Memory.ReadValue<int>(team2 + ASQTeamState.Tickets);
-                    teamTickets[team2Id] = team2Tickets;
-                }
-                else
-                {
+                    if (teamTickets.Count >= 2) break;
                 }
             }
             catch (Exception ex)
@@ -109,14 +96,15 @@ namespace squad_dma.Source.Squad.Features
                     
                     if (tickets.Count == 0)
                     {
-                        Logger.Error($"[{NAME}] No team tickets found for friendly team");
+                        Warn("none", "No team tickets found");
                         return 0;
                     }
                     if (localTeamId == -1)
                     {
-                        Logger.Error($"[{NAME}] Invalid local team ID for friendly tickets");
+                        Warn("team", "Invalid local team ID for tickets");
                         return 0;
                     }
+                    _lastWarning = null;
                     
                     return tickets.TryGetValue(localTeamId, out int friendlyTickets) ? friendlyTickets : 0;
                 }
@@ -142,12 +130,12 @@ namespace squad_dma.Source.Squad.Features
                     
                     if (tickets.Count == 0)
                     {
-                        Logger.Error($"[{NAME}] No team tickets found for enemy team");
+                        Warn("none", "No team tickets found");
                         return 0;
                     }
                     if (localTeamId == -1)
                     {
-                        Logger.Error($"[{NAME}] Invalid local team ID for enemy tickets");
+                        Warn("team", "Invalid local team ID for tickets");
                         return 0;
                     }
                     
@@ -157,7 +145,7 @@ namespace squad_dma.Source.Squad.Features
                             return team.Value;
                     }
                     
-                    Logger.Error($"[{NAME}] No enemy team found in tickets");
+                    Warn("enemy", "No enemy team found in tickets");
                     return 0;
                 }
                 catch (Exception ex)

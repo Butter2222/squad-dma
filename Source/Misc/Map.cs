@@ -52,6 +52,10 @@ namespace squad_dma
         [JsonPropertyName("mapLayers")]
         public List<MapLayer> MapLayers { get; set; }
 
+        /// <summary>Folder of the map pack this config was built from, or null for a legacy single-image map.</summary>
+        [JsonIgnore]
+        public string PackDirectory { get; set; }
+
         public static MapConfig LoadFromFile(string file)
         {
             var json = File.ReadAllText(file);
@@ -60,6 +64,13 @@ namespace squad_dma
 
         public void Save(Map map)
         {
+            if (PackDirectory != null)
+            {
+                // The pack's own map.json is never rewritten: hand-tuned values go to a small file next to it
+                MapPack.SaveCalibrationOverride(PackDirectory, this);
+                return;
+            }
+
             var json = JsonSerializer.Serialize(this, _jsonOptions);
             File.WriteAllText(map.ConfigFilePath, json);
         }
@@ -72,6 +83,35 @@ namespace squad_dma
 
         [JsonPropertyName("filename")]
         public string Filename { get; set; }
+
+        /// <summary>Tile grid of a map pack layer. When set, the image is built from the tiles instead of <see cref="Filename"/>.</summary>
+        [JsonIgnore]
+        public MapTileSet Tiles { get; set; }
+
+        /// <summary>
+        /// The image the radar draws: the HD tile pyramid when the pack has a complete one, otherwise one bitmap
+        /// from the base tiles or the single image file.
+        /// </summary>
+        public MapImage LoadImage()
+        {
+            if (Tiles != null && HdTileMapImage.IsComplete(Tiles.HdDirectory))
+                return new HdTileMapImage(Tiles.HdDirectory, Tiles.Width, Tiles.Height);
+            return new BitmapMapImage(LoadBitmap());
+        }
+
+        /// <summary>Decodes the layer into one immutable bitmap, from its tiles or its single image file.</summary>
+        public SKBitmap LoadBitmap()
+        {
+            var bitmap = Tiles != null ? Tiles.Stitch() : DecodeFile(Filename);
+            bitmap.SetImmutable();
+            return bitmap;
+        }
+
+        private static SKBitmap DecodeFile(string path)
+        {
+            using var stream = File.Open(path, FileMode.Open, FileAccess.Read);
+            return SKBitmap.Decode(stream);
+        }
     }
 
     public struct MapPosition

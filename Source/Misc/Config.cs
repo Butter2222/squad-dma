@@ -37,6 +37,11 @@ namespace squad_dma
         [JsonPropertyName("techMarkerScale")]
         public int TechMarkerScale { get; set; } = 100;
 
+        /// <summary>Opacity of the widget windows (aimview, target info, tickets), in percent. Saved under the old
+        /// "aimviewOpacity" key so an existing setting carries over.</summary>
+        [JsonPropertyName("aimviewOpacity")]
+        public int WidgetOpacity { get; set; } = 100;
+
         [JsonPropertyName("vsync")]
         public bool VSync { get; set; } = false;
 
@@ -162,6 +167,42 @@ namespace squad_dma
 
         [JsonPropertyName("quickSwap")]
         public bool QuickSwap { get; set; } = false;
+
+        [JsonPropertyName("quickAds")]
+        public bool QuickAds { get; set; } = false;
+
+        [JsonPropertyName("thirdPersonPlayer")]
+        public bool ThirdPersonPlayer { get; set; } = false;
+
+        [JsonPropertyName("thirdPersonVehicle")]
+        public bool ThirdPersonVehicle { get; set; } = false;
+
+        // Third person is an experiment, these are edited by hand in Settings.json:
+        // how a vehicle is switched (0 = soldier flag, 1 = the vehicle's own third person camera, 2 = both), the camera
+        // distances in cm, and the view mode written on foot when the game has none (EThirdPersonCameraMode, 0 = leave it)
+        [JsonPropertyName("thirdPersonVehicleMethod")]
+        public int ThirdPersonVehicleMethod { get; set; } = 2;
+
+        [JsonPropertyName("thirdPersonDistance")]
+        public float ThirdPersonDistance { get; set; } = 300f;
+
+        [JsonPropertyName("thirdPersonVehicleDistance")]
+        public float ThirdPersonVehicleDistance { get; set; } = 1000f;
+
+        [JsonPropertyName("thirdPersonPlayerViewMode")]
+        public int ThirdPersonPlayerViewMode { get; set; } = 4;
+
+        [JsonPropertyName("fireSupport")]
+        public bool FireSupport { get; set; } = false;
+
+        // 0 = arc: launched as aimed, moved onto the descent at the top of the flight. 1 = drop: put above the marker at once.
+        [JsonPropertyName("fireSupportMode")]
+        public int FireSupportMode { get; set; } = 0;
+
+        // Radius around the marker the shells are spread over, in metres
+        [JsonPropertyName("fireSupportSpreadMeters")]
+        public float FireSupportSpreadMeters { get; set; } = 10f;
+
 
         [JsonPropertyName("forceFullAuto")]
         public bool ForceFullAuto { get; set; } = false;

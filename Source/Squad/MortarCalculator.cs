@@ -15,14 +15,20 @@ namespace squad_dma.Source.Squad
         #region Private Fields
         private readonly Manager _manager;
         private readonly Game _game;
-        private DateTime _lastLogUpdate = DateTime.MinValue;
-        
-        // Current weapon information
-        private string _currentWeaponName = string.Empty;
+        private long _lastUpdateTicks;
+
+        private const long UPDATE_INTERVAL_MS = 500;
+
+        // Written by the feature thread, read by the UI thread
+        private volatile string _currentWeaponName = string.Empty;
         private string _lastLoggedWeaponName = string.Empty;
-        private bool _isInVehicle = false;
+        private volatile bool _isInVehicle = false;
         private bool _lastLoggedVehicleState = false;
-        private WeaponData _currentWeaponData = null;
+        private volatile WeaponData _currentWeaponData = null;
+
+        // The weapon name and its database entry only change when the vehicle weapon pointer changes,
+        // so the class-name memory read and the database lookup are skipped while it stays the same.
+        private ulong _lastWeaponPointer;
         #endregion
 
         #region Public Properties
@@ -51,13 +57,12 @@ namespace squad_dma.Source.Squad
         public void Update()
         {
             if (!_manager.IsLocalPlayerValid()) return;
-            
-            // Only update every 500ms to avoid spam
-            if ((DateTime.Now - _lastLogUpdate).TotalMilliseconds < 500) return;
-            
+
+            long now = Environment.TickCount64;
+            if (now - _lastUpdateTicks < UPDATE_INTERVAL_MS) return;
+            _lastUpdateTicks = now;
+
             DetectCurrentWeapon();
-            
-            _lastLogUpdate = DateTime.Now;
         }
         
         /// <summary>
@@ -71,26 +76,32 @@ namespace squad_dma.Source.Squad
                 if (!_manager.IsLocalPlayerValid()) 
                     return "Unknown";
 
-                string weaponName = "";
+                string weaponName;
 
                 // Only track vehicle weapons using Manager's existing functions
                 if (_manager.IsInVehicle())
                 {
                     _isInVehicle = true;
                     ulong vehicleWeapon = _manager.GetVehicleWeapon();
-                    weaponName = GetWeaponName(vehicleWeapon);
-                    
-                    // Update current weapon tracking
-                    _currentWeaponName = weaponName;
-                    
-                    // Update ballistic data
-                    _currentWeaponData = GetWeaponData(weaponName);
+
+                    if (vehicleWeapon != _lastWeaponPointer || string.IsNullOrEmpty(_currentWeaponName))
+                    {
+                        _lastWeaponPointer = vehicleWeapon;
+                        weaponName = GetWeaponName(vehicleWeapon);
+                        _currentWeaponName = weaponName;
+                        _currentWeaponData = GetWeaponData(weaponName);
+                    }
+                    else
+                    {
+                        weaponName = _currentWeaponName;
+                    }
                 }
                 else
                 {
                     _isInVehicle = false;
+                    _lastWeaponPointer = 0;
                     weaponName = "No Vehicle";
-                    
+
                     // Clear weapon data when not in vehicle
                     _currentWeaponName = weaponName;
                     _currentWeaponData = null;
@@ -123,37 +134,33 @@ namespace squad_dma.Source.Squad
             {
                 var solution = new BallisticSolution();
                 
-                // Calculate 2D distance on flat ground (ignore Z height differences)
+                // Horizontal distance only; the height difference is handled separately
                 float deltaX = targetPosition.X - shooterPosition.X;
                 float deltaY = targetPosition.Y - shooterPosition.Y;
                 float distanceGameUnits = (float)Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
                 float distance = distanceGameUnits / 100f; // Convert from game units (cm) to meters
                 solution.Distance = distance;
-                
-                // Calculate bearing (azimuth) using the correct formula
-                double radians = Math.Atan2(deltaY, deltaX);
-                double degrees = radians * (180.0 / Math.PI);
-                degrees = 90.0 - degrees;
-                
-                if (degrees < 0) degrees += 360.0;
-                
-                solution.Bearing = (float)degrees;
-                
-                // Use flat ground assumption - no height difference
-                solution.HeightDifference = 0f;
-                
+
+                solution.Bearing = (float)BearingDegrees(deltaX, deltaY);
+
+                // Positive when the target is higher than the shooter. Callers pass ground heights from the map's
+                // heightmap, or the same Z for both when the map has none (flat ground).
+                solution.HeightDifference = (targetPosition.Z - shooterPosition.Z) / 100f;
+
                 // Calculate elevation angle
                 solution.Elevation = CalculateElevation(distance, solution.HeightDifference, _currentWeaponData);
-                
+
                 // Calculate time of flight
-                solution.TimeOfFlight = CalculateTimeOfFlight(distance, solution.Elevation, _currentWeaponData);
+                solution.TimeOfFlight = CalculateTimeOfFlight(distance, solution.Elevation, _currentWeaponData, solution.HeightDifference);
                 
                 // Calculate spread radius and elliptical spread
                 solution.SpreadEllipse = CalculateSpreadEllipse(distance, solution.Elevation, _currentWeaponData);
                 solution.SpreadRadius = Math.Max(solution.SpreadEllipse.Horizontal, solution.SpreadEllipse.Vertical);
                 
                 // Check if target is in range
-                solution.IsInRange = distance >= _currentWeaponData.MinDistance;
+                solution.IsInRange = distance >= _currentWeaponData.MinDistance &&
+                                     (solution.HeightDifference == 0f ||
+                                      TrySolveElevation(distance, solution.HeightDifference, _currentWeaponData, out _, out _));
                 
                 // Set weapon info
                 solution.WeaponName = _currentWeaponData.Name;
@@ -170,10 +177,108 @@ namespace squad_dma.Source.Squad
             }
         }
 
+        /// <summary>
+        /// Compass bearing (0-360, clockwise from north) for a world-space delta.
+        /// World Y grows southward, so it is negated.
+        /// </summary>
+        public static double BearingDegrees(double deltaX, double deltaY)
+        {
+            double degrees = 90.0 - Math.Atan2(-deltaY, deltaX) * (180.0 / Math.PI);
+            if (degrees < 0) degrees += 360.0;
+            if (degrees >= 360.0) degrees -= 360.0;
+            return degrees;
+        }
+
+        /// <summary>
+        /// Everything the targeting widget needs for one target distance with the equipped weapon:
+        /// the dial setting, whether the target is reachable, and an estimated time of flight.
+        /// </summary>
+        /// <param name="meters">Horizontal distance to the target.</param>
+        /// <param name="heightDifferenceMeters">Target ground height minus shooter ground height; zero is flat ground.</param>
+        public RangingResult GetRanging(int meters, double heightDifferenceMeters = 0.0)
+        {
+            var data = _currentWeaponData;
+            if (data == null)
+                return RangingResult.None;
+
+            string unit = UnitSymbol(data.Unit);
+            int decimals = data.ElevationPrecision;
+            float height = (float)heightDifferenceMeters;
+            bool inMils = data.Unit.StartsWith("mil", StringComparison.OrdinalIgnoreCase);
+
+            double value;
+            bool estimate = false;
+            double maxRange;
+            if (RangeTables.TryGetValue(data.Name, out var table))
+            {
+                value = table.Lookup(meters);
+                maxRange = table.MaxDistance;
+            }
+            else
+            {
+                // No game table for this weapon: fall back to the physics solution
+                estimate = true;
+                value = CalculateElevation(meters, height, data);
+                if (inMils)
+                    value *= MILS_PER_DEGREE;
+                maxRange = CalculateMaxDistance(data);
+                decimals = Math.Min(decimals, 1);
+            }
+
+            var status = meters < data.MinDistance ? RangeStatus.TooClose
+                       : meters > maxRange ? RangeStatus.TooFar
+                       : RangeStatus.Ok;
+
+            if (height != 0f)
+            {
+                bool flatSolved = TrySolveElevation(meters, 0f, data, out float flatAngle, out _);
+                bool heightSolved = TrySolveElevation(meters, height, data, out float heightAngle, out int limit);
+
+                // The game tables are for flat ground: move the dial by how much the physics says the height changes the angle
+                if (!estimate && flatSolved && heightSolved)
+                    value += (heightAngle - flatAngle) * (inMils ? MILS_PER_DEGREE : 1.0);
+
+                if (status == RangeStatus.Ok)
+                {
+                    if (flatSolved && !heightSolved)
+                        status = RangeStatus.TooFar; // the height puts the target out of reach of this weapon
+                    else if (heightSolved && limit != 0)
+                    {
+                        bool highAngle = string.Equals(data.AngleType, "high", StringComparison.OrdinalIgnoreCase);
+                        status = (limit > 0) == highAngle ? RangeStatus.TooClose : RangeStatus.TooFar;
+                    }
+                }
+            }
+
+            float elevation = CalculateElevation(meters, height, data);
+            float tof = CalculateTimeOfFlight(meters, elevation, data, height);
+
+            return new RangingResult(value, unit, decimals, estimate, status, tof, data.MinDistance, (float)maxRange);
+        }
 
         #endregion
 
         #region Private Methods
+
+        private const double MILS_PER_DEGREE = 1600.0 / 90.0; // Squad mortar dial: 1600 mils per quarter turn
+
+        private static string UnitSymbol(string unit)
+        {
+            switch ((unit ?? string.Empty).ToLowerInvariant())
+            {
+                case "deg":
+                case "degree":
+                case "degrees":
+                    return "°";
+                case "mil":
+                case "mils":
+                case "milliradian":
+                case "milliradians":
+                    return "mil";
+                default:
+                    return unit ?? string.Empty;
+            }
+        }
 
         /// <summary>
         /// Gets the gravity value for ballistic calculations based on weapon data
@@ -340,32 +445,40 @@ namespace squad_dma.Source.Squad
             if (string.IsNullOrEmpty(weaponName))
                 return null;
 
-            string lowerName = weaponName.ToLower();
-            
+            string lowerName = weaponName.ToLowerInvariant();
+
             // Vehicle-mounted weapons (degrees-based)
-            if (lowerName.Contains("technical m252") && lowerName.Contains("m252"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "Tech.Mortar");
-            
+            if (lowerName.Contains("technical m252"))
+                return FindWeapon("Tech.Mortar");
+
             if (lowerName.Contains("ub32"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "Tech.UB-32");
-            
+                return FindWeapon("Tech.UB-32");
+
             if (lowerName.Contains("bm21grad"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "BM-21Grad");
-            
+                return FindWeapon("BM-21Grad");
+
             if (lowerName.Contains("m1064") && lowerName.Contains("m121"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "M1064M121");
-            
+                return FindWeapon("M1064M121");
+
             // Deployable mortars (milliradians-based)
             if (lowerName.Contains("m1937mortar") || lowerName.Contains("m252mortar") || lowerName.Contains("pp87mortar"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "Mortar");
-            
+                return FindWeapon("Mortar");
+
             // Other deployables
             if (lowerName.Contains("hellcannon"))
-                return WeaponDatabase.Weapons.FirstOrDefault(w => w.Name == "HellCannon");
-            
+                return FindWeapon("HellCannon");
+
             // Fallback: exact name match
-            return WeaponDatabase.Weapons.FirstOrDefault(w => 
-                w.Name.Equals(weaponName, StringComparison.OrdinalIgnoreCase));
+            return FindWeapon(weaponName);
+        }
+
+        private static WeaponData FindWeapon(string name)
+        {
+            var weapons = WeaponDatabase.Weapons;
+            for (int i = 0; i < weapons.Length; i++)
+                if (weapons[i].Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                    return weapons[i];
+            return null;
         }
 
         /// <summary>
@@ -379,66 +492,8 @@ namespace squad_dma.Source.Squad
         {
             try
             {
-                float velocity = weaponData.Velocity;
-                float gravity = GetGravityValue(weaponData);
-                
-                // Adjust for height offset
-                heightDifference += weaponData.HeightOffset;
-                
-                // Correct ballistic elevation formula:
-                // θ = arctan((v² ± √(v⁴ - g × (g × x² + 2 × y × v²))) / (g × x))
-                float v2 = velocity * velocity;
-                float v4 = v2 * v2;
-                float gx = gravity * distance;
-                float gx2 = gravity * distance * distance;
-                float gyv2 = gravity * heightDifference * v2;
-                
-                // Calculate discriminant: v⁴ - g × (g × x² + 2 × y × v²)
-                float discriminant = v4 - gravity * (gx2 + 2 * gyv2);
-                
-                if (discriminant < 0)
-                    return weaponData.MinElevation[0]; // Out of range, return min elevation
-                
-                float sqrtDiscriminant = (float)Math.Sqrt(discriminant);
-                
-                // Calculate both high and low angle solutions
-                // θ_high = arctan((v² + √discriminant) / (g × x))
-                // θ_low = arctan((v² - √discriminant) / (g × x))
-                float highAngleRad = (float)Math.Atan((v2 + sqrtDiscriminant) / gx);
-                float lowAngleRad = (float)Math.Atan((v2 - sqrtDiscriminant) / gx);
-                
-                // Convert to degrees
-                float highAngle = highAngleRad * 180f / (float)Math.PI;
-                float lowAngle = lowAngleRad * 180f / (float)Math.PI;
-                
-                // Choose angle based on weapon type
-                float selectedAngle;
-                if (weaponData.AngleType == "high")
-                {
-                    // For mortars, prefer the higher angle that's within limits
-                    // Check if high angle is within weapon limits
-                    if (highAngle >= weaponData.MinElevation[0] && highAngle <= weaponData.MinElevation[1])
-                    {
-                        selectedAngle = highAngle;
-                    }
-                    else if (lowAngle >= weaponData.MinElevation[0] && lowAngle <= weaponData.MinElevation[1])
-                    {
-                        selectedAngle = lowAngle;
-                    }
-                    else
-                    {
-                        // If neither is in range, use the closest to the preferred range
-                        selectedAngle = Math.Max(weaponData.MinElevation[0], Math.Min(weaponData.MinElevation[1], highAngle));
-                    }
-                }
-                else
-                {
-                    // For direct-fire weapons, prefer the lower angle
-                    selectedAngle = lowAngle;
-                    selectedAngle = Math.Max(weaponData.MinElevation[0], Math.Min(weaponData.MinElevation[1], selectedAngle));
-                }
-                
-                return selectedAngle;
+                TrySolveElevation(distance, heightDifference, weaponData, out float angle, out _);
+                return angle;
             }
             catch
             {
@@ -447,25 +502,104 @@ namespace squad_dma.Source.Squad
         }
 
         /// <summary>
+        /// Solves the ballistic elevation for a target at a horizontal distance and height difference.
+        /// False when the target can't be reached at any angle; <paramref name="angle"/> then holds the weapon's
+        /// minimum elevation. <paramref name="limit"/> is 0 when the angle is inside the weapon's elevation limits,
+        /// +1 when it had to be capped at the maximum and -1 when it had to be raised to the minimum.
+        /// </summary>
+        private bool TrySolveElevation(float distance, float heightDifference, WeaponData weaponData, out float angle, out int limit)
+        {
+            angle = weaponData.MinElevation[0];
+            limit = 0;
+
+            float velocity = weaponData.Velocity;
+            float gravity = GetGravityValue(weaponData);
+            
+            // Adjust for height offset
+            heightDifference += weaponData.HeightOffset;
+            
+            // Correct ballistic elevation formula:
+            // θ = arctan((v² ± √(v⁴ - g × (g × x² + 2 × y × v²))) / (g × x))
+            float v2 = velocity * velocity;
+            float v4 = v2 * v2;
+            float gx = gravity * distance;
+            float gx2 = gravity * distance * distance;
+            float yv2 = heightDifference * v2;
+
+            // Calculate discriminant: v⁴ - g × (g × x² + 2 × y × v²)
+            float discriminant = v4 - gravity * (gx2 + 2 * yv2);
+
+            if (gx <= 0 || discriminant < 0)
+                return false; // Out of range, angle stays at the min elevation
+
+            float sqrtDiscriminant = (float)Math.Sqrt(discriminant);
+            
+            // Calculate both high and low angle solutions
+            // θ_high = arctan((v² + √discriminant) / (g × x))
+            // θ_low = arctan((v² - √discriminant) / (g × x))
+            float highAngleRad = (float)Math.Atan((v2 + sqrtDiscriminant) / gx);
+            float lowAngleRad = (float)Math.Atan((v2 - sqrtDiscriminant) / gx);
+            
+            // Convert to degrees
+            float highAngle = highAngleRad * 180f / (float)Math.PI;
+            float lowAngle = lowAngleRad * 180f / (float)Math.PI;
+            
+            // Choose angle based on weapon type
+            float selectedAngle;
+            if (weaponData.AngleType == "high")
+            {
+                // For mortars, prefer the higher angle that's within limits
+                // Check if high angle is within weapon limits
+                if (highAngle >= weaponData.MinElevation[0] && highAngle <= weaponData.MinElevation[1])
+                {
+                    selectedAngle = highAngle;
+                }
+                else if (lowAngle >= weaponData.MinElevation[0] && lowAngle <= weaponData.MinElevation[1])
+                {
+                    selectedAngle = lowAngle;
+                }
+                else
+                {
+                    // If neither is in range, use the closest to the preferred range
+                    selectedAngle = highAngle;
+                    limit = highAngle > weaponData.MinElevation[1] ? 1 : -1;
+                    selectedAngle = Math.Max(weaponData.MinElevation[0], Math.Min(weaponData.MinElevation[1], selectedAngle));
+                }
+            }
+            else
+            {
+                // For direct-fire weapons, prefer the lower angle
+                selectedAngle = lowAngle;
+                if (selectedAngle > weaponData.MinElevation[1]) limit = 1;
+                else if (selectedAngle < weaponData.MinElevation[0]) limit = -1;
+                selectedAngle = Math.Max(weaponData.MinElevation[0], Math.Min(weaponData.MinElevation[1], selectedAngle));
+            }
+
+            angle = selectedAngle;
+            return true;
+        }
+
+        /// <summary>
         /// Calculates time of flight for projectile
         /// </summary>
         /// <param name="distance">Distance to target</param>
         /// <param name="elevation">Elevation angle in degrees</param>
         /// <param name="weaponData">Weapon ballistic data</param>
+        /// <param name="heightDifference">Target ground height minus shooter ground height in meters (positive = target higher)</param>
         /// <returns>Time of flight in seconds</returns>
-        private float CalculateTimeOfFlight(float distance, float elevation, WeaponData weaponData)
+        private float CalculateTimeOfFlight(float distance, float elevation, WeaponData weaponData, float heightDifference = 0f)
         {
             try
             {
                 float elevationRad = elevation * (float)Math.PI / 180f;
                 float velocity = weaponData.Velocity;
                 float gravity = GetGravityValue(weaponData);
-                float heightDifference = 0f; // Flat ground assumption
-                
-                // Correct ballistic time of flight formula:
+
+                // Correct ballistic time of flight formula, y being how far the shell drops below its launch point:
                 // t = (v × sin(θ) + √((v × sin(θ))² + 2 × g × y)) / g
+                float drop = -heightDifference;
                 float vSinTheta = velocity * (float)Math.Sin(elevationRad);
-                float discriminant = vSinTheta * vSinTheta + 2f * gravity * heightDifference;
+                float discriminant = vSinTheta * vSinTheta + 2f * gravity * drop;
                 
                 // Ensure discriminant is not negative
                 if (discriminant < 0)
@@ -638,27 +772,32 @@ namespace squad_dma.Source.Squad
             if (string.IsNullOrEmpty(weaponName))
                 return -1;
 
-            switch (weaponName)
+            return RangeTables.TryGetValue(weaponName, out var table) ? table.Lookup(meters) : -1;
+        }
+
+        private static readonly Dictionary<string, RangeTable> RangeTables = new(StringComparer.Ordinal)
+        {
+            ["Tech.Mortar"] = new RangeTable(TechMortarDistances, TechMortarDegrees),
+            ["Mortar"] = new RangeTable(MortarDistances, MortarMilliradians),
+            ["HellCannon"] = new RangeTable(HellCannonDistances, HellCannonDegrees),
+            ["BM-21Grad"] = new RangeTable(BM21GradDistances, BM21GradDegrees),
+            ["UB-32"] = new RangeTable(UB32Distances, UB32Degrees),
+            ["Tech.UB-32"] = new RangeTable(UB32Distances, UB32Degrees),
+        };
+
+        private sealed class RangeTable
+        {
+            private readonly double[] _distances, _values;
+
+            public RangeTable(double[] distances, double[] values)
             {
-                case "Tech.Mortar":
-                    return MetersToDegrees(meters, TechMortarDistances, TechMortarDegrees);
-                
-                case "Mortar":
-                    return MetersToMilliradians(meters, MortarDistances, MortarMilliradians);
-                
-                case "HellCannon":
-                    return MetersToDegrees(meters, HellCannonDistances, HellCannonDegrees);
-                
-                case "BM-21Grad":
-                    return MetersToDegrees(meters, BM21GradDistances, BM21GradDegrees);
-                
-                case "UB-32":
-                case "Tech.UB-32":
-                    return MetersToDegrees(meters, UB32Distances, UB32Degrees);
-                
-                default:
-                    return -1; // Weapon not supported
+                _distances = distances;
+                _values = values;
             }
+
+            public double MaxDistance => _distances[_distances.Length - 1];
+
+            public double Lookup(int meters) => MetersToDegrees(meters, _distances, _values);
         }
 
         /// <summary>
@@ -792,30 +931,6 @@ namespace squad_dma.Source.Squad
         }
 
         /// <summary>
-        /// Calculates the spread radius based on weapon MOA and trajectory
-        /// </summary>
-        /// <param name="distance">Distance to target in meters</param>
-        /// <param name="elevation">Elevation angle in degrees</param>
-        /// <param name="weaponData">Weapon ballistic data</param>
-        /// <returns>Spread radius in meters</returns>
-        private float CalculateSpreadRadius(float distance, float elevation, WeaponData weaponData)
-        {
-            try
-            {
-                var spread = CalculateSpreadEllipse(distance, elevation, weaponData);
-                // Return the larger of horizontal or vertical spread as the radius
-                // This gives us a circular approximation of the elliptical spread
-                return Math.Max(spread.Horizontal, spread.Vertical);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"Error calculating spread radius: {ex.Message}");
-                // Dynamic fallback based on weapon's MOA and distance
-                return GetDynamicFallbackSpread(distance, weaponData);
-            }
-        }
-
-        /// <summary>
         /// Calculates the elliptical spread dimensions for a weapon using proper ballistic physics
         /// Based on Squad's actual spread mechanics - NEVER a perfect circle!
         /// </summary>
@@ -835,9 +950,6 @@ namespace squad_dma.Source.Squad
                 // Convert MOA to radians using utility function
                 float moaRad = ConvertMoaToRadians(moa);
                 float elevationRad = elevation * (float)Math.PI / 180f;
-                
-                // Calculate time of flight for this trajectory
-                float timeOfFlight = CalculateTimeOfFlight(distance, elevation, weaponData);
                 
                 // Calculate VERTICAL SPREAD using proper ballistic formula
                 // This is the distance variation caused by elevation angle imprecision
@@ -1310,36 +1422,40 @@ namespace squad_dma.Source.Squad
 
     #endregion
 
-    #region Usage Example
-    
-    /// <summary>
-    /// Example usage for integrating vehicle ballistic calculations into your radar/ESP system
-    /// Only works when player is in a vehicle with ballistic weapons
-    /// </summary>
-    public static class BallisticExample
+    #region Ranging Result
+
+    public enum RangeStatus { Ok, TooClose, TooFar }
+
+    /// <summary>Dial setting and reachability for one target distance with the equipped weapon.</summary>
+    public readonly struct RangingResult
     {
-        /// <summary>
-        /// Example of how to use vehicle ballistic calculations in your ESP/radar
-        /// Only displays ballistic info when in vehicle with supported weapon
-        /// </summary>
-        /// <param name="mortarCalculator">MortarCalculator instance</param>
-        /// <param name="targetPosition">Enemy/target position from radar</param>
-        /// <param name="playerPosition">Local player position</param>
-        /// <returns>Formatted string for display on radar, empty if not in ballistic vehicle</returns>
-        public static string GetBallisticDisplayText(MortarCalculator mortarCalculator, Vector3 targetPosition, Vector3 playerPosition)
+        public static readonly RangingResult None = default;
+
+        public RangingResult(double value, string unit, int decimals, bool isEstimate, RangeStatus status,
+            float timeOfFlight, float minDistance, float maxDistance)
         {
-            // Only show ballistic info if in vehicle with ballistic weapon
-            if (!mortarCalculator.IsInVehicle || !mortarCalculator.HasBallisticWeapon)
-                return string.Empty;
-                
-            var solution = mortarCalculator.CalculateTrajectory(targetPosition, playerPosition);
-            if (solution == null || !solution.IsInRange)
-                return $"❌ OUT OF RANGE";
-                
-            // Return formatted ballistic solution for display
-            return $"🎯 {solution.Distance:F0}m | {solution.Bearing:F0}° | {solution.Elevation:F1}° | {solution.TimeOfFlight:F1}s | {solution.ExplosionDamage}dmg";
+            HasWeapon = true;
+            Value = value;
+            Unit = unit;
+            Decimals = decimals;
+            IsEstimate = isEstimate;
+            Status = status;
+            TimeOfFlight = timeOfFlight;
+            MinDistance = minDistance;
+            MaxDistance = maxDistance;
         }
+
+        public bool HasWeapon { get; }
+        public double Value { get; }
+        public string Unit { get; }
+        public int Decimals { get; }
+        /// <summary>True when there is no game ranging table for the weapon and the value comes from the physics model.</summary>
+        public bool IsEstimate { get; }
+        public RangeStatus Status { get; }
+        public float TimeOfFlight { get; }
+        public float MinDistance { get; }
+        public float MaxDistance { get; }
     }
-    
+
     #endregion
 }

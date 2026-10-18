@@ -165,6 +165,16 @@ namespace squad_dma
 
         public ActorType ActorType { get; set; } = ActorType.Player;
         public ulong PlayerStateAddress { get; set; } = 0; // Address of the PlayerState for this actor
+
+        // Player capsule, re-read with the actor so it follows stance. Zero until the first read succeeds.
+        public float CapsuleHalfHeight { get; set; }
+        public float CapsuleRadius { get; set; }
+
+        // Vehicle mesh bounds in actor-local space (cm), read once from the root mesh asset
+        public bool HasVehicleBounds { get; set; }
+        public Vector3 VehicleBoundsOrigin { get; set; }
+        public Vector3 VehicleHalfExtents { get; set; }
+        public DateTime NextBoundsAttempt { get; set; } = DateTime.MinValue;
         public bool IsClaimed { get; set; } = false; // Vehicle claim status
         public int ClaimingSquadID { get; set; } = -1; // Squad ID that claimed the vehicle
         private Vector3D _pos = new Vector3D(0, 0, 0);

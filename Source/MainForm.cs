@@ -43,16 +43,17 @@ namespace squad_dma
         {
             public object WeaponData;
             public float ShooterX, ShooterY, TargetX, TargetY;
+            public TerrainHeightmap Terrain;
             public BallisticSolution Solution;
         }
 
         /// <summary>Snapshot built at the start of the current frame; read-only for widgets drawn in the same pass.</summary>
         internal ActorFrameSnapshot FrameSnapshot => _frame;
-        private System.Windows.Forms.Timer _panTimer;
         private GameStatus _previousGameStatus = GameStatus.NotFound;
         private EspOverlay _espOverlay;
         private AimviewWidget _aimviewWidget;
         private TInfoWidget _tInfoWidget;
+        private TicketsWidget _ticketsWidget;
 
         private bool _isFreeMapToggled;
         private bool _isDragging;
@@ -66,18 +67,14 @@ namespace squad_dma
 
 
         private Map _selectedMap;
-        private SKBitmap[] _loadedBitmaps;
+        private MapImage[] _loadedBitmaps;
         private MapPosition _mapPanPosition = new();
         private Point _lastMousePosition;
         private PointOfInterest _hoveredPoi;
         private UActor _closestPlayerToMouse;
-        private SKPoint _targetPanPosition;
 
-        private const float DRAG_SENSITIVITY = 1.0f;
         private const float VELOCITY_DECAY = 0.92f;
         private const float MAX_VELOCITY = 50.0f;
-        private const float PAN_SMOOTHNESS = 0.3f;
-        private const int PAN_INTERVAL = 16;
 
         private bool _isWaitingForKey = false;
         private Button _currentKeybindButton = null;
@@ -107,6 +104,7 @@ namespace squad_dma
         public void AddPointOfInterest(Vector3D position, string name)
         {
             _pointsOfInterest.Add(new PointOfInterest(position, name));
+            PublishFireSupportTarget();
         }
 
         public void RemovePointOfInterest(string name)
@@ -115,12 +113,14 @@ namespace squad_dma
             if (poi != null)
             {
                 _pointsOfInterest.Remove(poi);
+                PublishFireSupportTarget();
             }
         }
 
         public void ClearAllPointsOfInterest()
         {
             _pointsOfInterest.Clear();
+            PublishFireSupportTarget();
             _mapCanvas.Invalidate();
         }
 
@@ -152,6 +152,7 @@ namespace squad_dma
         public void ClearPointsOfInterest()
         {
             _pointsOfInterest.Clear();
+            PublishFireSupportTarget();
             _mapCanvas.Invalidate();
         }
 
@@ -202,7 +203,8 @@ namespace squad_dma
             };
             tabRadar.Controls.Add(_mapCanvas);
             chkMapFree.Parent = _mapCanvas;
-            
+            StyleOverlayControls();
+
             // Initialize Aimview Panel if enabled
             if (_config.EnableAimview)
             {
@@ -260,18 +262,20 @@ namespace squad_dma
             }
         }
         
+        /// <summary>Current numbers for the ticket counter widget.</summary>
+        internal (int Friendly, int Enemy, int Kills, int Woundeds) TicketCounts
+            => (_lastFriendlyTickets, _lastEnemyTickets, _lastKills, _lastWoundeds);
+
         private void InitializeTInfoWidget()
         {
             _tInfoWidget = new TInfoWidget(_mapCanvas, this, _uiScale);
+            _ticketsWidget = new TicketsWidget(_mapCanvas, this, _uiScale);
         }
 
         private void InitializeTimers()
         {
             _mapChangeTimer.AutoReset = false;
             _mapChangeTimer.Elapsed += MapChangeTimer_Elapsed;
-
-            _panTimer = new System.Windows.Forms.Timer { Interval = PAN_INTERVAL };
-            _panTimer.Tick += PanTimer_Tick;
 
             var inputTimer = new System.Windows.Forms.Timer { Interval = 10 };
             inputTimer.Tick += InputUpdate_Tick;
@@ -292,7 +296,6 @@ namespace squad_dma
         {
             Shown += frmMain_Shown;
             _mapCanvas.PaintSurface += skMapCanvas_PaintSurface;
-            ticketsPanel.Paint += ticketsPanel_Paint;
             _mapCanvas.MouseMove += skMapCanvas_MouseMove;
             _mapCanvas.MouseDown += skMapCanvas_MouseDown;
             _mapCanvas.MouseDoubleClick += skMapCanvas_MouseDoubleClick;
@@ -323,9 +326,6 @@ namespace squad_dma
             chkEspShowDistance.CheckedChanged += ChkEspShowDistance_CheckedChanged;
             chkEspShowHealth.CheckedChanged += ChkEspShowHealth_CheckedChanged;
             txtEspFontSize.TextChanged += TxtEspFontSize_TextChanged;
-            txtFirstScopeMag.TextChanged += TxtFirstScopeMag_TextChanged;
-            txtSecondScopeMag.TextChanged += TxtSecondScopeMag_TextChanged;
-            txtThirdScopeMag.TextChanged += TxtThirdScopeMag_TextChanged;
         }
 
         private void LoadInitialData()
@@ -339,6 +339,15 @@ namespace squad_dma
             // Create and add the color configuration panel to the Colors tab
             var colorPanel = CreateColorConfigurationPanel();
             tabColors.Controls.Add(colorPanel);
+
+            // The dark mode theming recolors the panels when they are added to the tab, which wipes the preview
+            // swatches to its grey. Paint the real colors again right after, and every time the tab is opened.
+            RefreshColorPreviews();
+            tabControl.SelectedIndexChanged += (s, e) =>
+            {
+                if (tabControl.SelectedTab == tabColors)
+                    RefreshColorPreviews();
+            };
         }
         #endregion
 
@@ -367,6 +376,9 @@ namespace squad_dma
             
             _tInfoWidget?.Dispose();
             _tInfoWidget = null;
+
+            _ticketsWidget?.Dispose();
+            _ticketsWidget = null;
 
             CleanupLoadedBitmaps();
             Config.ClearCache();
@@ -582,35 +594,31 @@ namespace squad_dma
 
         private void HandleMapZoom(MouseEventArgs e)
         {
-            int zoomStep = 3;
+            const int zoomStep = 3;
+
+            // On the free map the point under the cursor stays under the cursor while zooming
+            var before = _isFreeMapToggled ? GetMapLocation() : null;
+            float oldZoom = _config.DefaultZoom;
+
             if (e.Delta < 0)
                 ZoomOut(zoomStep);
             else if (e.Delta > 0)
                 ZoomIn(zoomStep);
 
-            if (_isFreeMapToggled)
-            {
-                var mousePos = _mapCanvas.PointToClient(Cursor.Position);
-                var mapParams = GetMapLocation();
-                
-                if (mapParams == null)
-                {
-                    return; 
-                }
-                
-                var mapMousePos = new SKPoint(
-                    (float)(mapParams.Bounds.Left + mousePos.X / mapParams.XScale),
-                    (float)(mapParams.Bounds.Top + mousePos.Y / mapParams.YScale)
-                );
+            if (before == null || oldZoom == _config.DefaultZoom || _mapCanvas.Width <= 0 || _mapCanvas.Height <= 0)
+                return;
 
-                // Only update target position if zooming out
-                if (e.Delta < 0)
-                {
-                    _targetPanPosition = mapMousePos;
-                    if (!_panTimer.Enabled)
-                        _panTimer.Start();
-                }
-            }
+            // The visible area scales linearly with the zoom setting
+            double ratio = _config.DefaultZoom / (double)oldZoom;
+            var mouse = _mapCanvas.PointToClient(Cursor.Position);
+            double u = (double)mouse.X / _mapCanvas.Width, v = (double)mouse.Y / _mapCanvas.Height;
+            double mapX = before.Bounds.Left + mouse.X / before.XScale;
+            double mapY = before.Bounds.Top + mouse.Y / before.YScale;
+
+            _mapPanPosition.X = mapX + (0.5 - u) * before.Bounds.Width * ratio;
+            _mapPanPosition.Y = mapY + (0.5 - v) * before.Bounds.Height * ratio;
+            ClampPanPosition();
+            _mapCanvas.Invalidate();
         }
 
         private void skMapCanvas_MouseMove(object sender, MouseEventArgs e)
@@ -640,26 +648,46 @@ namespace squad_dma
             _closestPlayerToMouse = FindClosestObject(players, mouse, x => x.ZoomedPosition, 12 * _uiScale);
         }
 
+        /// <summary>
+        /// The map follows the cursor 1:1: a screen pixel is XScale/YScale pixels of the map image, so the pan
+        /// moves by the mouse delta divided by those scales, at any zoom level and window size.
+        /// </summary>
         private void HandleMapDragging(MouseEventArgs e)
         {
             if (!_lastMousePosition.IsEmpty)
             {
-                float dx = (e.X - _lastMousePosition.X) * DRAG_SENSITIVITY;
-                float dy = (e.Y - _lastMousePosition.Y) * DRAG_SENSITIVITY;
-                
-                float zoomNormalizer = (_config.DefaultZoom / 100f) * 2.0f;
-                
-                _targetPanPosition.X -= dx * zoomNormalizer;
-                _targetPanPosition.Y -= dy * zoomNormalizer;
-                
-                _mapPanPosition.X = (float)_targetPanPosition.X;
-                _mapPanPosition.Y = (float)_targetPanPosition.Y;
-                
-                _mapCanvas.Invalidate();
+                var mapParams = GetMapLocation();
+                if (mapParams != null && mapParams.XScale > 0 && mapParams.YScale > 0)
+                {
+                    _mapPanPosition.X -= (e.X - _lastMousePosition.X) / mapParams.XScale;
+                    _mapPanPosition.Y -= (e.Y - _lastMousePosition.Y) / mapParams.YScale;
+                    ClampPanPosition();
+                }
             }
-            
+
             _lastMousePosition = e.Location;
         }
+
+        /// <summary>
+        /// Keeps the pan centre where the view can still follow it. Past the edge of the map the view stops
+        /// moving, so without this the pan would keep building up and the map would feel stuck, then jump.
+        /// </summary>
+        private void ClampPanPosition()
+        {
+            if (_loadedBitmaps == null || _loadedBitmaps.Length == 0)
+                return;
+
+            var bitmap = _loadedBitmaps[Math.Clamp(GetMapLayerIndex(_mapPanPosition.Height), 0, _loadedBitmaps.Length - 1)];
+            if (bitmap == null)
+                return;
+
+            double zoom = 0.01 * _config.DefaultZoom;
+            _mapPanPosition.X = ClampCentre(_mapPanPosition.X, bitmap.Width * zoom / 2, bitmap.Width);
+            _mapPanPosition.Y = ClampCentre(_mapPanPosition.Y, bitmap.Height * zoom / 2, bitmap.Height);
+        }
+
+        private static double ClampCentre(double centre, double half, double size)
+            => half * 2 >= size ? size / 2 : Math.Clamp(centre, half, size - half);
 
         private void HandlePOIHover(MouseEventArgs e)
         {
@@ -690,12 +718,12 @@ namespace squad_dma
             {
                 _isDragging = true;
                 _lastMousePosition = e.Location;
-                _panTimer.Stop();
             }
 
             if (e.Button == MouseButtons.Right && _hoveredPoi != null)
             {
                 _pointsOfInterest.Remove(_hoveredPoi);
+                PublishFireSupportTarget();
                 _hoveredPoi = null;
                 _mapCanvas.Invalidate();
             }
@@ -722,8 +750,7 @@ namespace squad_dma
 
                 var worldX = (mouseX - _selectedMap.ConfigFile.X) / _selectedMap.ConfigFile.Scale;
                 var worldY = (mouseY - _selectedMap.ConfigFile.Y) / _selectedMap.ConfigFile.Scale;
-                // Use flat ground assumption - set POI to same height as local player
-                var worldZ = this.LocalPlayer.Position.Z;
+                var worldZ = GroundHeightAt(worldX, worldY);
 
                 var poiPosition = new Vector3D(worldX - AbsoluteLocation.X, worldY - AbsoluteLocation.Y, worldZ - AbsoluteLocation.Z);
 
@@ -739,7 +766,6 @@ namespace squad_dma
             {
                 _isDragging = false;
                 _lastMousePosition = e.Location;
-                _panTimer.Start();
             }
         }
 
@@ -779,6 +805,9 @@ namespace squad_dma
                         
                         // Draw TInfo widget
                         _tInfoWidget?.Draw(canvas);
+
+                        // Draw tickets widget
+                        _ticketsWidget?.Draw(canvas);
                     }
                 }
                 else
@@ -791,46 +820,57 @@ namespace squad_dma
             catch { }
         }
 
-        private void ticketsPanel_Paint(object sender, PaintEventArgs e)
+        #region Overlay styling
+        // Same look as the radar widgets: dark rounded card with a hairline border
+        private static readonly Color CardColor = Color.FromArgb(16, 19, 24);
+        private static readonly Color CardBorderColor = Color.FromArgb(58, 63, 72);
+        private static readonly Color CardValueColor = Color.White;
+        private const int CardRadius = 6;
+
+        private static System.Drawing.Drawing2D.GraphicsPath RoundedRect(RectangleF r, float radius)
         {
-            if (Memory.GameStatus != GameStatus.InGame || Memory._game == null)
-            {
-                // Reset when not in game
-                _lastFriendlyTickets = 0;
-                _lastEnemyTickets = 0;
-                _lastKills = 0;
-                _lastWoundeds = 0;
-                return;
-            }
-
-            var g = e.Graphics;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-
-            string displayText = $"Friendly: {_lastFriendlyTickets}  |  Enemy: {_lastEnemyTickets}  |  K: {_lastKills}  |  W: {_lastWoundeds}";
-
-            using (var font = new Font("Arial", 9f, FontStyle.Bold))
-            using (var format = new StringFormat())
-            {
-                format.Alignment = StringAlignment.Center;
-                format.LineAlignment = StringAlignment.Center;
-
-                RectangleF rect = new RectangleF(
-                    0,
-                    0,
-                    ticketsPanel.Width,
-                    ticketsPanel.Height
-                );
-
-                g.DrawString(
-                    displayText,
-                    font,
-                    Brushes.WhiteSmoke,
-                    rect,
-                    format
-                );
-            }
+            float d = radius * 2;
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            path.AddArc(r.Left, r.Top, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Top, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.Left, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
         }
+
+        /// <summary>Cuts a control to rounded corners, and keeps it that way when it changes size.</summary>
+        private static void ApplyRoundedRegion(Control control, int radius)
+        {
+            void Apply()
+            {
+                if (control.Width <= 0 || control.Height <= 0)
+                    return;
+                using var path = RoundedRect(new RectangleF(0, 0, control.Width, control.Height), radius);
+                var old = control.Region;
+                control.Region = new Region(path);
+                old?.Dispose();
+            }
+
+            Apply();
+            control.SizeChanged += (s, e) => Apply();
+        }
+
+        private void StyleOverlayControls()
+        {
+            // Map follow / free toggle
+            chkMapFree.FlatStyle = FlatStyle.Flat;
+            chkMapFree.BackColor = CardColor;
+            chkMapFree.ForeColor = CardValueColor;
+            chkMapFree.FlatAppearance.BorderSize = 1;
+            chkMapFree.FlatAppearance.BorderColor = CardBorderColor;
+            chkMapFree.FlatAppearance.MouseOverBackColor = Color.FromArgb(30, 35, 43);
+            chkMapFree.FlatAppearance.MouseDownBackColor = Color.FromArgb(40, 46, 56);
+            chkMapFree.FlatAppearance.CheckedBackColor = Color.FromArgb(14, 72, 94); // free mode: lit up
+            chkMapFree.Cursor = Cursors.Hand;
+            ApplyRoundedRegion(chkMapFree, CardRadius);
+        }
+        #endregion
 
         private void btnToggleMap_Click(object sender, EventArgs e)
         {
@@ -873,6 +913,7 @@ namespace squad_dma
             
             _aimviewWidget?.SetScaleFactor(_uiScale);
             _tInfoWidget?.SetScaleFactor(_uiScale);
+            _ticketsWidget?.SetScaleFactor(_uiScale);
             
             if (_mapCanvas != null)
             {
@@ -968,6 +1009,7 @@ namespace squad_dma
         /// </summary>
         public Panel CreateColorConfigurationPanel()
         {
+            _colorPreviewRefreshers.Clear();
             var mainPanel = new Panel
             {
                 Dock = DockStyle.Fill,
@@ -1057,6 +1099,7 @@ namespace squad_dma
                     // Refresh panel
                     tabColors.Controls.Clear();
                     tabColors.Controls.Add(CreateColorConfigurationPanel());
+                    RefreshColorPreviews();
                 }
             };
 
@@ -1123,13 +1166,22 @@ namespace squad_dma
             };
             rowPanel.Controls.Add(hexLabel);
 
+            // The swatch always shows the color currently set, including the one loaded from the config
+            var current = color;
+            void RefreshPreview()
+            {
+                colorBox.BackColor = current.ToDrawingColor();
+                hexLabel.Text = ColorToHex(current.ToDrawingColor());
+            }
+            _colorPreviewRefreshers.Add(RefreshPreview);
+
             // Click handlers for color selection
-            Action openColorPicker = () => OpenColorPicker(colorName, color, (newColor) =>
+            Action openColorPicker = () => OpenColorPicker(colorName, current, (newColor) =>
             {
                 onColorChanged(newColor);
-                colorBox.BackColor = newColor.ToDrawingColor();
-                hexLabel.Text = ColorToHex(newColor.ToDrawingColor());
-                
+                current = newColor;
+                RefreshPreview();
+
                 // Refresh tech marker paints to apply new colors immediately
                 _renderer.RefreshTechPaints();
             });
@@ -1144,6 +1196,14 @@ namespace squad_dma
             rowPanel.MouseLeave += (s, e) => rowPanel.BackColor = System.Drawing.Color.FromArgb(40, 40, 40);
 
             return rowPanel;
+        }
+
+        private readonly List<Action> _colorPreviewRefreshers = new();
+
+        private void RefreshColorPreviews()
+        {
+            foreach (var refresh in _colorPreviewRefreshers)
+                refresh();
         }
 
         /// <summary>
@@ -1169,19 +1229,29 @@ namespace squad_dma
                 return;
             }
 
-            var configs = dir.GetFiles("*.json");
-            if (configs.Length == 0)
+            // Map packs (one folder per map: tiles, heights, map.json)
+            foreach (var packDir in MapPack.FindPacks(dir.FullName))
             {
-                Program.Log("No .json map configs found in Maps directory.");
-                return;
+                try
+                {
+                    _maps.Add(MapPack.Load(packDir));
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"Error loading map pack {Path.GetFileName(packDir)}: {ex.Message}");
+                }
             }
 
-            foreach (var config in configs)
+            // Single-image maps from before map packs, only for maps that have no pack
+            foreach (var config in dir.GetFiles("*.json"))
             {
                 try
                 {
                     var name = Path.GetFileNameWithoutExtension(config.Name);
                     var mapConfig = MapConfig.LoadFromFile(config.FullName);
+                    if (_maps.Any(m => m.ConfigFile.MapID.Any(id => mapConfig.MapID.Contains(id, StringComparer.OrdinalIgnoreCase))))
+                        continue;
+
                     var map = new Map(name.ToUpper(), mapConfig, config.FullName);
                     map.ConfigFile.MapLayers = map.ConfigFile.MapLayers.OrderBy(x => x.MinHeight).ToList();
                     _maps.Add(map);
@@ -1191,6 +1261,16 @@ namespace squad_dma
                     Program.Log($"Error loading map config {config.Name}: {ex.Message}");
                 }
             }
+
+            if (_maps.Count == 0)
+            {
+                Program.Log("No map packs or .json map configs found in Maps directory.");
+                return;
+            }
+
+            var ordered = _maps.OrderBy(m => m.Name, StringComparer.Ordinal).ToList();
+            _maps.Clear();
+            _maps.AddRange(ordered);
 
             Program.Log($"Loaded {_maps.Count} map configurations.");
         }
@@ -1221,10 +1301,8 @@ namespace squad_dma
             chkEspShowDistance.Checked = _config.EspShowDistance;
             chkEspShowHealth.Checked = _config.EspShowHealth;
             txtEspFontSize.Text = _config.ESPFontSize.ToString();
-            txtFirstScopeMag.Text = _config.FirstScopeMagnification.ToString("F1");
-            txtSecondScopeMag.Text = _config.SecondScopeMagnification.ToString("F1");
-            txtThirdScopeMag.Text = _config.ThirdScopeMagnification.ToString("F1");
             trkTechMarkerScale.Value = _config.TechMarkerScale;
+            trkWidgetOpacity.Value = Math.Clamp(_config.WidgetOpacity, trkWidgetOpacity.Minimum, trkWidgetOpacity.Maximum);
             #endregion
             #endregion
 
@@ -1245,6 +1323,11 @@ namespace squad_dma
             chkNoSpread.Checked = _config.NoSpread;
             chkNoSway.Checked = _config.NoSway;
             chkInstantGrenade.Checked = _config.InstantGrenade;
+            chkQuickAds.Checked = _config.QuickAds;
+            chkFireSupport.Checked = _config.FireSupport;
+            cmbFireSupportMode.SelectedIndex = _config.FireSupportMode == (int)squad_dma.Source.Squad.Features.FireSupportMode.Drop ? 1 : 0;
+            trkFireSupportSpread.Value = Math.Clamp((int)_config.FireSupportSpreadMeters, trkFireSupportSpread.Minimum, trkFireSupportSpread.Maximum);
+            lblFireSupportSpread.Text = $"Fire Support Spread: {trkFireSupportSpread.Value} m";
             #endregion
 
             #endregion
@@ -1318,26 +1401,16 @@ namespace squad_dma
                             bitmap?.Dispose(); // Cleanup resources
                     }
 
-                    _loadedBitmaps = new SKBitmap[_selectedMap.ConfigFile.MapLayers.Count];
+                    _loadedBitmaps = new MapImage[_selectedMap.ConfigFile.MapLayers.Count];
 
                     for (int i = 0; i < _loadedBitmaps.Length; i++)
-                    {
-                        using (
-                            var stream = File.Open(
-                                _selectedMap.ConfigFile.MapLayers[i].Filename,
-                                FileMode.Open,
-                                FileAccess.Read))
-                        {
-                            _loadedBitmaps[i] = SKBitmap.Decode(stream); // Load new bitmap(s)
-                            _loadedBitmaps[i].SetImmutable();
-                        }
-                    }
+                        _loadedBitmaps[i] = _selectedMap.ConfigFile.MapLayers[i].LoadImage(); // Load new bitmap(s)
+
+                    TerrainHeightmap.Select(_selectedMap);
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception(
-                        $"ERROR loading {_selectedMap.ConfigFile.MapLayers[0].Filename}: {ex}"
-                    );
+                    throw new Exception($"ERROR loading map {_selectedMap.Name}: {ex}");
                 }
                 finally
                 {
@@ -1373,7 +1446,6 @@ namespace squad_dma
                 _lastEnemyTickets = 0;
                 _lastKills = 0;
                 _lastWoundeds = 0;
-                ticketsPanel.Invalidate();
                 
                 Task.Run(async () => await ApplyFeaturesAsync());
             }
@@ -1383,7 +1455,6 @@ namespace squad_dma
                 _lastEnemyTickets = 0;
                 _lastKills = 0;
                 _lastWoundeds = 0;
-                ticketsPanel.Invalidate();
                 
                 ClearPointsOfInterest();
             }
@@ -1393,7 +1464,6 @@ namespace squad_dma
                 _lastEnemyTickets = 0;
                 _lastKills = 0;
                 _lastWoundeds = 0;
-                ticketsPanel.Invalidate();
             }
             
             _previousGameStatus = currentGameStatus;
@@ -1402,10 +1472,14 @@ namespace squad_dma
         private async Task ApplyFeaturesAsync()
         {
             const int retryDelay = 250;
+            var game = Memory._game; // features belong to this map, stop once the game is replaced or ends
 
             while (true)
             {
-                if (Memory._game != null && Memory._game.InGame)
+                if (!ReferenceEquals(Memory._game, game) || Memory.GameStatus == GameStatus.NotFound)
+                    return;
+
+                if (game != null && game.InGame)
                 {
                     try
                     {
@@ -1455,6 +1529,12 @@ namespace squad_dma
 
                             if (_config.InstantGrenade)
                                 Memory._game.SetInstantGrenade(true);
+
+                            if (_config.QuickAds)
+                                Memory._game.SetQuickAds(true);
+
+                            if (_config.FireSupport)
+                                Memory._game.SetFireSupport(true);
 
                             return;
                         }
@@ -1539,7 +1619,6 @@ namespace squad_dma
                 _lastEnemyTickets = enemy;
                 _lastKills = kills;
                 _lastWoundeds = woundeds;
-                ticketsPanel.Invalidate();
             }
         }
 
@@ -1565,17 +1644,19 @@ namespace squad_dma
                 // If no exact match found, try partial matching (contains)
                 if (selectedMap is null)
                 {
-                    selectedMap = _maps.FirstOrDefault(x => x.ConfigFile.MapID.Any(id => 
-                        id.Contains(currentMap, StringComparison.OrdinalIgnoreCase) || 
+                    // Longest name first, so Narva_f is tried before the Narva it contains
+                    selectedMap = _maps.OrderByDescending(x => x.Name.Length).FirstOrDefault(x => x.ConfigFile.MapID.Any(id =>
+                        id.Contains(currentMap, StringComparison.OrdinalIgnoreCase) ||
                         currentMap.Contains(id, StringComparison.OrdinalIgnoreCase)));
                 }
-                
+
                 if (selectedMap is not null)
                 {
                     _selectedMap = selectedMap;
                     CleanupLoadedBitmaps();
                     ClearPointsOfInterest();
                     LoadMapBitmaps();
+                    TerrainHeightmap.Select(_selectedMap);
                 }
                 else
                 {
@@ -1590,7 +1671,7 @@ namespace squad_dma
         private void LoadMapBitmaps()
         {
             var mapLayers = _selectedMap.ConfigFile.MapLayers;
-            _loadedBitmaps = new SKBitmap[mapLayers.Count];
+            _loadedBitmaps = new MapImage[mapLayers.Count];
 
             Parallel.ForEach(mapLayers, (mapLayer, _, _) =>
             {
@@ -1598,13 +1679,11 @@ namespace squad_dma
                 {
                     try
                     {
-                        using var stream = File.Open(mapLayer.Filename, FileMode.Open, FileAccess.Read);
-                        _loadedBitmaps[mapLayers.IndexOf(mapLayer)] = SKBitmap.Decode(stream);
-                        _loadedBitmaps[mapLayers.IndexOf(mapLayer)].SetImmutable();
+                        _loadedBitmaps[mapLayers.IndexOf(mapLayer)] = mapLayer.LoadImage();
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error loading map layer: {ex.Message}");
+                        Logger.Error($"Error loading map layer: {ex.Message}");
                     }
                 }
             });
@@ -1775,8 +1854,8 @@ namespace squad_dma
                 Bottom = _mapCanvas.Bottom
             };
 
-            canvas.DrawBitmap(
-                _loadedBitmaps[mapParams.MapLayerIndex],
+            _loadedBitmaps[mapParams.MapLayerIndex].Draw(
+                canvas,
                 mapParams.Bounds,
                 mapCanvasBounds,
                 SKPaints.PaintBitmap
@@ -1887,14 +1966,25 @@ namespace squad_dma
                     // unchanged between frames while the player stands still.
                     var cache = _poiTrajectoryCache[i];
                     float targetX = (float)poiPos.X, targetY = (float)poiPos.Y;
-                    if (!ReferenceEquals(cache.WeaponData, weaponData) ||
+                    var terrain = TerrainHeightmap.Current;
+                    if (!ReferenceEquals(cache.WeaponData, weaponData) || !ReferenceEquals(cache.Terrain, terrain) ||
                         cache.ShooterX != shooterX || cache.ShooterY != shooterY ||
                         cache.TargetX != targetX || cache.TargetY != targetY)
                     {
-                        // Use flat ground assumption - both positions at same height
+                        // Ground height at both ends from the map's heightmap; flat ground when it has none
+                        float shooterZ = 0f, targetZ = 0f;
+                        if (terrain != null &&
+                            terrain.TryGetHeightCm(shooterX, shooterY, out double shooterGround) &&
+                            terrain.TryGetHeightCm(targetX, targetY, out double targetGround))
+                        {
+                            shooterZ = (float)shooterGround;
+                            targetZ = (float)targetGround;
+                        }
+
                         cache.Solution = mortarCalculator.CalculateTrajectory(
-                            new Vector3(targetX, targetY, 0f), new Vector3(shooterX, shooterY, 0f));
+                            new Vector3(targetX, targetY, targetZ), new Vector3(shooterX, shooterY, shooterZ));
                         cache.WeaponData = weaponData;
+                        cache.Terrain = terrain;
                         cache.ShooterX = shooterX; cache.ShooterY = shooterY;
                         cache.TargetX = targetX; cache.TargetY = targetY;
                     }
@@ -1957,6 +2047,27 @@ namespace squad_dma
                 canvas.DrawCircle(cx, cy, minDistancePixels, _renderer.MinDistanceFillPaint);
                 canvas.DrawCircle(cx, cy, minDistancePixels, _renderer.MinDistanceStrokePaint);
             }
+
+            DrawFireSupportImpacts(canvas, bx, by, sx, sy);
+        }
+
+
+        // Fire Support impacts: world positions copied from the feature, then projected to the canvas. Buffers are reused every frame.
+        private readonly List<Vector3D> _impactWorldBuffer = new();
+        private readonly List<SKPoint> _impactPointBuffer = new();
+
+        private void DrawFireSupportImpacts(SKCanvas canvas, double bx, double by, double sx, double sy)
+        {
+            if (!_config.FireSupport) return;
+
+            squad_dma.Source.Squad.Features.FireSupport.CopyRecentImpacts(_impactWorldBuffer);
+            if (_impactWorldBuffer.Count == 0) return;
+
+            _impactPointBuffer.Clear();
+            foreach (var impact in _impactWorldBuffer)
+                _impactPointBuffer.Add(new SKPoint((float)(bx + impact.X * sx), (float)(by + impact.Y * sy)));
+
+            _renderer.DrawImpactMarkers(canvas, _impactPointBuffer, _uiScale);
         }
 
         private void DrawPOINumber(SKCanvas canvas, SKPoint center, int markerNumber)
@@ -2015,6 +2126,18 @@ namespace squad_dma
                     playerZoomedPos.DrawToolTip(canvas, _closestPlayerToMouse, distanceText);
                 }
             }
+        }
+
+        /// <summary>
+        /// Ground height at a map position (cm). Falls back to the local player's height when the map has no height
+        /// data, which is the old flat-ground assumption.
+        /// </summary>
+        private double GroundHeightAt(double worldX, double worldY)
+        {
+            var terrain = TerrainHeightmap.Current;
+            if (terrain != null && terrain.TryGetHeightCm(worldX, worldY, out double height))
+                return height;
+            return LocalPlayer.Position.Z;
         }
 
         private void btnAddPOI_Click(object sender, EventArgs e)
@@ -2095,53 +2218,23 @@ namespace squad_dma
             return null;
         }
 
-        private void PanTimer_Tick(object sender, EventArgs e)
-        {
-            if (!_isDragging)
-            {
-                float dx = (float)(_targetPanPosition.X - _mapPanPosition.X);
-                float dy = (float)(_targetPanPosition.Y - _mapPanPosition.Y);
-                
-                if (Math.Abs(dx) < 0.1f && Math.Abs(dy) < 0.1f)
-                {
-                    _panTimer.Stop();
-                    return;
-                }
-                
-                _mapPanPosition.X += (float)(dx * PAN_SMOOTHNESS);
-                _mapPanPosition.Y += (float)(dy * PAN_SMOOTHNESS);
-                _mapCanvas.Invalidate();
-            }
-        }
-
+        // On the free map the view zooms around its own centre; the mouse wheel then re-anchors it to the cursor
         private bool ZoomIn(int step = 1)
         {
-            float oldZoom = _config.DefaultZoom;
             _config.DefaultZoom = Math.Max(10, _config.DefaultZoom - step);
-            
             if (_isFreeMapToggled)
-            {
-                float zoomFactor = oldZoom / _config.DefaultZoom;
-                _mapPanPosition.X = (float)(_targetPanPosition.X - (_targetPanPosition.X - _mapPanPosition.X) * zoomFactor);
-                _mapPanPosition.Y = (float)(_targetPanPosition.Y - (_targetPanPosition.Y - _mapPanPosition.Y) * zoomFactor);
-            }
-            
+                ClampPanPosition();
+
             _mapCanvas.Invalidate();
             return true;
         }
 
         private bool ZoomOut(int step = 1)
         {
-            float oldZoom = _config.DefaultZoom;
             _config.DefaultZoom = Math.Min(200, _config.DefaultZoom + step);
-            
             if (_isFreeMapToggled)
-            {
-                float zoomFactor = oldZoom / _config.DefaultZoom;
-                _mapPanPosition.X = (float)(_targetPanPosition.X - (_targetPanPosition.X - _mapPanPosition.X) * zoomFactor);
-                _mapPanPosition.Y = (float)(_targetPanPosition.Y - (_targetPanPosition.Y - _mapPanPosition.Y) * zoomFactor);
-            }
-            
+                ClampPanPosition();
+
             _mapCanvas.Invalidate();
             return true;
         }
@@ -2151,54 +2244,27 @@ namespace squad_dma
         private void chkMapFree_CheckedChanged(object sender, EventArgs e)
         {
             _isFreeMapToggled = chkMapFree.Checked;
-            
-            if (_isFreeMapToggled)
+            _isDragging = false;
+            chkMapFree.Text = _isFreeMapToggled ? "Map Free" : "Map Follow";
+
+            // Either way the view starts from the player, so switching to free never jumps and switching back snaps to them
+            var localPlayer = this.LocalPlayer;
+            if (localPlayer is not null)
             {
-                chkMapFree.Text = "Map Free";
-                
-                var localPlayer = this.LocalPlayer;
-                if (localPlayer is not null)
-                {
-                    var localPlayerPos = new Vector3D(
-                        localPlayer.Position.X + AbsoluteLocation.X,
-                        localPlayer.Position.Y + AbsoluteLocation.Y,
-                        localPlayer.Position.Z + AbsoluteLocation.Z
-                    );
-                    var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
-                    _targetPanPosition = new SKPoint((float)localPlayerMapPos.X, (float)localPlayerMapPos.Y);
-                    _mapPanPosition.X = localPlayerMapPos.X;
-                    _mapPanPosition.Y = localPlayerMapPos.Y;
-                    _mapPanPosition.Height = localPlayerMapPos.Height;
-                    _mapPanPosition.TechScale = (.01f * _config.TechMarkerScale);
-                    
-                    if (_panTimer.Enabled)
-                        _panTimer.Stop();
-                }
+                var localPlayerPos = new Vector3D(
+                    localPlayer.Position.X + AbsoluteLocation.X,
+                    localPlayer.Position.Y + AbsoluteLocation.Y,
+                    localPlayer.Position.Z + AbsoluteLocation.Z
+                );
+                var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
+                _mapPanPosition.X = localPlayerMapPos.X;
+                _mapPanPosition.Y = localPlayerMapPos.Y;
+                _mapPanPosition.Height = localPlayerMapPos.Height;
+                _mapPanPosition.TechScale = (.01f * _config.TechMarkerScale);
+                if (_isFreeMapToggled)
+                    ClampPanPosition();
             }
-            else
-            {
-                chkMapFree.Text = "Map Follow";
-                
-                var localPlayer = this.LocalPlayer;
-                if (localPlayer is not null)
-                {
-                    var localPlayerPos = new Vector3D(
-                        localPlayer.Position.X + AbsoluteLocation.X,
-                        localPlayer.Position.Y + AbsoluteLocation.Y,
-                        localPlayer.Position.Z + AbsoluteLocation.Z
-                    );
-                    var localPlayerMapPos = localPlayerPos.ToMapPos(_selectedMap);
-                    _targetPanPosition = new SKPoint((float)localPlayerMapPos.X, (float)localPlayerMapPos.Y);
-                    _mapPanPosition.X = localPlayerMapPos.X;
-                    _mapPanPosition.Y = localPlayerMapPos.Y;
-                    _mapPanPosition.Height = localPlayerMapPos.Height;
-                    _mapPanPosition.TechScale = (.01f * _config.TechMarkerScale);
-                    
-                    if (_panTimer.Enabled)
-                        _panTimer.Stop();
-                }
-            }
-            
+
             _mapCanvas.Invalidate();
         }
         
@@ -2246,14 +2312,16 @@ namespace squad_dma
 
                 var worldX = (mouseX - _selectedMap.ConfigFile.X) / _selectedMap.ConfigFile.Scale;
                 var worldY = (mouseY - _selectedMap.ConfigFile.Y) / _selectedMap.ConfigFile.Scale;
-                var worldPos = new Vector3D(worldX, worldY, LocalPlayer.Position.Z);
+                var worldPos = new Vector3D(worldX, worldY, GroundHeightAt(worldX, worldY));
 
                 _pointsOfInterest.Add(new PointOfInterest(worldPos, "POI"));
+                PublishFireSupportTarget();
                 _mapCanvas.Invalidate();
             }
             else if (e.Button == MouseButtons.Right && _hoveredPoi != null)
             {
                 _pointsOfInterest.Remove(_hoveredPoi);
+                PublishFireSupportTarget();
                 _mapCanvas.Invalidate();
             }
         }
@@ -2373,6 +2441,13 @@ namespace squad_dma
         {
             _config.UIScale = trkUIScale.Value;
             InitiateUIScaling();
+            _mapCanvas.Invalidate();
+            Config.SaveConfig(_config);
+        }
+
+        private void trkWidgetOpacity_Scroll(object sender, EventArgs e)
+        {
+            _config.WidgetOpacity = trkWidgetOpacity.Value;
             _mapCanvas.Invalidate();
             Config.SaveConfig(_config);
         }
@@ -2516,6 +2591,49 @@ namespace squad_dma
             if (InGame)
             {
                 Memory._game?.SetQuickSwap(_config.QuickSwap);
+            }
+        }
+
+        // Fire Support sends artillery shells to the newest marker on the map
+        private void PublishFireSupportTarget()
+        {
+            squad_dma.Source.Squad.Features.FireSupport.SetTarget(_pointsOfInterest.Count > 0 ? _pointsOfInterest[^1].Position : null);
+        }
+
+        private void ChkFireSupport_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.FireSupport = chkFireSupport.Checked;
+            Config.SaveConfig(_config);
+
+            if (InGame)
+            {
+                Memory._game?.SetFireSupport(_config.FireSupport);
+            }
+        }
+
+        private void CmbFireSupportMode_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            _config.FireSupportMode = cmbFireSupportMode.SelectedIndex == 1
+                ? (int)squad_dma.Source.Squad.Features.FireSupportMode.Drop
+                : (int)squad_dma.Source.Squad.Features.FireSupportMode.Arc;
+            Config.SaveConfig(_config);
+        }
+
+        private void TrkFireSupportSpread_Scroll(object sender, EventArgs e)
+        {
+            _config.FireSupportSpreadMeters = trkFireSupportSpread.Value;
+            lblFireSupportSpread.Text = $"Fire Support Spread: {trkFireSupportSpread.Value} m";
+            Config.SaveConfig(_config);
+        }
+
+        private void ChkQuickAds_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.QuickAds = chkQuickAds.Checked;
+            Config.SaveConfig(_config);
+
+            if (InGame)
+            {
+                Memory._game?.SetQuickAds(_config.QuickAds);
             }
         }
 
@@ -2672,44 +2790,6 @@ namespace squad_dma
         }
 
 
-        private void TxtFirstScopeMag_TextChanged(object sender, EventArgs e)
-        {
-            if (float.TryParse(txtFirstScopeMag.Text, out float mag) && mag >= 0)
-            {
-                _config.FirstScopeMagnification = mag;
-                Config.SaveConfig(_config);
-            }
-            else
-            {
-                txtFirstScopeMag.Text = _config.FirstScopeMagnification.ToString("F1");
-            }
-        }
-
-        private void TxtSecondScopeMag_TextChanged(object sender, EventArgs e)
-        {
-            if (float.TryParse(txtSecondScopeMag.Text, out float mag) && mag >= 0)
-            {
-                _config.SecondScopeMagnification = mag;
-                Config.SaveConfig(_config);
-            }
-            else
-            {
-                txtSecondScopeMag.Text = _config.SecondScopeMagnification.ToString("F1");
-            }
-        }
-
-        private void TxtThirdScopeMag_TextChanged(object sender, EventArgs e)
-        {
-            if (float.TryParse(txtThirdScopeMag.Text, out float mag) && mag >= 0)
-            {
-                _config.ThirdScopeMagnification = mag;
-                Config.SaveConfig(_config);
-            }
-            else
-            {
-                txtThirdScopeMag.Text = _config.ThirdScopeMagnification.ToString("F1");
-            }
-        }
         #endregion
         #endregion
         #endregion

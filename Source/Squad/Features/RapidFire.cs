@@ -115,6 +115,7 @@ namespace squad_dma.Source.Squad.Features
         
         private void RestoreWeapon(ulong weapon, ref float originalTimeBetweenShots, ref float originalTimeBetweenSingleShots, bool isVehicle)
         {
+            if (IsGrenade(weapon)) return; // WeaponConfig does not exist on a grenade, the write would land past the object
             try
             {
                 if (originalTimeBetweenShots != 0.0f)
@@ -137,6 +138,7 @@ namespace squad_dma.Source.Squad.Features
         
         private void Apply(ulong weapon, ref float originalTimeBetweenShots, ref float originalTimeBetweenSingleShots, bool isVehicle)
         {
+            if (IsGrenade(weapon)) return; // WeaponConfig does not exist on a grenade, the write would land past the object
             try
             {
                 ulong weaponConfigOffset = weapon + ASQWeapon.WeaponConfig;

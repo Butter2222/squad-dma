@@ -5,44 +5,56 @@ using squad_dma.Source.Squad;
 
 namespace squad_dma
 {
+    /// <summary>
+    /// Firing table for the placed markers: distance, bearing, the dial setting for the equipped weapon,
+    /// time of flight, and whether the target can be reached at all.
+    /// </summary>
     public class TInfoWidget : SKWidget
     {
         #region Fields
         private readonly MainForm _mainForm;
-        private List<TargetMarkerInfo> _markerInfos = new List<TargetMarkerInfo>();
+        private readonly List<TargetMarkerInfo> _markerInfos = new List<TargetMarkerInfo>();
+        private string _weaponLine = NoWeaponText;
+        private bool _hasWeapon;
 
         // Input signature of the last row build (see UpdateMarkerInfo)
         private readonly List<MainForm.PointOfInterest> _lastMarkers = new();
         private double _lastPlayerX, _lastPlayerY;
         private object _lastWeaponData;
+        private TerrainHeightmap _lastTerrain;
         private bool _inputsValid;
 
         // Layout values that only change when rows or UI scale change
-        private static readonly string[] Headers = { "Mark", "Distance", "Bearing", "Range" };
-        private static readonly float[] BaseColumnWidths = { 40, 80, 80, 80 };
-        private readonly float[] _columnWidths = new float[4];
+        private static readonly string[] Headers = { "#", "Dist", "Brg", "Elev", "ToF", "" };
+        private static readonly float[] BaseColumnWidths = { 26, 92, 66, 92, 56, 44 };
+        private readonly float[] _columnWidths = new float[BaseColumnWidths.Length];
         private float _layoutScale = float.NaN;
+        private float _layoutTextSize = float.NaN;
         private float _rowHeight;
         private float _totalWidth;
         private bool _sizeDirty = true;
         #endregion
 
-        #region Properties
-        private float TitleBarHeight => 12.5f * ScaleFactor;
-        private SKRect TitleBar => new(Rectangle.Left, Rectangle.Top, Rectangle.Right, Rectangle.Top + TitleBarHeight);
-        private SKRect MinimizeButton => new(TitleBar.Right - TitleBarHeight,
-            TitleBar.Top, TitleBar.Right, TitleBar.Bottom);
-        #endregion
+        // A bit more opaque than the default so the table stays readable over the map
+        protected override SKColor BodyColor => new SKColor(10, 12, 16, 0xCC);
 
         #region Constants
         private const float PADDING = 5f;
         private const float TEXT_OFFSET_X = 4f;
         private const float TEXT_OFFSET_Y = 6f;
+        private const int MAX_ROWS = 8;
+        private const string NoWeaponText = "No ballistic weapon";
+
+        private static readonly SKColor ValueColor = SKColors.White;
+        private static readonly SKColor DialColor = new(255, 214, 64);   // The number to dial in
+        private static readonly SKColor GoodColor = new(96, 255, 96);
+        private static readonly SKColor BadColor = new(255, 80, 80);
+        private static readonly SKColor DimColor = new(170, 170, 170);
         #endregion
 
         #region Constructor
         public TInfoWidget(SKGLControl parent, MainForm mainForm, float scaleFactor)
-            : base(parent, "Targeting Info", new SKPoint(10, 100), new SKSize(300, 100), scaleFactor, canResize: false)
+            : base(parent, "", new SKPoint(10, 100), new SKSize(300, 100), scaleFactor, canResize: false)
         {
             _mainForm = mainForm;
         }
@@ -51,11 +63,9 @@ namespace squad_dma
         #region Public Methods
         public override void Draw(SKCanvas canvas)
         {
-            // Update marker information
             UpdateMarkerInfo();
-            
-            // Eliminates recomputing column widths (LINQ Select/ToArray/Sum) and re-applying the size
-            // (locked setter + resize-triangle rebuild) every frame: only when rows or scale changed.
+
+            // Column widths and the size are only recomputed when rows or scale changed, not every frame.
             EnsureLayout();
             if (_sizeDirty)
             {
@@ -67,15 +77,10 @@ namespace squad_dma
                 _sizeDirty = false;
             }
 
-            // Draw custom background with 80% opacity
-            DrawCustomBackground(canvas);
-            
-            // Draw title bar and minimize button
-            DrawTitleBar(canvas);
+            base.Draw(canvas);
 
             if (Minimized) return;
 
-            // Draw content
             DrawContent(canvas);
         }
 
@@ -109,13 +114,15 @@ namespace squad_dma
             }
 
             var playerPos = localPlayer.Position; // single locked read
-            var weaponData = Memory._game?._soldierManager?.WeaponDetector?.CurrentWeaponData;
+            var detector = Memory._game?._soldierManager?.WeaponDetector;
+            var weaponData = detector?.CurrentWeaponData;
+            var terrain = TerrainHeightmap.Current;
 
-            // Eliminates rebuilding every row (reflection lookups, trig, string formatting, ranging-table lookups)
-            // on every frame: rows only change when the player moved, the weapon changed, or the marker list changed.
+            // Rows only change when the player moved, the weapon changed, the terrain finished loading, or the marker list changed.
             if (_inputsValid &&
                 playerPos.X == _lastPlayerX && playerPos.Y == _lastPlayerY &&
                 ReferenceEquals(weaponData, _lastWeaponData) &&
+                ReferenceEquals(terrain, _lastTerrain) &&
                 MarkersUnchanged(markers))
                 return;
 
@@ -123,23 +130,37 @@ namespace squad_dma
             _lastPlayerX = playerPos.X;
             _lastPlayerY = playerPos.Y;
             _lastWeaponData = weaponData;
+            _lastTerrain = terrain;
             _lastMarkers.Clear();
 
+            _hasWeapon = detector != null && detector.HasBallisticWeapon;
+            _weaponLine = BuildWeaponLine(weaponData);
+
             _markerInfos.Clear();
-            for (int i = 0; i < markers.Count && i < 5; i++)
+            for (int i = 0; i < markers.Count && i < MAX_ROWS; i++)
             {
                 var marker = markers[i];
                 _lastMarkers.Add(marker);
-                var info = CalculateMarkerInfo(marker, playerPos, i + 1);
+                var info = CalculateMarkerInfo(marker, playerPos, i + 1, detector);
                 if (info != null)
                     _markerInfos.Add(info);
             }
             _sizeDirty = true;
         }
 
+        private static string BuildWeaponLine(WeaponData weapon)
+        {
+            if (weapon == null)
+                return NoWeaponText;
+
+            return weapon.MinDistance > 0
+                ? $"{weapon.Name}"
+                : weapon.Name;
+        }
+
         private bool MarkersUnchanged(List<MainForm.PointOfInterest> markers)
         {
-            int count = Math.Min(markers.Count, 5);
+            int count = Math.Min(markers.Count, MAX_ROWS);
             if (count != _lastMarkers.Count)
                 return false;
             for (int i = 0; i < count; i++)
@@ -148,94 +169,62 @@ namespace squad_dma
             return true;
         }
 
-        private TargetMarkerInfo CalculateMarkerInfo(MainForm.PointOfInterest marker, Vector3D playerPos, int markerNumber)
+        private TargetMarkerInfo CalculateMarkerInfo(MainForm.PointOfInterest marker, Vector3D playerPos, int markerNumber, MortarCalculator detector)
         {
             try
             {
-                // Typed access replaces two reflection GetProperty/GetValue pairs per marker per frame.
                 var markerPos = marker.Position;
 
-                // Both positions carry the same absolute offset, which cancels in every delta below,
-                // so the MainForm round-trip through GetAbsoluteLocation() is not needed.
+                // Both positions carry the same absolute offset, which cancels in every delta below.
                 var dx = markerPos.X - playerPos.X;
                 var dy = markerPos.Y - playerPos.Y;
 
-                // 2D distance on flat ground (ignore Z height differences)
+                // Horizontal distance; how much higher or lower the target ground is comes from the heightmap
                 var distance = Math.Sqrt(dx * dx + dy * dy);
                 int distanceMeters = (int)Math.Round(distance / 100);
+                double bearing = MortarCalculator.BearingDegrees(dx, dy);
+                double heightMeters = TerrainHeightmap.HeightDifferenceMeters(playerPos.X, playerPos.Y, markerPos.X, markerPos.Y);
+                int heightRounded = (int)Math.Round(heightMeters);
 
-                // Bearing using the exact working formula
-                double radians = Math.Atan2(-dy, dx);
-                double degrees = radians * (180.0 / Math.PI);
-                degrees = 90.0 - degrees;
-
-                if (degrees < 0) degrees += 360.0;
-
-                float bearing = (float)degrees;
-
-                // Get weapon-specific ranging
-                string rangingInfo = GetWeaponRanging(distanceMeters);
-
-                return new TargetMarkerInfo
+                var info = new TargetMarkerInfo
                 {
-                    Number = markerNumber,
-                    Distance = distanceMeters,
-                    Bearing = bearing,
-                    RangingInfo = rangingInfo,
-                    Name = marker.Name,
-                    // Formatted once when the row is rebuilt, not once per cell per frame.
                     NumberText = markerNumber.ToString(),
-                    DistanceText = $"{distanceMeters}m",
-                    BearingText = $"{bearing:F1}°"
+                    DistanceText = heightRounded == 0 ? $"{distanceMeters}m" : $"{distanceMeters}m {heightRounded:+0;-0}",
+                    BearingText = $"{bearing:F1}°",
+                    ElevText = "-",
+                    TofText = "-",
+                    StatusText = "",
                 };
+
+                var ranging = _hasWeapon && detector != null ? detector.GetRanging(distanceMeters, heightMeters) : RangingResult.None;
+                if (!ranging.HasWeapon)
+                    return info;
+
+                switch (ranging.Status)
+                {
+                    case RangeStatus.TooClose:
+                        info.StatusText = "MIN";
+                        info.Bad = true;
+                        break;
+                    case RangeStatus.TooFar:
+                        info.StatusText = "MAX";
+                        info.Bad = true;
+                        break;
+                    default:
+                        info.StatusText = "OK";
+                        info.ElevText = (ranging.IsEstimate ? "~" : "")
+                            + ranging.Value.ToString(ranging.Decimals == 0 ? "F0" : "F1") + ranging.Unit;
+                        info.TofText = $"{ranging.TimeOfFlight:F1}s";
+                        break;
+                }
+
+                return info;
             }
             catch
             {
                 return null;
             }
         }
-
-        private string GetWeaponRanging(int distanceMeters)
-        {
-            try
-            {
-                var weaponDetector = Memory._game?._soldierManager?.WeaponDetector;
-                if (weaponDetector == null || !weaponDetector.HasBallisticWeapon)
-                    return "N/A";
-
-                // Get the database weapon name from the current weapon data
-                var weaponData = weaponDetector.CurrentWeaponData;
-                if (weaponData == null)
-                    return "N/A";
-
-                var weaponName = weaponData.Name;
-                var rangingValue = MortarCalculator.GetWeaponRanging(weaponName, distanceMeters);
-                var unit = MortarCalculator.GetWeaponRangingUnit(weaponName);
-                
-                if (rangingValue < 0)
-                    return "N/A";
-                
-                return $"{rangingValue:F1}{unit}";
-            }
-            catch
-            {
-                return "N/A";
-            }
-        }
-
-        private bool HasBallisticWeapon()
-        {
-            try
-            {
-                return Memory._game?._soldierManager?.WeaponDetector?.HasBallisticWeapon ?? false;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private float _layoutTextSize = float.NaN;
 
         private void EnsureLayout()
         {
@@ -251,58 +240,30 @@ namespace squad_dma
                 _totalWidth += _columnWidths[i];
             }
             _rowHeight = (TextPaint.FontSpacing + 4f) * ScaleFactor;
+
+            TextOutlinePaint.TextSize = TextPaint.TextSize;
+            TextOutlinePaint.StrokeWidth = 2.5f * ScaleFactor;
+            BorderPaint.StrokeWidth = Math.Max(1f, ScaleFactor);
             _sizeDirty = true;
         }
+
+        private int RowCount => 1 + (_markerInfos.Count == 0 ? 1 : _markerInfos.Count + 1); // weapon line + (header + rows | standby)
 
         private SKSize CalculateRequiredSize()
         {
             float pad = PADDING * ScaleFactor;
-            float totalHeight = (_markerInfos.Count + 1) * _rowHeight; // +1 for header
-
-            return new SKSize(_totalWidth + pad * 2, totalHeight + pad * 2);
+            return new SKSize(_totalWidth + pad * 2, RowCount * _rowHeight + pad * 2);
         }
 
-        private void DrawCustomBackground(SKCanvas canvas)
+        // Dark outline under the fill keeps the text readable over the map
+        private void DrawText(SKCanvas canvas, string text, float x, float y, SKColor color)
         {
-            if (!Minimized)
-                canvas.DrawRect(Rectangle, CustomBackgroundPaint);
-        }
+            if (string.IsNullOrEmpty(text))
+                return;
 
-        private void DrawTitleBar(SKCanvas canvas)
-        {
-            canvas.DrawRect(TitleBar, TitleBarPaint);
-            float titleCenterY = TitleBar.Top + (TitleBar.Height / 2);
-            float titleYOffset = (TitleBarText.FontMetrics.Ascent + TitleBarText.FontMetrics.Descent) / 2;
-            canvas.DrawText(Title,
-                new(TitleBar.Left + 2.5f * ScaleFactor,
-                titleCenterY - titleYOffset),
-                TitleBarText);
-            canvas.DrawRect(MinimizeButton, ButtonBackgroundPaint);
-            DrawMinimizeButton(canvas);
-        }
-
-        private void DrawMinimizeButton(SKCanvas canvas)
-        {
-            float minHalfLength = MinimizeButton.Width / 4;
-            if (Minimized)
-            {
-                canvas.DrawLine(MinimizeButton.MidX - minHalfLength,
-                    MinimizeButton.MidY,
-                    MinimizeButton.MidX + minHalfLength,
-                    MinimizeButton.MidY,
-                    SymbolPaint);
-                canvas.DrawLine(MinimizeButton.MidX,
-                    MinimizeButton.MidY - minHalfLength,
-                    MinimizeButton.MidX,
-                    MinimizeButton.MidY + minHalfLength,
-                    SymbolPaint);
-            }
-            else
-                canvas.DrawLine(MinimizeButton.MidX - minHalfLength,
-                    MinimizeButton.MidY,
-                    MinimizeButton.MidX + minHalfLength,
-                    MinimizeButton.MidY,
-                    SymbolPaint);
+            canvas.DrawText(text, x, y, TextOutlinePaint);
+            TextPaint.Color = color;
+            canvas.DrawText(text, x, y, TextPaint);
         }
 
         private void DrawContent(SKCanvas canvas)
@@ -310,121 +271,105 @@ namespace squad_dma
             float pad = PADDING * ScaleFactor;
             float textOffsetX = TEXT_OFFSET_X * ScaleFactor;
             float textOffsetY = TEXT_OFFSET_Y * ScaleFactor;
-
-            // Layout (column widths / row height / total width) comes from the cache built in EnsureLayout();
-            // the size was already applied in Draw(), so it is not recomputed or re-set here.
             float rowHeight = _rowHeight;
             float totalWidth = _totalWidth;
 
-            var origin = new SKPoint(ClientRectangle.Left + pad, ClientRectangle.Top + pad);
+            float left = ClientRectangle.Left + pad;
+            float top = ClientRectangle.Top + pad;
+            float right = left + totalWidth;
+            float bottom = top + RowCount * rowHeight;
+
+            // Weapon line: what the numbers below are calculated for
+            DrawText(canvas, _weaponLine, left + textOffsetX, top + rowHeight - textOffsetY, _hasWeapon ? GoodColor : DimColor);
+
+            float y = top + rowHeight;
 
             if (_markerInfos.Count == 0)
             {
-                // Draw standby message
-                canvas.DrawText("No markers placed", origin.X + textOffsetX, origin.Y + rowHeight - textOffsetY, TextPaint);
+                DrawText(canvas, "No markers placed", left + textOffsetX, y + rowHeight - textOffsetY, DimColor);
+                canvas.DrawLine(left, y, right, y, BorderPaint);
                 return;
             }
 
-            // Draw headers
-            float x = origin.X;
-            float y = origin.Y;
-
+            // Header row
+            canvas.DrawRect(new SKRect(left, y, right, y + rowHeight), HeaderFillPaint);
+            float x = left;
             for (int i = 0; i < Headers.Length; i++)
             {
-                canvas.DrawText(Headers[i], x + textOffsetX, y + rowHeight - textOffsetY, TextPaint);
+                DrawText(canvas, Headers[i], x + textOffsetX, y + rowHeight - textOffsetY, DimColor);
                 x += _columnWidths[i];
             }
-
-            // Draw header separator line
-            canvas.DrawLine(origin.X, y + rowHeight, origin.X + totalWidth, y + rowHeight, BorderPaint);
             y += rowHeight;
 
-            // Draw marker data rows (cell strings were formatted when the row was built; no per-frame arrays)
+            // Marker rows
             for (int r = 0; r < _markerInfos.Count; r++)
             {
                 var info = _markerInfos[r];
+                if (info.Bad)
+                    canvas.DrawRect(new SKRect(left, y, right, y + rowHeight), BadRowFillPaint);
 
-                x = origin.X;
+                float baseline = y + rowHeight - textOffsetY;
+                x = left;
                 for (int i = 0; i < _columnWidths.Length; i++)
                 {
-                    string cell = i switch
+                    string cell;
+                    SKColor color;
+                    switch (i)
                     {
-                        0 => info.NumberText,
-                        1 => info.DistanceText,
-                        2 => info.BearingText,
-                        _ => info.RangingInfo
-                    };
-                    canvas.DrawText(cell, x + textOffsetX, y + rowHeight - textOffsetY, TextPaint);
-                    canvas.DrawLine(x, y - rowHeight, x, y + rowHeight, BorderPaint);
+                        case 0: cell = info.NumberText; color = ValueColor; break;
+                        case 1: cell = info.DistanceText; color = ValueColor; break;
+                        case 2: cell = info.BearingText; color = ValueColor; break;
+                        case 3: cell = info.ElevText; color = info.Bad ? BadColor : DialColor; break;
+                        case 4: cell = info.TofText; color = info.Bad ? BadColor : ValueColor; break;
+                        default: cell = info.StatusText; color = info.Bad ? BadColor : GoodColor; break;
+                    }
+                    DrawText(canvas, cell, x + textOffsetX, baseline, color);
                     x += _columnWidths[i];
                 }
-
-                // Draw right border and bottom separator
-                canvas.DrawLine(x, y - rowHeight, x, y + rowHeight, BorderPaint);
-                canvas.DrawLine(origin.X, y + rowHeight, origin.X + totalWidth, y + rowHeight, BorderPaint);
                 y += rowHeight;
             }
-        }
 
-        // Override mouse click handling in parent class
-        // This would need to be integrated into the parent's mouse handling system
+            // Grid: a line under every row and a line between every column; the window border is the outer edge
+            for (int row = 1; row < RowCount; row++)
+            {
+                float ly = top + row * rowHeight;
+                canvas.DrawLine(left, ly, right, ly, BorderPaint);
+            }
+
+            float vx = left;
+            float gridTop = top + rowHeight; // the weapon line spans every column
+            for (int i = 0; i < _columnWidths.Length - 1; i++)
+            {
+                vx += _columnWidths[i];
+                canvas.DrawLine(vx, gridTop, vx, bottom, BorderPaint);
+            }
+        }
         #endregion
 
         #region Data Classes
         private class TargetMarkerInfo
         {
-            public int Number { get; set; }
-            public int Distance { get; set; }
-            public float Bearing { get; set; }
-            public string RangingInfo { get; set; } = "";
-            public string Name { get; set; } = "";
             public string NumberText { get; set; } = "";
             public string DistanceText { get; set; } = "";
             public string BearingText { get; set; } = "";
+            public string ElevText { get; set; } = "";
+            public string TofText { get; set; } = "";
+            public string StatusText { get; set; } = "";
+            public bool Bad { get; set; }
         }
         #endregion
 
         #region Paints
-        private static readonly SKPaint CustomBackgroundPaint = new SKPaint()
+        private static readonly SKPaint HeaderFillPaint = new SKPaint()
         {
-            Color = SKColors.Black.WithAlpha(0xCC), // 80% Opacity
-            StrokeWidth = 1,
+            Color = new SKColor(255, 255, 255, 36),
             Style = SKPaintStyle.Fill,
         };
 
-        private static readonly SKPaint TitleBarPaint = new SKPaint()
+        private static readonly SKPaint BadRowFillPaint = new SKPaint()
         {
-            Color = new SKColor(64, 64, 64), // Dark gray
-            StrokeWidth = 0.5f,
+            Color = new SKColor(200, 0, 0, 80),
             Style = SKPaintStyle.Fill,
-        };
-
-        private static readonly SKPaint ButtonBackgroundPaint = new SKPaint()
-        {
-            Color = new SKColor(80, 80, 80), // Slightly lighter dark gray for button
-            StrokeWidth = 0.1f,
-            Style = SKPaintStyle.Fill,
-        };
-
-        private static readonly SKPaint SymbolPaint = new SKPaint()
-        {
-            Color = SKColors.White,
-            StrokeWidth = 2f,
-            Style = SKPaintStyle.Stroke,
-            IsAntialias = true
-        };
-
-        private static readonly SKPaint TitleBarText = new SKPaint()
-        {
-            SubpixelText = true,
-            Color = SKColors.White,
-            IsStroke = false,
-            TextSize = 9f,
-            TextAlign = SKTextAlign.Left,
-            TextEncoding = SKTextEncoding.Utf8,
-            IsAntialias = true,
-            Typeface = CustomFonts.SKFontFamilyRegular,
-            FilterQuality = SKFilterQuality.High
         };
 
         internal static SKPaint TextPaint { get; } = new()
@@ -439,10 +384,24 @@ namespace squad_dma
             FilterQuality = SKFilterQuality.High
         };
 
+        private static SKPaint TextOutlinePaint { get; } = new()
+        {
+            SubpixelText = true,
+            Color = new SKColor(0, 0, 0, 230),
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 2.5f,
+            StrokeJoin = SKStrokeJoin.Round,
+            TextSize = 12,
+            TextEncoding = SKTextEncoding.Utf8,
+            IsAntialias = true,
+            Typeface = SKTypeface.FromFamilyName("Consolas"), // Same font as TextPaint so the outline lines up
+        };
+
         internal static SKPaint BorderPaint { get; } = new()
         {
-            Color = SKColors.DimGray,
-            StrokeWidth = 2f,
+            Color = new SKColor(255, 255, 255, 40),
+            StrokeWidth = 1f,
+            Style = SKPaintStyle.Stroke,
             IsStroke = true
         };
         #endregion

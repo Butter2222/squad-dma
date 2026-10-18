@@ -38,6 +38,12 @@ namespace squad_dma
         private SKPath _resizeTriangle;
         private float _relativeX;
         private float _relativeY;
+
+        // Rounded shapes of the frame, rebuilt only when the window moves, resizes, rescales or collapses
+        private SKRect _frameRect;
+        private float _frameScale = float.NaN;
+        private bool _frameMinimized;
+        private SKRoundRect _cardShape, _headerShape, _clientShape;
         #endregion
 
         #region Private Properties
@@ -52,6 +58,12 @@ namespace squad_dma
         protected bool CanResize { get; }
         protected float ScaleFactor { get; private set; }
         protected SKPath ResizeTriangle => _resizeTriangle;
+
+        /// <summary>Fill of the window body behind the content.</summary>
+        protected virtual SKColor BodyColor => new SKColor(10, 12, 16, 0x99);
+
+        /// <summary>True for widgets that paint over the whole body and draw <see cref="DrawBorder"/> themselves, after their content.</summary>
+        protected virtual bool DrawsOwnBorder => false;
         #endregion
 
         #region Public Properties
@@ -205,22 +217,88 @@ namespace squad_dma
         #endregion
 
         #region Public Methods
+        /// <summary>
+        /// Draws the window frame: a rounded card with a slim header (drag handle and minimize button), a
+        /// divider under the header, a grip in the resize corner and a hairline border. Content goes on top.
+        /// </summary>
         public virtual void Draw(SKCanvas canvas)
         {
+            // Widget Opacity covers the window itself (body, header, controls and border); whatever a widget draws on top stays at full strength.
+            float opacity = WindowOpacity;
+            if (opacity < 0.995f)
+            {
+                _opacityPaint.Color = SKColors.White.WithAlpha((byte)(opacity * 255f));
+                int restore = canvas.SaveLayer(Rectangle, _opacityPaint);
+                DrawWindow(canvas);
+                canvas.RestoreToCount(restore);
+            }
+            else
+            {
+                DrawWindow(canvas);
+            }
+
+            if (!DrawsOwnBorder)
+                DrawBorder(canvas);
+        }
+
+        /// <summary>Opacity of the widget windows, 0.1 to 1, from the Widget Opacity setting. Shared by every widget.</summary>
+        protected static float WindowOpacity => Math.Clamp(Program.Config.WidgetOpacity / 100f, 0.1f, 1f);
+
+        private readonly SKPaint _opacityPaint = new();
+
+        private void DrawWindow(SKCanvas canvas)
+        {
+            EnsureFrame();
+            float s = ScaleFactor;
+
+            BodyPaint.Color = BodyColor;
             if (!Minimized)
-                canvas.DrawRect(Rectangle, WidgetBackgroundPaint);
-            canvas.DrawRect(TitleBar, TitleBarPaint);
-            float titleCenterY = TitleBar.Top + (TitleBar.Height / 2);
-            float titleYOffset = (TitleBarText.FontMetrics.Ascent + TitleBarText.FontMetrics.Descent) / 2;
-            canvas.DrawText(Title,
-                new(TitleBar.Left + 2.5f * ScaleFactor,
-                titleCenterY - titleYOffset),
-                TitleBarText);
-            canvas.DrawRect(MinimizeButton, ButtonBackgroundPaint);
-            // Draw Rest of stuff...
+                canvas.DrawRoundRect(_cardShape, BodyPaint);
+            else
+                canvas.DrawRoundRect(_headerShape, BodyPaint); // nothing sits behind a collapsed header
+
+            canvas.DrawRoundRect(_headerShape, HeaderPaint);
+            if (!Minimized)
+            {
+                float dividerY = TitleBar.Bottom;
+                canvas.DrawLine(TitleBar.Left, dividerY, TitleBar.Right, dividerY, DividerPaint);
+            }
+
+            if (!string.IsNullOrEmpty(Title))
+            {
+                float titleYOffset = (TitleBarText.FontMetrics.Ascent + TitleBarText.FontMetrics.Descent) / 2;
+                canvas.DrawText(Title, TitleBar.Left + 6f * s, TitleBar.MidY - titleYOffset, TitleBarText);
+            }
+            else
+            {
+                // A small handle in the middle of the header shows it can be dragged
+                float gripW = 16f * s, gripH = Math.Max(1.5f, 2f * s);
+                canvas.DrawRoundRect(new SKRect(TitleBar.MidX - gripW / 2, TitleBar.MidY - gripH / 2,
+                    TitleBar.MidX + gripW / 2, TitleBar.MidY + gripH / 2), gripH / 2, gripH / 2, GripPaint);
+            }
+
             DrawMinimizeButton(canvas);
             if (!Minimized && CanResize)
                 DrawResizeCorner(canvas);
+        }
+
+        /// <summary>Hairline outline of the window. Widgets that paint over the whole body call this after their content.</summary>
+        protected void DrawBorder(SKCanvas canvas)
+        {
+            EnsureFrame();
+            FrameBorderPaint.Color = FrameBorderColor.WithAlpha((byte)(FrameBorderColor.Alpha * WindowOpacity));
+            FrameBorderPaint.StrokeWidth = Math.Max(1f, ScaleFactor * 0.75f);
+            canvas.DrawRoundRect(Minimized ? _headerShape : _cardShape, FrameBorderPaint);
+        }
+
+        /// <summary>The client area with its bottom corners rounded to match the frame. Clip content to it so it doesn't poke past the corners.</summary>
+        protected SKRoundRect ClientShape
+        {
+            get
+            {
+                EnsureFrame();
+                return _clientShape;
+            }
         }
 
         public virtual void SetScaleFactor(float newScale)
@@ -246,28 +324,44 @@ namespace squad_dma
                 _location = new SKPoint(_location.X, clientRectangle.Bottom - rect.Height);
         }
         
+        private void EnsureFrame()
+        {
+            var rect = Rectangle;
+            if (_cardShape != null && rect.Equals(_frameRect) && ScaleFactor == _frameScale && Minimized == _frameMinimized)
+                return;
+
+            _frameRect = rect;
+            _frameScale = ScaleFactor;
+            _frameMinimized = Minimized;
+
+            float r = 5f * ScaleFactor;
+            var round = new SKPoint(r, r);
+            var square = new SKPoint(0, 0);
+
+            _cardShape?.Dispose();
+            _headerShape?.Dispose();
+            _clientShape?.Dispose();
+
+            _cardShape = new SKRoundRect(rect, r);
+
+            // Radii run upper-left, upper-right, lower-right, lower-left
+            _headerShape = new SKRoundRect();
+            _headerShape.SetRectRadii(TitleBar, Minimized
+                ? new[] { round, round, round, round }
+                : new[] { round, round, square, square });
+
+            _clientShape = new SKRoundRect();
+            _clientShape.SetRectRadii(ClientRectangle, new[] { square, square, round, round });
+        }
+
+        // Just the symbol, the click area is still the whole square at the right end of the header
         private void DrawMinimizeButton(SKCanvas canvas)
         {
-            float minHalfLength = MinimizeButton.Width / 4;
+            GlyphPaint.StrokeWidth = Math.Max(1.25f, 1.5f * ScaleFactor);
+            float half = MinimizeButton.Width / 5;
+            canvas.DrawLine(MinimizeButton.MidX - half, MinimizeButton.MidY, MinimizeButton.MidX + half, MinimizeButton.MidY, GlyphPaint);
             if (Minimized)
-            {
-                canvas.DrawLine(MinimizeButton.MidX - minHalfLength,
-                    MinimizeButton.MidY,
-                    MinimizeButton.MidX + minHalfLength,
-                    MinimizeButton.MidY,
-                    SymbolPaint);
-                canvas.DrawLine(MinimizeButton.MidX,
-                    MinimizeButton.MidY - minHalfLength,
-                    MinimizeButton.MidX,
-                    MinimizeButton.MidY + minHalfLength,
-                    SymbolPaint);
-            }
-            else
-                canvas.DrawLine(MinimizeButton.MidX - minHalfLength,
-                    MinimizeButton.MidY,
-                    MinimizeButton.MidX + minHalfLength,
-                    MinimizeButton.MidY,
-                    SymbolPaint);
+                canvas.DrawLine(MinimizeButton.MidX, MinimizeButton.MidY - half, MinimizeButton.MidX, MinimizeButton.MidY + half, GlyphPaint);
         }
 
         private void InitializeResizeTriangle()
@@ -286,11 +380,16 @@ namespace squad_dma
             old?.Dispose();
         }
 
+        // Two short diagonal lines in the bottom-right corner. The grab area is still the corner triangle.
         private void DrawResizeCorner(SKCanvas canvas)
         {
-            var path = ResizeTriangle;
-            if (path is not null)
-                canvas.DrawPath(path, TitleBarPaint);
+            float s = ScaleFactor;
+            float inset = 3f * s;
+            float right = Rectangle.Right - inset, bottom = Rectangle.Bottom - inset;
+
+            ResizeGripPaint.StrokeWidth = Math.Max(1f, 1.25f * s);
+            canvas.DrawLine(right - 7f * s, bottom, right, bottom - 7f * s, ResizeGripPaint);
+            canvas.DrawLine(right - 3.5f * s, bottom, right, bottom - 3.5f * s, ResizeGripPaint);
         }
         
         private WidgetClickEvent HitTest(SKPoint point)
@@ -317,31 +416,54 @@ namespace squad_dma
         #endregion
 
         #region Paints
-        private static readonly SKPaint WidgetBackgroundPaint = new SKPaint()
+        // Colors are RGB plus alpha (0 invisible, 255 solid).
+        private static readonly SKPaint BodyPaint = new SKPaint()
         {
-            Color = SKColors.Black.WithAlpha(0x99), // 60% Opacity
-            StrokeWidth = 1,
             Style = SKPaintStyle.Fill,
+            IsAntialias = true
         };
 
-        private static readonly SKPaint TitleBarPaint = new SKPaint()
+        private static readonly SKPaint HeaderPaint = new SKPaint()
         {
-            Color = new SKColor(64, 64, 64), // Dark gray
-            StrokeWidth = 0.5f,
+            Color = new SKColor(255, 255, 255, 22),
             Style = SKPaintStyle.Fill,
+            IsAntialias = true
         };
 
-        private static readonly SKPaint ButtonBackgroundPaint = new SKPaint()
+        private static readonly SKPaint DividerPaint = new SKPaint()
         {
-            Color = new SKColor(80, 80, 80), // Slightly lighter dark gray for button
-            StrokeWidth = 0.1f,
-            Style = SKPaintStyle.Fill,
+            Color = new SKColor(255, 255, 255, 30),
+            StrokeWidth = 1f,
+            Style = SKPaintStyle.Stroke
         };
 
-        private static readonly SKPaint SymbolPaint = new SKPaint()
+        private static readonly SKPaint GripPaint = new SKPaint()
         {
-            Color = SKColors.White,
-            StrokeWidth = 2f,
+            Color = new SKColor(255, 255, 255, 60),
+            Style = SKPaintStyle.Fill,
+            IsAntialias = true
+        };
+
+        private static readonly SKPaint GlyphPaint = new SKPaint()
+        {
+            Color = new SKColor(255, 255, 255, 170),
+            Style = SKPaintStyle.Stroke,
+            StrokeCap = SKStrokeCap.Round,
+            IsAntialias = true
+        };
+
+        private static readonly SKPaint ResizeGripPaint = new SKPaint()
+        {
+            Color = new SKColor(255, 255, 255, 90),
+            Style = SKPaintStyle.Stroke,
+            StrokeCap = SKStrokeCap.Round,
+            IsAntialias = true
+        };
+
+        private static readonly SKColor FrameBorderColor = new SKColor(255, 255, 255, 45);
+        private static readonly SKPaint FrameBorderPaint = new SKPaint()
+        {
+            Color = FrameBorderColor,
             Style = SKPaintStyle.Stroke,
             IsAntialias = true
         };
@@ -372,6 +494,10 @@ namespace squad_dma
                 _parent.MouseMove -= Parent_MouseMove;
                 _parent.Resize -= Parent_Resize;
                 ResizeTriangle?.Dispose();
+                _cardShape?.Dispose();
+                _headerShape?.Dispose();
+                _clientShape?.Dispose();
+                _opacityPaint.Dispose();
             }
         }
         #endregion

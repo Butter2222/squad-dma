@@ -835,6 +835,7 @@ namespace squad_dma
                         IScatterWriteDataEntry<ulong> ulongEntry => scatter.PrepareWriteStruct(ulongEntry.Address, ulongEntry.Data),
                         IScatterWriteDataEntry<bool> boolEntry => scatter.PrepareWriteStruct(boolEntry.Address, boolEntry.Data),
                         IScatterWriteDataEntry<byte> byteEntry => scatter.PrepareWriteStruct(byteEntry.Address, byteEntry.Data),
+                        IScatterWriteDataEntry<Vector3D> vectorEntry => scatter.PrepareWriteStruct(vectorEntry.Address, vectorEntry.Data),
                         _ => throw new NotSupportedException($"Unsupported data type: {entry.GetType()}")
                     };
 

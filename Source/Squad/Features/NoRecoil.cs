@@ -177,7 +177,7 @@ namespace squad_dma.Source.Squad.Features
                 ulong weapon = _cachedCurrentWeapon;
                 if (weapon != 0)
                 {
-                    ulong weaponStaticInfo = GetCachedWeaponStaticInfo(weapon);
+                    ulong weaponStaticInfo = GetGunStaticInfo(weapon);
                     if (weaponStaticInfo != 0)
                     {
                         _lastWeaponStaticInfo = weaponStaticInfo;

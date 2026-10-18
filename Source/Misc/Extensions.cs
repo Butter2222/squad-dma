@@ -127,11 +127,11 @@ namespace squad_dma
         {
             SKColor textColor = actor.ActorType switch
             {
-                ActorType.Player => actor.IsFriendly() ? SKColors.Blue : SKPaints.EnemyPlayer,
+                ActorType.Player => actor.IsFriendly() ? SKPaints.Friendly : SKPaints.EnemyPlayer,
                 ActorType.Projectile => SKColors.Orange,
                 ActorType.ProjectileAA => SKColors.Orange,
                 ActorType.ProjectileSmall => SKPaints.SmallProjectile,
-                _ when Names.Vehicles.Contains(actor.ActorType) => actor.IsFriendly() ? SKPaints.Vehicle : actor.IsEnemy() ? SKPaints.EnemyVehicle : SKPaints.Vehicle,
+                _ when Names.Vehicles.Contains(actor.ActorType) => actor.IsFriendly() ? SKPaints.FriendlyVehicle : actor.IsEnemy() ? SKPaints.EnemyVehicle : SKPaints.Vehicle,
                 _ => SKPaints.DefaultTextColor // Default
             };
 

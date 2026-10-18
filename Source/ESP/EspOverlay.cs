@@ -33,6 +33,10 @@ namespace squad_dma
         private SolidColorBrush enemyVehicleBrush;
         private SolidColorBrush friendlyVehicleBrush;
         private SolidColorBrush healthBrush;
+        private SolidColorBrush markerShadowBrush;
+
+        // Box or marker per target, decided from its on-screen size
+        private readonly TargetLod _lod = new();
         private SharpDX.DirectWrite.TextFormat textFormat;
         private bool running = true;
         private Game Game => Memory._game;
@@ -102,48 +106,6 @@ namespace squad_dma
             ActorType.TruckLogistics, ActorType.TruckTransport, ActorType.TruckTransportArmed
         };
 
-        // Vehicle size categories for realistic box sizing
-        private enum VehicleSize { Small, Medium, Large, ExtraLarge }
-        
-        private static readonly Dictionary<ActorType, VehicleSize> VehicleSizes = new Dictionary<ActorType, VehicleSize>
-        {
-            // Motorcycle
-            { ActorType.Motorcycle, VehicleSize.Small },
-            
-            // Medium vehicles (jeeps, light trucks, boats)
-            { ActorType.JeepTransport, VehicleSize.Medium },
-            { ActorType.JeepLogistics, VehicleSize.Medium },
-            { ActorType.JeepTurret, VehicleSize.Medium },
-            { ActorType.JeepArtillery, VehicleSize.Medium },
-            { ActorType.JeepAntitank, VehicleSize.Medium },
-            { ActorType.JeepAntiAir, VehicleSize.Medium },
-            { ActorType.JeepRWSTurret, VehicleSize.Medium },
-            { ActorType.Boat, VehicleSize.Medium },
-            { ActorType.BoatLogistics, VehicleSize.Medium },
-            { ActorType.TrackedJeep, VehicleSize.Medium },
-            { ActorType.LoachCAS, VehicleSize.Medium },
-            { ActorType.LoachScout, VehicleSize.Medium },
-            
-            // Large vehicles (trucks, APCs, IFVs)
-            { ActorType.TruckTransport, VehicleSize.Large },
-            { ActorType.TruckLogistics, VehicleSize.Large },
-            { ActorType.TruckTransportArmed, VehicleSize.Large },
-            { ActorType.TruckArtillery, VehicleSize.Large },
-            { ActorType.TruckAntiAir, VehicleSize.Large },
-            { ActorType.APC, VehicleSize.Large },
-            { ActorType.TrackedAPC, VehicleSize.Large },
-            { ActorType.TrackedAPCArtillery, VehicleSize.Large },
-            { ActorType.IFV, VehicleSize.Large },
-            { ActorType.TrackedIFV, VehicleSize.Large },
-            { ActorType.TrackedLogistics, VehicleSize.Large },
-            { ActorType.TransportHelicopter, VehicleSize.Large },
-            
-            // Extra Large vehicles (tanks, heavy armor)
-            { ActorType.Tank, VehicleSize.ExtraLarge },
-            { ActorType.TankMGS, VehicleSize.ExtraLarge },
-            { ActorType.AttackHelicopter, VehicleSize.ExtraLarge }
-        };
-
         public EspOverlay()
         {
             FormBorderStyle = FormBorderStyle.None;
@@ -159,6 +121,25 @@ namespace squad_dma
 
             InitializeDirect2D();
             StartRenderLoop();
+        }
+
+        private int _teamColorVersion = -1;
+
+        private static RawColor4 ToRaw(SkiaSharp.SKColor c) => new(c.Red / 255f, c.Green / 255f, c.Blue / 255f, 1f);
+
+        /// <summary>Copies the colors from the Colors tab into the team brushes whenever they have changed.</summary>
+        private void SyncTeamColors()
+        {
+            int version = SKPaints.ColorVersion;
+            if (version == _teamColorVersion)
+                return;
+            _teamColorVersion = version;
+
+            enemyPlayerBrush.Color = ToRaw(SKPaints.EnemyPlayer);
+            friendlyBrush.Color = ToRaw(SKPaints.Friendly);
+            squadBrush.Color = ToRaw(SKPaints.Squad);
+            enemyVehicleBrush.Color = ToRaw(SKPaints.EnemyVehicle);
+            friendlyVehicleBrush.Color = ToRaw(SKPaints.FriendlyVehicle);
         }
 
         private void InitializeDirect2D()
@@ -180,24 +161,24 @@ namespace squad_dma
             renderTarget = new WindowRenderTarget(factory, rtProps, renderProperties);
             
             // Initialize brushes - NO ANTIALIASING for performance
-            // Enemy players = White (SKPaints.EnemyPlayer)
-            enemyPlayerBrush = new SolidColorBrush(renderTarget, new RawColor4(1.0f, 1.0f, 1.0f, 1.0f));
+            // The team brushes take their colors from the Colors tab (SKPaints); SyncTeamColors keeps them current.
+            enemyPlayerBrush = new SolidColorBrush(renderTarget, default);
             
-            // Friendly players = Light Blue (SKPaints.Friendly - RGB: 0, 187, 254)
-            friendlyBrush = new SolidColorBrush(renderTarget, new RawColor4(0f / 255f, 187f / 255f, 254f / 255f, 1.0f));
+            friendlyBrush = new SolidColorBrush(renderTarget, default);
             
-            // Squad members = Green (SKPaints.Squad)
-            squadBrush = new SolidColorBrush(renderTarget, new RawColor4(0f, 128f / 255f, 0f, 1.0f));
+            squadBrush = new SolidColorBrush(renderTarget, default);
             
-            // Enemy vehicles = Yellow (SKPaints.EnemyVehicle)
-            enemyVehicleBrush = new SolidColorBrush(renderTarget, new RawColor4(1.0f, 1.0f, 0.0f, 1.0f));
+            enemyVehicleBrush = new SolidColorBrush(renderTarget, default);
             
-            // Friendly vehicles = Light Blue (SKPaints.FriendlyVehicle)
-            friendlyVehicleBrush = new SolidColorBrush(renderTarget, new RawColor4(0f / 255f, 187f / 255f, 254f / 255f, 1.0f));
+            friendlyVehicleBrush = new SolidColorBrush(renderTarget, default);
+            SyncTeamColors();
             
             // Health bar brush (dynamic color based on health percentage)
             healthBrush = new SolidColorBrush(renderTarget, new RawColor4(0.0f, 1.0f, 0.0f, 1.0f));
-            
+
+            // Dark outline under the markers so they stay readable on bright backgrounds
+            markerShadowBrush = new SolidColorBrush(renderTarget, new RawColor4(0f, 0f, 0f, 0.75f));
+
             // Optimized text format - no antialiasing
             textFormat = new SharpDX.DirectWrite.TextFormat(new SharpDX.DirectWrite.Factory(), "Verdana", Program.Config.ESPFontSize)
             {
@@ -282,19 +263,19 @@ namespace squad_dma
             renderTarget.EndDraw();
         }
 
-        private RawRectangleF CalculatePlayerBox(UActor actor, Vector2 screenPos, float distance)
+        // Empty (all zero) when the box cannot be projected
+        private static RawRectangleF CalculatePlayerBox(UActor actor)
         {
-            // Use EXACT same method as AimviewWidget - simple distance-based box
-            float boxSize = Math.Max(20f, Math.Min(100f, 2000f / distance)); // Adaptive size based on distance
-            float boxWidth = boxSize * 0.6f; // Narrower width for player aspect ratio
-            float boxHeight = boxSize;
+            return EspGeometry.TryPlayerRect(actor, actor.Position, false, out var ndc)
+                ? NdcToScreenRect(ndc)
+                : new RawRectangleF(0, 0, 0, 0);
+        }
 
-            return new RawRectangleF(
-                screenPos.X - boxWidth / 2f,
-                screenPos.Y - boxHeight / 2f,
-                screenPos.X + boxWidth / 2f,
-                screenPos.Y + boxHeight / 2f
-            );
+        private static RawRectangleF NdcToScreenRect(in NdcRect ndc)
+        {
+            var topLeft = Camera.NdcToViewport(new Vector2(ndc.MinX, ndc.MaxY));
+            var bottomRight = Camera.NdcToViewport(new Vector2(ndc.MaxX, ndc.MinY));
+            return new RawRectangleF(topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y);
         }
 
         // Cache text metrics to avoid expensive TextLayout creation - MAJOR PERFORMANCE BOOST
@@ -332,6 +313,51 @@ namespace squad_dma
             }
         }
 
+        // Box or marker thresholds scale with the screen height; the aim pad is how close the center of the screen
+        // must be to a target for it to count as aimed at.
+        private float BoxEnterSize => Height * 0.025f;
+        private float BoxExitSize => Height * 0.017f;
+        private float MarkerArm => Math.Max(4f, Height * 0.0036f);
+        private const float AimPad = 14f;
+
+        /// <summary>Small solid "+" with a dark outline, used in place of a box for small targets.</summary>
+        private void DrawMarker(SolidColorBrush brush, float cx, float cy, float arm)
+        {
+            DrawMarkerLines(markerShadowBrush, cx, cy, arm + 1f, 4f);
+            DrawMarkerLines(brush, cx, cy, arm, 2f);
+        }
+
+        private void DrawMarkerLines(SolidColorBrush brush, float cx, float cy, float arm, float width)
+        {
+            renderTarget.DrawLine(new RawVector2(cx - arm, cy), new RawVector2(cx + arm, cy), brush, width);
+            renderTarget.DrawLine(new RawVector2(cx, cy - arm), new RawVector2(cx, cy + arm), brush, width);
+        }
+
+        /// <summary>
+        /// Draws the target as a box or a marker and returns the rectangle the labels should sit around:
+        /// the box itself, or a small square around the marker.
+        /// </summary>
+        private RawRectangleF DrawBoxOrMarker(ulong key, RawRectangleF rect, SolidColorBrush brush, float markerScale, bool draw, out bool asBox)
+        {
+            float width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;
+            float midX = (rect.Left + rect.Right) * 0.5f, midY = (rect.Top + rect.Bottom) * 0.5f;
+            bool aimed = TargetLod.IsAimedAt(rect.Left, rect.Top, rect.Right, rect.Bottom, Width * 0.5f, Height * 0.5f, AimPad);
+
+            asBox = _lod.UseBox(key, Math.Max(width, height), BoxEnterSize, BoxExitSize, aimed);
+            if (asBox)
+            {
+                // A target promoted by aim can still be tiny; keep the box large enough to see
+                float minW = Math.Max(width, 14f * markerScale), minH = Math.Max(height, 14f * markerScale);
+                rect = new RawRectangleF(midX - minW * 0.5f, midY - minH * 0.5f, midX + minW * 0.5f, midY + minH * 0.5f);
+                if (draw) renderTarget.DrawRectangle(rect, brush);
+                return rect;
+            }
+
+            float arm = MarkerArm * markerScale;
+            if (draw) DrawMarker(brush, midX, midY, arm);
+            return new RawRectangleF(midX - arm, midY - arm, midX + arm, midY + arm);
+        }
+
         // Squad / friendly / enemy brush, resolved once per actor per frame (was 3-5 IsInMySquad/IsFriendly calls per actor).
         private SolidColorBrush TeamBrush(UActor actor)
         {
@@ -346,6 +372,9 @@ namespace squad_dma
                 Program.Log("DrawEsp: Game, LocalPlayer, or actors not initialized.");
                 return;
             }
+
+            SyncTeamColors();
+            _lod.BeginFrame();
 
             Vector3 camPosVec = Camera.Location.ToVector3();
             Vector3 localPlayerPosVec = Memory.LocalPlayer.Position.ToVector3();
@@ -401,7 +430,7 @@ namespace squad_dma
             {
                 if (actor.ActorType == ActorType.Player)
                 {
-                    RawRectangleF boxRect = CalculatePlayerBox(actor, screenPos, distance);
+                    RawRectangleF boxRect = CalculatePlayerBox(actor);
                     if ((boxRect.Left == 0 && boxRect.Top == 0 && boxRect.Right == 0 && boxRect.Bottom == 0) &&
                         Program.Config.EspBones && actor.BoneScreenPositions != null)
                     {
@@ -414,8 +443,8 @@ namespace squad_dma
                     // Squad / friendly / enemy brush resolved once for box, name, distance and bones.
                     var teamBrush = TeamBrush(actor);
 
-                    if (Program.Config.EspShowBox)
-                        renderTarget.DrawRectangle(boxRect, teamBrush);
+                    // Box when big enough or aimed at, otherwise a small marker
+                    boxRect = DrawBoxOrMarker(actor.Base, boxRect, teamBrush, 1f, Program.Config.EspShowBox, out bool drawnAsBox);
 
                     float boxCenterX = (boxRect.Left + boxRect.Right) / 2f;
                     float boxWidth = boxRect.Right - boxRect.Left;
@@ -444,7 +473,7 @@ namespace squad_dma
                         renderTarget.DrawText(distanceText, textFormat, distanceRect, teamBrush);
                     }
 
-                    if (Program.Config.EspShowHealth && actor.Health >= 0)
+                    if (drawnAsBox && Program.Config.EspShowHealth && actor.Health >= 0)
                         DrawHealthBar(boxRect, actor.Health);
 
                     if (Program.Config.EspBones && actor.BoneScreenPositions != null)
@@ -473,21 +502,6 @@ namespace squad_dma
             return isVehicle;
         }
 
-        private float GetVehicleSizeMultiplier(ActorType vehicleType)
-        {
-            if (!VehicleSizes.TryGetValue(vehicleType, out VehicleSize size))
-                return 1.0f; // Default size for unknown vehicles
-            
-            return size switch
-            {
-                VehicleSize.Small => 0.7f,        // 70% of base size (motorcycles)
-                VehicleSize.Medium => 1.0f,       // 100% of base size (jeeps, boats)
-                VehicleSize.Large => 1.4f,        // 140% of base size (trucks, APCs)
-                VehicleSize.ExtraLarge => 1.8f,   // 180% of base size (tanks)
-                _ => 1.0f
-            };
-        }
-
         private void DrawVehicleBox(UActor actor, Vector2 screenPos, float distance)
         {
             bool isEnemy = actor.TeamID != -1 && actor.TeamID != Memory.LocalPlayer.TeamID;
@@ -500,27 +514,12 @@ namespace squad_dma
             // Select brush based on vehicle ownership - matching AimviewWidget color scheme
             var vehicleBrush = (isUnclaimed || isEnemy) ? enemyVehicleBrush : friendlyVehicleBrush;
 
-            // Vehicle-type-based sizing with reduced base size
-            float baseSize = 480f; // Reduced by 60% (1200 * 0.4)
-            float minSize = 50f;    // Minimum size to ensure visibility
-            float maxSize = 2000f;  // Maximum size for very large vehicles
-            
-            // Get vehicle-specific size multiplier
-            float sizeMultiplier = GetVehicleSizeMultiplier(actor.ActorType);
-            float vehicleBaseSize = baseSize * sizeMultiplier;
-            
-            // Distance-based scaling with better curve
-            float distanceScale = Math.Max(1f, distance / 10f); // Scale factor based on distance
-            float boxSize = Math.Max(minSize, Math.Min(maxSize, vehicleBaseSize / distanceScale));
-            
-            // Aspect ratio similar to 1204x754 (approximately 1.6:1)
-            float boxWidth = boxSize * 1.6f;  // Width based on 1204x754 aspect ratio
-            float boxHeight = boxSize * 1.0f; // Height maintains the calculated box size
-            
-            RawRectangleF vehicleRect = new RawRectangleF(
-                screenPos.X - boxWidth / 2f, screenPos.Y - boxHeight / 2f,
-                screenPos.X + boxWidth / 2f, screenPos.Y + boxHeight / 2f
-            );
+            // Box from the vehicle's real mesh bounds, oriented with the vehicle
+            if (!EspGeometry.TryVehicleRect(actor, actor.Position, false, out var vehicleNdc))
+                return;
+
+            RawRectangleF vehicleRect = NdcToScreenRect(vehicleNdc);
+            float boxWidth = vehicleRect.Right - vehicleRect.Left;
 
             // Eliminates the rectangle draw, string build and text-metrics lookup for fully off-screen vehicles
             // (text sits just above the box and is at most a few hundred px wide, hence the margin).
@@ -528,7 +527,9 @@ namespace squad_dma
                 vehicleRect.Bottom < -100f || vehicleRect.Top > Height + 100f)
                 return;
 
-            renderTarget.DrawRectangle(vehicleRect, vehicleBrush);
+            // Same marker size as players; only the color differs
+            vehicleRect = DrawBoxOrMarker(actor.Base, vehicleRect, vehicleBrush, 1f, true, out _);
+            boxWidth = vehicleRect.Right - vehicleRect.Left;
 
             string vehicleText = GetEspText(actor, distance);
             var (textWidth, textHeight) = GetTextMetrics(vehicleText);
@@ -622,6 +623,7 @@ namespace squad_dma
             enemyVehicleBrush.Dispose();
             friendlyVehicleBrush.Dispose();
             healthBrush.Dispose();
+            markerShadowBrush.Dispose();
             textFormat.Dispose();
             _dwFactory.Dispose();
             renderTarget.Dispose();

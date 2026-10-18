@@ -2,9 +2,9 @@
 {
     public struct GameObjects
     {
-        public const uint GObjects = 0xb945d30;
-        public const uint GNames = 0x0B877C80;
-        public const uint GWorld = 0xbad4398;
+        public const uint GObjects = 0xB943D30;
+        public const uint GNames = 0x0B875C80;
+        public const uint GWorld = 0xBAD2398;
     }
 
     public struct World
@@ -14,7 +14,7 @@
         public const uint GameState = 0x1B0; // AGameStateBase*
         public const uint Levels = 0x1C8; // TArray<ULevel*>
         public const uint OwningGameInstance = 0x228; // UGameInstance*
-        public const uint WorldOrigin = 0x5B8; // FIntVector
+        public const uint WorldOrigin = 0x5B8; // FIntVector 
     }
 
     public struct GameInstance
@@ -37,7 +37,7 @@
     {
         public const uint Instigator = 0x1A8; // APawn*
         public const uint RootComponent = 0x1C0; // USceneComponent*
-        public const uint ID = 0x18; // int32
+        public const uint ID = 0x18; // int32 
         public const uint CustomTimeDilation = 0x68; // float
         public const uint bReplicateMovement = 0x58; // uint8
         public const uint bHidden = 0x58; // uint8
@@ -46,9 +46,14 @@
 
     public struct UObject
     {
-        public const uint Class = 0x10; // UClass* (ClassPrivate)
-        public const uint Name = 0x18; // FName.ComparisonIndex (NamePrivate)
-        public const uint Outer = 0x20; // UObject* (OuterPrivate), for a component that's its owning actor
+        public const uint Class = 0x10; // UClass* (ClassPrivate) 
+        public const uint Name = 0x18; // FName.ComparisonIndex (NamePrivate) 
+        public const uint Outer = 0x20; // UObject* (OuterPrivate), for a component that's its owning actor 
+    }
+
+    public struct UStruct
+    {
+        public const uint SuperStruct = 0x40; // UStruct*, parent class
     }
 
     public struct USceneComponent
@@ -58,13 +63,21 @@
         public const uint RelativeLocation = 0x148; // FVector
         public const uint RelativeRotation = 0x160; // FRotator
         public const uint RelativeScale3D = 0x178; // FVector
-        public const uint ComponentToWorld = 0x1A8; // FTransform. Don't rely on it, the translation read back as ~0 for capture zones; walk AttachParent instead
+        public const uint ComponentToWorld = 0x1A8; // FTransform. Don't rely on it, the translation read back as ~0 for capture zones; walk AttachParent instead - UNVERIFIED (the current SDK has a bit field at 0x1A8)
+        public const uint ComponentToWorldFlags = 0x1A8; // uint8 bit field, bit 0 = bComponentToWorldUpdated
+        public const uint ComponentToWorldUpdatedBit = 0x01;
     }
 
-    // Objectives (flags / capture zones).
+    // Where the cached world transform of a scene component can sit, searched for at runtime (not in the SDK dump)
+    public struct ComponentTransformScan
+    {
+        public const uint Start = 0x1B0;
+        public const uint End = 0x240;
+    }
+
     public struct ASQUndirectedGraph
     {
-        public const uint Nodes = 0x2D0; // TArray<USQGraphNodeComponent*>. 
+        public const uint Nodes = 0x2D0; // TArray<USQGraphNodeComponent*>.
     }
 
     public struct USQCaptureZoneComponent
@@ -79,22 +92,28 @@
     {
         public const uint SphereRadius = 0x568; // float.
     }
+
     public struct UBoxComponent
     {
-        public const uint BoxExtent = 0x570; // FVector (doubles)
+        public const uint BoxExtent = 0x568; // FVector (doubles)
     }
 
-    // Ranges that get scanned for fields whose offset moves around between builds.
+    public struct ASQProtectionZone
+    {
+        public const uint CollisionBox = 0x2C8; // UBoxComponent* (DummyPresetCollisionCPP) 
+        public const uint TeamId = 0x300; // uint8, 1 or 2
+    }
+
     public struct ObjectiveScan
     {
-        public const uint ActorFieldsStart = 0x2B8; // first field after AActor
-        public const uint ActorFieldsLength = 0x200; // component pointers stored directly on the flag actor
-        public const uint GraphArrayStart = 0x2B8; // search range for the graph's node TArray
-        public const uint GraphArrayEnd = 0x400;
-        public const uint SceneComponentArraysStart = 0xC0; // AttachChildren region of a USceneComponent
-        public const uint SceneComponentArraysEnd = 0x140;
-        public const uint ActorComponentArraysStart = 0x1F0; // InstanceComponents / BlueprintCreatedComponents region of an AActor
-        public const uint ActorComponentArraysEnd = 0x2B8;
+        public const uint ActorFieldsStart = 0x2B8; // first field after AActor - UNVERIFIED (type not found in current SDK dump, value kept from previous list)
+        public const uint ActorFieldsLength = 0x200; // component pointers stored directly on the flag actor - UNVERIFIED (type not found in current SDK dump, value kept from previous list)
+        public const uint GraphArrayStart = 0x2B8; // search range for the graph's node TArray - UNVERIFIED (type not found in current SDK dump, value kept from previous list)
+        public const uint GraphArrayEnd = 0x400; //  - UNVERIFIED (type not found in current SDK dump, value kept from previous list)
+        public const uint SceneComponentArraysStart = 0xC0; // AttachChildren region of a USceneComponent - UNVERIFIED (type not found in current SDK dump, value kept from previous list)
+        public const uint SceneComponentArraysEnd = 0x140; //  - UNVERIFIED (type not found in current SDK dump, value kept from previous list)
+        public const uint ActorComponentArraysStart = 0x1F0; // InstanceComponents / BlueprintCreatedComponents region of an AActor - UNVERIFIED (type not found in current SDK dump, value kept from previous list)
+        public const uint ActorComponentArraysEnd = 0x2B8; //  - UNVERIFIED (type not found in current SDK dump, value kept from previous list)
     }
 
     public struct UPrimitiveComponent
@@ -152,6 +171,38 @@
         public const uint CachedCameraShakeMod = 0x2830; // UCameraModifier_CameraShake*
     }
 
+    public struct ASQProjectile
+    {
+        public const uint ProjectileMovement = 0x2C0; // UProjectileMovementComponent*
+        public const uint DamageInstigatorController = 0x588; // AController*
+        public const uint LastImpactPoint = 0x2F8; // FVector (doubles), ImpactPoint of LastImpactHitResult (0x2D0 + 0x28)
+        public const uint bHasImpacted = 0x3D0; // bool
+    }
+
+    public struct UMovementComponent
+    {
+        public const uint Velocity = 0xD8; // FVector (doubles), cm/s
+    }
+
+    public struct USQProjectileMovement
+    {
+        public const uint ConstantAcceleration = 0x298; // FVector (doubles), rocket motor push, cm/s²
+        public const uint bIgnoreGravityDuringConstantAcceleration = 0x2B4; // bool
+        public const uint bIgnoreGravity = 0x2B5; // bool
+    }
+
+    public struct UProjectileMovementComponent
+    {
+        public const uint ProjectileGravityScale = 0x158; // float
+    }
+
+    public struct FMinimalViewInfo
+    {
+        public const uint FOV = 0x30; // float
+        public const uint AspectRatio = 0x5C; // float
+        public const uint bConstrainAspectRatio = 0x68; // bit 0
+    }
+
     public struct FTViewTarget
     {
         public const uint POV = 0x10; // FMinimalViewInfo
@@ -162,9 +213,15 @@
         public const uint PlayerArray = 0x2D0; // TArray<APlayerState*>
     }
 
+    public struct AGameState
+    {
+        public const uint MatchState = 0x310; // FName (WaitingToStart, InProgress, WaitingPostMatch, LeavingMap)
+    }
+
     public struct ASQGameState
     {
-        public const uint TeamStates = 0x3C0; // TArray<ASQTeamState*>
+        public const uint TeamStates = 0x3C0; // TArray<ASQTeamState*>, filled on the server and not replicated
+        public const uint IndexedTeamStates = 0x3D0; // TArray<ASQTeamState*>, replicated to clients
         public const uint WinningTeam = 0x3E8; // ASQTeamState*
     }
 
@@ -212,7 +269,7 @@
     {
         public const uint Health = 0x27C0; // float
         public const uint MaxHealth = 0x2754; // float 
-        public const uint SoldierBitFlags = 0x274C; // uint8 bitfield: bit0=bIsDying, bit1=bIsBleeding, bit2=bIsWounded, bit3=bAllowWoundedState - UNVERIFIED (field not found in current SDK dump, value kept from previous list)
+        public const uint SoldierBitFlags = 0x274C; // uint8 bitfield: bit0=bIsDying, bit1=bIsBleeding, bit2=bIsWounded, bit3=bAllowWoundedState 
         public const uint WoundedThreshold = 0x27C8; // float
         public const uint HealthBleedableThreshold = 0x27CC; // float
         public const uint WoundedHealthLossRate = 0x27D8; // float
@@ -233,6 +290,20 @@
     public struct USQItemStaticInfo
     {
         public const uint bUsableInMainBase = 0x7A0; // bool
+        public const uint MutualWeapons = 0x300; // TArray<FSQMutualWeapon>
+        public const uint EmptyUnequipDuration = 0x310; // float
+        public const uint EmptyEquipDuration = 0x314; // float
+    }
+
+    public struct FSQMutualWeapon
+    {
+        public const uint Size = 0xF0; //  
+        public const uint BothEmptyEquipDuration = 0x48; // float
+        public const uint PreviousEmptyOrIgnoreCurrentEquipDuration = 0x68; // float
+        public const uint CurrentEmptyOrIgnorePreviousEquipDuration = 0x88; // float
+        public const uint NoneEmptyOrIgnoreBothEquipDuration = 0xA8; // float
+        public const uint CurrentEmptyUnequipDuration = 0xC8; // float
+        public const uint NoneOrIgnoreCurrentUnequipDuration = 0xE8; // float
     }
 
     public struct USQPawnInventoryComponent
@@ -254,6 +325,7 @@
         public const uint bFireInput = 0x7B5; // bool
         public const uint WeaponStaticInfo = 0x550; // USQWeaponStaticInfo*
         public const uint CurrentState = 0x7A0; // ESQWeaponState
+        public const uint CalculatedADSTime = 0x998; // float
     }
 
     public struct FSQWeaponData
@@ -305,22 +377,22 @@
         public const uint bCachedUnderhandPinpull = 0x5B2; // bool
         public const uint bCachedUnderhandThrow = 0x5B3; // bool
         public const uint bCachedReloading = 0x5B4; // bool
-        public const uint ActorWeaponOverhandPinpull1pMontage = 0x600;
-        public const uint ActorWeaponOverhandPinpull3pMontage = 0x608;
-        public const uint ActorOverhandPinpull1pMontage = 0x610;
-        public const uint ActorOverhandPinpull3pMontage = 0x618;
-        public const uint ActorWeaponOverhandThrow1pMontage = 0x620;
-        public const uint ActorWeaponOverhandThrow3pMontage = 0x628;
-        public const uint ActorOverhandThrow1pMontage = 0x630;
-        public const uint ActorOverhandThrow3pMontage = 0x638;
-        public const uint ActorWeaponUnderhandPinpull1pMontage = 0x640;
-        public const uint ActorWeaponUnderhandPinpull3pMontage = 0x648;
-        public const uint ActorUnderhandPinpull1pMontage = 0x650;
-        public const uint ActorUnderhandPinpull3pMontage = 0x658;
-        public const uint ActorWeaponUnderhandThrow1pMontage = 0x660;
-        public const uint ActorWeaponUnderhandThrow3pMontage = 0x668;
-        public const uint ActorUnderhandThrow1pMontage = 0x670;
-        public const uint ActorUnderhandThrow3pMontage = 0x678;
+        public const uint ActorWeaponOverhandPinpull1pMontage = 0x5B8; // UAnimMontage*
+        public const uint ActorWeaponOverhandPinpull3pMontage = 0x5C0; // UAnimMontage*
+        public const uint ActorOverhandPinpull1pMontage = 0x5C8; // UAnimMontage*
+        public const uint ActorOverhandPinpull3pMontage = 0x5D0; // UAnimMontage*
+        public const uint ActorWeaponOverhandThrow1pMontage = 0x5D8; // UAnimMontage*
+        public const uint ActorWeaponOverhandThrow3pMontage = 0x5E0; // UAnimMontage*
+        public const uint ActorOverhandThrow1pMontage = 0x5E8; // UAnimMontage*
+        public const uint ActorOverhandThrow3pMontage = 0x5F0; // UAnimMontage*
+        public const uint ActorWeaponUnderhandPinpull1pMontage = 0x5F8; // UAnimMontage*
+        public const uint ActorWeaponUnderhandPinpull3pMontage = 0x600; // UAnimMontage*
+        public const uint ActorUnderhandPinpull1pMontage = 0x608; // UAnimMontage*
+        public const uint ActorUnderhandPinpull3pMontage = 0x610; // UAnimMontage*
+        public const uint ActorWeaponUnderhandThrow1pMontage = 0x618; // UAnimMontage*
+        public const uint ActorWeaponUnderhandThrow3pMontage = 0x620; // UAnimMontage*
+        public const uint ActorUnderhandThrow1pMontage = 0x628; // UAnimMontage*
+        public const uint ActorUnderhandThrow3pMontage = 0x630; // UAnimMontage*
     }
 
     public struct USQGrenadeStaticInfo
@@ -383,13 +455,51 @@
 
     public struct FString
     {
-        public const uint Length = 0x8;
+        public const uint Length = 0x8; //  - UNVERIFIED (type not found in current SDK dump, value kept from previous list)
     }
 
     public struct Character
     {
         public const uint CharacterMovement = 0x340; // UCharacterMovementComponent*
+        public const uint CapsuleComponent = 0x348; // UCapsuleComponent*
         public const uint ReplicatedMovementMode = 0x462; // uint8
+    }
+
+    public struct UCapsuleComponent
+    {
+        public const uint CapsuleHalfHeight = 0x568; // float
+        public const uint CapsuleRadius = 0x56C; // float
+    }
+
+    public struct USceneCaptureComponent2D
+    {
+        public const uint FOVAngle = 0x33C; // float
+    }
+
+    public struct USkinnedMeshComponent
+    {
+        public const uint SkeletalMesh = 0x5A0; // USkeletalMesh*
+    }
+
+    public struct UStaticMeshComponent
+    {
+        public const uint StaticMesh = 0x5A0; // UStaticMesh*
+    }
+
+    public struct USkeletalMesh
+    {
+        public const uint ExtendedBounds = 0x158; // FBoxSphereBounds
+    }
+
+    public struct UStaticMesh
+    {
+        public const uint ExtendedBounds = 0x250; // FBoxSphereBounds
+    }
+
+    public struct FBoxSphereBounds
+    {
+        public const uint Origin = 0x0; // FVector (double x3)
+        public const uint BoxExtent = 0x18; // FVector (double x3)
     }
 
     public struct CharacterMovementComponent
@@ -514,8 +624,8 @@
 
     public struct UAnimMontage
     {
-        public const uint BlendInTime = 0xC8; // FAlphaBlend::BlendTime
-        public const uint BlendOutTime = 0xF8; // FAlphaBlend::BlendTime 
+        public const uint BlendInTime = 0xC8; // FAlphaBlend::BlendTime (BlendIn 0xC0 / BlendOut 0xF0 + 0x8)
+        public const uint BlendOutTime = 0xF8; // FAlphaBlend::BlendTime (BlendIn 0xC0 / BlendOut 0xF0 + 0x8)
         public const uint BlendOutTriggerTime = 0x120; // float
         public const uint bEnableAutoBlendOut = 0x172; // bool
     }
