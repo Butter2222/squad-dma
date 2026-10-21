@@ -40,7 +40,8 @@ namespace squad_dma
             trkUIScale = new TrackBar();
             trkAimLength = new TrackBar();
             trkTechMarkerScale = new TrackBar();
-            trkWidgetOpacity = new TrackBar();
+            trkAimviewOpacity = new TrackBar();
+            trkInfoWidgetOpacity = new TrackBar();
             btnListVehicles = new CheckBox();
             btnToggleMap = new Button();
             btnRestartRadar = new Button();
@@ -51,12 +52,18 @@ namespace squad_dma
             btnApplyMapScale = new Button();
             chkHighAlert = new CheckBox();
             chkShowObjectives = new CheckBox();
+            chkShowDiagnostics = new CheckBox();
+            lblInfoWidgetOpacity = new Label();
             tabSettings = new TabPage();
             grpGeneral = new GroupBox();
             lblUIScale = new Label();
             lblAimline = new Label();
             lblTechMarkerScale = new Label();
-            lblWidgetOpacity = new Label();
+            lblAimviewOpacity = new Label();
+            lblFireSupportMode = new Label();
+            cmbFireSupportMode = new ComboBox();
+            lblFireSupportSpread = new Label();
+            trkFireSupportSpread = new TrackBar();
             grpRadar = new GroupBox();
             grpLocalSoldier = new GroupBox();
             chkDisableSuppression = new CheckBox();
@@ -79,10 +86,8 @@ namespace squad_dma
             chkFireSupport = new CheckBox();
             chkThirdPersonPlayer = new CheckBox();
             chkThirdPersonVehicle = new CheckBox();
-            cmbFireSupportMode = new ComboBox();
-            lblFireSupportMode = new Label();
-            lblFireSupportSpread = new Label();
-            trkFireSupportSpread = new TrackBar();
+            chkFreeCamera = new CheckBox();
+            chkNoFoliage = new CheckBox();
             grpKeybinds = new GroupBox();
             lblKeybindSpeedHack = new Label();
             btnKeybindSpeedHack = new Button();
@@ -105,6 +110,8 @@ namespace squad_dma
             btnKeybindZoomIn = new Button();
             lblKeybindZoomOut = new Label();
             btnKeybindZoomOut = new Button();
+            lblKeybindFreeCamera = new Label();
+            btnKeybindFreeCamera = new Button();
             grpEsp = new GroupBox();
             chkEnableEsp = new CheckBox();
             chkEnableBones = new CheckBox();
@@ -129,15 +136,16 @@ namespace squad_dma
             ((System.ComponentModel.ISupportInitialize)trkUIScale).BeginInit();
             ((System.ComponentModel.ISupportInitialize)trkAimLength).BeginInit();
             ((System.ComponentModel.ISupportInitialize)trkTechMarkerScale).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)trkWidgetOpacity).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)trkAimviewOpacity).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)trkInfoWidgetOpacity).BeginInit();
             tabSettings.SuspendLayout();
             grpGeneral.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)trkFireSupportSpread).BeginInit();
             grpRadar.SuspendLayout();
             grpLocalSoldier.SuspendLayout();
             grpKeybinds.SuspendLayout();
             grpEsp.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)trkEspMaxDistance).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)trkFireSupportSpread).BeginInit();
             ((System.ComponentModel.ISupportInitialize)trkEspVehicleMaxDistance).BeginInit();
             tabRadar.SuspendLayout();
             grpMapSetup.SuspendLayout();
@@ -186,12 +194,12 @@ namespace squad_dma
             // 
             // trkUIScale
             // 
+            trkUIScale.AutoSize = false;
             trkUIScale.LargeChange = 10;
             trkUIScale.Location = new Point(10, 38);
             trkUIScale.Maximum = 200;
             trkUIScale.Minimum = 50;
             trkUIScale.Name = "trkUIScale";
-            trkUIScale.AutoSize = false;
             trkUIScale.Size = new Size(205, 26);
             trkUIScale.SmallChange = 5;
             trkUIScale.TabIndex = 14;
@@ -203,13 +211,13 @@ namespace squad_dma
             // 
             // trkAimLength
             // 
+            trkAimLength.AutoSize = false;
             trkAimLength.LargeChange = 50;
             trkAimLength.Location = new Point(10, 81);
             trkAimLength.Margin = new Padding(4, 3, 4, 3);
             trkAimLength.Maximum = 2000;
             trkAimLength.Minimum = 10;
             trkAimLength.Name = "trkAimLength";
-            trkAimLength.AutoSize = false;
             trkAimLength.Size = new Size(205, 26);
             trkAimLength.SmallChange = 5;
             trkAimLength.TabIndex = 11;
@@ -221,12 +229,12 @@ namespace squad_dma
             // 
             // trkTechMarkerScale
             // 
+            trkTechMarkerScale.AutoSize = false;
             trkTechMarkerScale.LargeChange = 10;
             trkTechMarkerScale.Location = new Point(10, 124);
             trkTechMarkerScale.Maximum = 200;
             trkTechMarkerScale.Minimum = 50;
             trkTechMarkerScale.Name = "trkTechMarkerScale";
-            trkTechMarkerScale.AutoSize = false;
             trkTechMarkerScale.Size = new Size(205, 26);
             trkTechMarkerScale.SmallChange = 5;
             trkTechMarkerScale.TabIndex = 17;
@@ -235,33 +243,40 @@ namespace squad_dma
             toolTip.SetToolTip(trkTechMarkerScale, "Adjust the size of vehicle and tech markers");
             trkTechMarkerScale.Value = 100;
             trkTechMarkerScale.Scroll += trkTechMarkerScale_Scroll;
-            //
-            // lblWidgetOpacity
-            //
-            lblWidgetOpacity.AutoSize = true;
-            lblWidgetOpacity.Font = new Font("Segoe UI", 9F);
-            lblWidgetOpacity.Location = new Point(15, 151);
-            lblWidgetOpacity.Name = "lblWidgetOpacity";
-            lblWidgetOpacity.Size = new Size(91, 15);
-            lblWidgetOpacity.TabIndex = 27;
-            lblWidgetOpacity.Text = "Widget Opacity";
-            //
-            // trkWidgetOpacity
-            //
-            trkWidgetOpacity.LargeChange = 10;
-            trkWidgetOpacity.Location = new Point(10, 167);
-            trkWidgetOpacity.Maximum = 100;
-            trkWidgetOpacity.Minimum = 10;
-            trkWidgetOpacity.Name = "trkWidgetOpacity";
-            trkWidgetOpacity.AutoSize = false;
-            trkWidgetOpacity.Size = new Size(205, 26);
-            trkWidgetOpacity.SmallChange = 5;
-            trkWidgetOpacity.TabIndex = 28;
-            trkWidgetOpacity.TickFrequency = 10;
-            trkWidgetOpacity.TickStyle = TickStyle.None;
-            toolTip.SetToolTip(trkWidgetOpacity, "Adjust how see-through the widget windows are (aimview, target info and tickets)");
-            trkWidgetOpacity.Value = 100;
-            trkWidgetOpacity.Scroll += trkWidgetOpacity_Scroll;
+            // 
+            // trkAimviewOpacity
+            // 
+            trkAimviewOpacity.AutoSize = false;
+            trkAimviewOpacity.LargeChange = 10;
+            trkAimviewOpacity.Location = new Point(10, 167);
+            trkAimviewOpacity.Maximum = 100;
+            trkAimviewOpacity.Minimum = 10;
+            trkAimviewOpacity.Name = "trkAimviewOpacity";
+            trkAimviewOpacity.Size = new Size(205, 26);
+            trkAimviewOpacity.SmallChange = 5;
+            trkAimviewOpacity.TabIndex = 28;
+            trkAimviewOpacity.TickFrequency = 10;
+            trkAimviewOpacity.TickStyle = TickStyle.None;
+            toolTip.SetToolTip(trkAimviewOpacity, "How see-through the aimview window is. Separate from the info widgets so it can be very transparent.");
+            trkAimviewOpacity.Value = 100;
+            trkAimviewOpacity.Scroll += trkAimviewOpacity_Scroll;
+            // 
+            // trkInfoWidgetOpacity
+            // 
+            trkInfoWidgetOpacity.AutoSize = false;
+            trkInfoWidgetOpacity.LargeChange = 10;
+            trkInfoWidgetOpacity.Location = new Point(10, 210);
+            trkInfoWidgetOpacity.Maximum = 100;
+            trkInfoWidgetOpacity.Minimum = 10;
+            trkInfoWidgetOpacity.Name = "trkInfoWidgetOpacity";
+            trkInfoWidgetOpacity.Size = new Size(205, 26);
+            trkInfoWidgetOpacity.SmallChange = 5;
+            trkInfoWidgetOpacity.TabIndex = 29;
+            trkInfoWidgetOpacity.TickFrequency = 10;
+            trkInfoWidgetOpacity.TickStyle = TickStyle.None;
+            toolTip.SetToolTip(trkInfoWidgetOpacity, "How see-through the data widgets are (target info, tickets and diagnostics). Keep it higher for readable numbers.");
+            trkInfoWidgetOpacity.Value = 90;
+            trkInfoWidgetOpacity.Scroll += trkInfoWidgetOpacity_Scroll;
             // 
             // btnListVehicles
             // 
@@ -269,7 +284,7 @@ namespace squad_dma
             btnListVehicles.Font = new Font("Segoe UI", 9F);
             btnListVehicles.Location = new Point(15, 30);
             btnListVehicles.Name = "btnListVehicles";
-            btnListVehicles.Size = new Size(150, 19);
+            btnListVehicles.Size = new Size(144, 19);
             btnListVehicles.TabIndex = 19;
             btnListVehicles.Text = "Actor Detect ( Debug )";
             toolTip.SetToolTip(btnListVehicles, "Toggle vehicle name detection");
@@ -366,22 +381,45 @@ namespace squad_dma
             toolTip.SetToolTip(chkHighAlert, "Extend aimlines of enemies looking at you");
             chkHighAlert.UseVisualStyleBackColor = true;
             chkHighAlert.CheckedChanged += chkHighAlert_CheckedChanged;
-            //
+            // 
             // chkShowObjectives
-            //
+            // 
             chkShowObjectives.AutoSize = true;
             chkShowObjectives.Font = new Font("Segoe UI", 9F);
             chkShowObjectives.Location = new Point(235, 99);
             chkShowObjectives.Name = "chkShowObjectives";
-            chkShowObjectives.Size = new Size(110, 19);
+            chkShowObjectives.Size = new Size(113, 19);
             chkShowObjectives.TabIndex = 19;
             chkShowObjectives.Text = "Show Objectives";
             toolTip.SetToolTip(chkShowObjectives, "Draw objective (flag) names and capture bounds on the radar");
             chkShowObjectives.UseVisualStyleBackColor = true;
             chkShowObjectives.CheckedChanged += chkShowObjectives_CheckedChanged;
-            //
+            // 
+            // chkShowDiagnostics
+            // 
+            chkShowDiagnostics.AutoSize = true;
+            chkShowDiagnostics.Font = new Font("Segoe UI", 9F);
+            chkShowDiagnostics.Location = new Point(235, 124);
+            chkShowDiagnostics.Name = "chkShowDiagnostics";
+            chkShowDiagnostics.Size = new Size(119, 19);
+            chkShowDiagnostics.TabIndex = 20;
+            chkShowDiagnostics.Text = "Show Diagnostics";
+            toolTip.SetToolTip(chkShowDiagnostics, "Status pill in the top-right corner of the radar: FPS, data rate and connection health. Click it (or use the Diagnostics keybind) for the detailed panel.");
+            chkShowDiagnostics.UseVisualStyleBackColor = true;
+            chkShowDiagnostics.CheckedChanged += ChkShowDiagnostics_CheckedChanged;
+            // 
+            // lblInfoWidgetOpacity
+            // 
+            lblInfoWidgetOpacity.AutoSize = true;
+            lblInfoWidgetOpacity.Font = new Font("Segoe UI", 9F);
+            lblInfoWidgetOpacity.Location = new Point(15, 194);
+            lblInfoWidgetOpacity.Name = "lblInfoWidgetOpacity";
+            lblInfoWidgetOpacity.Size = new Size(89, 15);
+            lblInfoWidgetOpacity.TabIndex = 30;
+            lblInfoWidgetOpacity.Text = "Widget Opacity";
+            // 
             // tabSettings
-            //
+            // 
             tabSettings.BackColor = SystemColors.Control;
             tabSettings.Controls.Add(grpGeneral);
             tabSettings.Controls.Add(grpRadar);
@@ -403,12 +441,15 @@ namespace squad_dma
             grpGeneral.Controls.Add(trkAimLength);
             grpGeneral.Controls.Add(lblTechMarkerScale);
             grpGeneral.Controls.Add(trkTechMarkerScale);
-            grpGeneral.Controls.Add(lblWidgetOpacity);
-            grpGeneral.Controls.Add(trkWidgetOpacity);
+            grpGeneral.Controls.Add(lblAimviewOpacity);
+            grpGeneral.Controls.Add(trkAimviewOpacity);
+            grpGeneral.Controls.Add(lblInfoWidgetOpacity);
+            grpGeneral.Controls.Add(trkInfoWidgetOpacity);
             grpGeneral.Controls.Add(chkShowEnemyDistance);
             grpGeneral.Controls.Add(chkEnableAimview);
             grpGeneral.Controls.Add(chkHighAlert);
             grpGeneral.Controls.Add(chkShowObjectives);
+            grpGeneral.Controls.Add(chkShowDiagnostics);
             grpGeneral.Controls.Add(lblFireSupportMode);
             grpGeneral.Controls.Add(cmbFireSupportMode);
             grpGeneral.Controls.Add(lblFireSupportSpread);
@@ -452,6 +493,60 @@ namespace squad_dma
             lblTechMarkerScale.TabIndex = 18;
             lblTechMarkerScale.Text = "Vehicle/Tech Scale";
             // 
+            // lblAimviewOpacity
+            // 
+            lblAimviewOpacity.AutoSize = true;
+            lblAimviewOpacity.Font = new Font("Segoe UI", 9F);
+            lblAimviewOpacity.Location = new Point(15, 151);
+            lblAimviewOpacity.Name = "lblAimviewOpacity";
+            lblAimviewOpacity.Size = new Size(97, 15);
+            lblAimviewOpacity.TabIndex = 27;
+            lblAimviewOpacity.Text = "Aimview Opacity";
+            // 
+            // lblFireSupportMode
+            // 
+            lblFireSupportMode.AutoSize = true;
+            lblFireSupportMode.Font = new Font("Segoe UI", 9F);
+            lblFireSupportMode.Location = new Point(410, 22);
+            lblFireSupportMode.Name = "lblFireSupportMode";
+            lblFireSupportMode.Size = new Size(105, 15);
+            lblFireSupportMode.TabIndex = 27;
+            lblFireSupportMode.Text = "Fire Support Mode";
+            // 
+            // cmbFireSupportMode
+            // 
+            cmbFireSupportMode.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbFireSupportMode.DropDownWidth = 200;
+            cmbFireSupportMode.Items.AddRange(new object[] { "Arc", "Drop" });
+            cmbFireSupportMode.Location = new Point(410, 40);
+            cmbFireSupportMode.Name = "cmbFireSupportMode";
+            cmbFireSupportMode.Size = new Size(170, 23);
+            cmbFireSupportMode.TabIndex = 20;
+            cmbFireSupportMode.SelectedIndexChanged += CmbFireSupportMode_SelectedIndexChanged;
+            // 
+            // lblFireSupportSpread
+            // 
+            lblFireSupportSpread.AutoSize = true;
+            lblFireSupportSpread.Font = new Font("Segoe UI", 9F);
+            lblFireSupportSpread.Location = new Point(415, 65);
+            lblFireSupportSpread.Name = "lblFireSupportSpread";
+            lblFireSupportSpread.Size = new Size(142, 15);
+            lblFireSupportSpread.TabIndex = 18;
+            lblFireSupportSpread.Text = "Fire Support Spread: 10 m";
+            // 
+            // trkFireSupportSpread
+            // 
+            trkFireSupportSpread.AutoSize = false;
+            trkFireSupportSpread.Location = new Point(410, 81);
+            trkFireSupportSpread.Maximum = 100;
+            trkFireSupportSpread.Name = "trkFireSupportSpread";
+            trkFireSupportSpread.Size = new Size(170, 26);
+            trkFireSupportSpread.TabIndex = 19;
+            trkFireSupportSpread.TickFrequency = 10;
+            trkFireSupportSpread.TickStyle = TickStyle.None;
+            trkFireSupportSpread.Value = 10;
+            trkFireSupportSpread.Scroll += TrkFireSupportSpread_Scroll;
+            // 
             // grpRadar
             // 
             grpRadar.Controls.Add(btnRestartRadar);
@@ -488,6 +583,8 @@ namespace squad_dma
             grpLocalSoldier.Controls.Add(chkFireSupport);
             grpLocalSoldier.Controls.Add(chkThirdPersonPlayer);
             grpLocalSoldier.Controls.Add(chkThirdPersonVehicle);
+            grpLocalSoldier.Controls.Add(chkFreeCamera);
+            grpLocalSoldier.Controls.Add(chkNoFoliage);
             grpLocalSoldier.Location = new Point(8, 391);
             grpLocalSoldier.Name = "grpLocalSoldier";
             grpLocalSoldier.Padding = new Padding(15);
@@ -662,13 +759,13 @@ namespace squad_dma
             chkInstantGrenade.Text = "Instant Grenade ( Crash )";
             chkInstantGrenade.UseVisualStyleBackColor = true;
             chkInstantGrenade.CheckedChanged += ChkInstantGrenade_CheckedChanged;
-            //
+            // 
             // chkQuickAds
-            //
+            // 
             chkQuickAds.AutoSize = true;
             chkQuickAds.Location = new Point(210, 70);
             chkQuickAds.Name = "chkQuickAds";
-            chkQuickAds.Size = new Size(80, 19);
+            chkQuickAds.Size = new Size(82, 19);
             chkQuickAds.TabIndex = 16;
             chkQuickAds.Text = "Quick ADS";
             chkQuickAds.UseVisualStyleBackColor = true;
@@ -679,56 +776,48 @@ namespace squad_dma
             chkFireSupport.AutoSize = true;
             chkFireSupport.Location = new Point(410, 145);
             chkFireSupport.Name = "chkFireSupport";
-            chkFireSupport.Size = new Size(98, 19);
+            chkFireSupport.Size = new Size(90, 19);
             chkFireSupport.TabIndex = 17;
             chkFireSupport.Text = "Fire Support";
             chkFireSupport.UseVisualStyleBackColor = true;
             chkFireSupport.CheckedChanged += ChkFireSupport_CheckedChanged;
             // 
-            // lblFireSupportSpread
+            // chkThirdPersonPlayer
             // 
-            lblFireSupportSpread.AutoSize = true;
-            lblFireSupportSpread.Font = new Font("Segoe UI", 9F);
-            lblFireSupportSpread.Location = new Point(15, 194);
-            lblFireSupportSpread.Name = "lblFireSupportSpread";
-            lblFireSupportSpread.Size = new Size(125, 15);
-            lblFireSupportSpread.TabIndex = 18;
-            lblFireSupportSpread.Text = "Fire Support Spread: 10 m";
+            chkThirdPersonPlayer.Location = new Point(0, 0);
+            chkThirdPersonPlayer.Name = "chkThirdPersonPlayer";
+            chkThirdPersonPlayer.Size = new Size(104, 24);
+            chkThirdPersonPlayer.TabIndex = 18;
             // 
-            // trkFireSupportSpread
+            // chkThirdPersonVehicle
             // 
-            trkFireSupportSpread.Location = new Point(10, 210);
-            trkFireSupportSpread.Maximum = 100;
-            trkFireSupportSpread.Minimum = 0;
-            trkFireSupportSpread.Name = "trkFireSupportSpread";
-            trkFireSupportSpread.AutoSize = false;
-            trkFireSupportSpread.TickStyle = TickStyle.None;
-            trkFireSupportSpread.Size = new Size(205, 26);
-            trkFireSupportSpread.TabIndex = 19;
-            trkFireSupportSpread.TickFrequency = 10;
-            trkFireSupportSpread.Value = 10;
-            trkFireSupportSpread.Scroll += TrkFireSupportSpread_Scroll;
+            chkThirdPersonVehicle.Location = new Point(0, 0);
+            chkThirdPersonVehicle.Name = "chkThirdPersonVehicle";
+            chkThirdPersonVehicle.Size = new Size(104, 24);
+            chkThirdPersonVehicle.TabIndex = 19;
             // 
-            // lblFireSupportMode
+            // chkFreeCamera
             // 
-            lblFireSupportMode.AutoSize = true;
-            lblFireSupportMode.Font = new Font("Segoe UI", 9F);
-            lblFireSupportMode.Location = new Point(410, 22);
-            lblFireSupportMode.Name = "lblFireSupportMode";
-            lblFireSupportMode.Size = new Size(104, 15);
-            lblFireSupportMode.TabIndex = 27;
-            lblFireSupportMode.Text = "Fire Support Mode";
+            chkFreeCamera.AutoSize = true;
+            chkFreeCamera.Location = new Point(10, 170);
+            chkFreeCamera.Name = "chkFreeCamera";
+            chkFreeCamera.Size = new Size(92, 19);
+            chkFreeCamera.TabIndex = 18;
+            chkFreeCamera.Text = "Free Camera";
+            chkFreeCamera.UseVisualStyleBackColor = true;
+            chkFreeCamera.CheckedChanged += ChkFreeCamera_CheckedChanged;
             // 
-            // cmbFireSupportMode
+            // chkNoFoliage
             // 
-            cmbFireSupportMode.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmbFireSupportMode.DropDownWidth = 200;
-            cmbFireSupportMode.Items.AddRange(new object[] { "Arc", "Drop" });
-            cmbFireSupportMode.Location = new Point(410, 40);
-            cmbFireSupportMode.Name = "cmbFireSupportMode";
-            cmbFireSupportMode.Size = new Size(170, 23);
-            cmbFireSupportMode.TabIndex = 20;
-            cmbFireSupportMode.SelectedIndexChanged += CmbFireSupportMode_SelectedIndexChanged;
+            chkNoFoliage.AutoSize = true;
+            chkNoFoliage.Location = new Point(410, 170);
+            chkNoFoliage.Name = "chkNoFoliage";
+            chkNoFoliage.Size = new Size(82, 19);
+            chkNoFoliage.TabIndex = 20;
+            chkNoFoliage.Text = "No Foliage";
+            toolTip.SetToolTip(chkNoFoliage, "Hides grass and foliage (client side, through the engine's console variables)");
+            chkNoFoliage.UseVisualStyleBackColor = true;
+            chkNoFoliage.CheckedChanged += ChkRenderTweak_CheckedChanged;
             // 
             // grpKeybinds
             // 
@@ -753,6 +842,8 @@ namespace squad_dma
             grpKeybinds.Controls.Add(btnKeybindZoomIn);
             grpKeybinds.Controls.Add(lblKeybindZoomOut);
             grpKeybinds.Controls.Add(btnKeybindZoomOut);
+            grpKeybinds.Controls.Add(lblKeybindFreeCamera);
+            grpKeybinds.Controls.Add(btnKeybindFreeCamera);
             grpKeybinds.Location = new Point(630, 6);
             grpKeybinds.Name = "grpKeybinds";
             grpKeybinds.Padding = new Padding(15);
@@ -940,6 +1031,23 @@ namespace squad_dma
             btnKeybindZoomOut.TabIndex = 23;
             btnKeybindZoomOut.Text = "Down";
             btnKeybindZoomOut.Click += BtnKeybindZoomOut_Click;
+            // 
+            // lblKeybindFreeCamera
+            // 
+            lblKeybindFreeCamera.Location = new Point(380, 30);
+            lblKeybindFreeCamera.Name = "lblKeybindFreeCamera";
+            lblKeybindFreeCamera.Size = new Size(85, 20);
+            lblKeybindFreeCamera.TabIndex = 40;
+            lblKeybindFreeCamera.Text = "Free Camera";
+            // 
+            // btnKeybindFreeCamera
+            // 
+            btnKeybindFreeCamera.Location = new Point(470, 30);
+            btnKeybindFreeCamera.Name = "btnKeybindFreeCamera";
+            btnKeybindFreeCamera.Size = new Size(90, 20);
+            btnKeybindFreeCamera.TabIndex = 41;
+            btnKeybindFreeCamera.Text = "None";
+            btnKeybindFreeCamera.Click += BtnKeybindFreeCamera_Click;
             // 
             // grpEsp
             // 
@@ -1174,10 +1282,12 @@ namespace squad_dma
             ((System.ComponentModel.ISupportInitialize)trkUIScale).EndInit();
             ((System.ComponentModel.ISupportInitialize)trkAimLength).EndInit();
             ((System.ComponentModel.ISupportInitialize)trkTechMarkerScale).EndInit();
-            ((System.ComponentModel.ISupportInitialize)trkWidgetOpacity).EndInit();
+            ((System.ComponentModel.ISupportInitialize)trkAimviewOpacity).EndInit();
+            ((System.ComponentModel.ISupportInitialize)trkInfoWidgetOpacity).EndInit();
             tabSettings.ResumeLayout(false);
             grpGeneral.ResumeLayout(false);
             grpGeneral.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)trkFireSupportSpread).EndInit();
             grpRadar.ResumeLayout(false);
             grpRadar.PerformLayout();
             grpLocalSoldier.ResumeLayout(false);
@@ -1187,7 +1297,6 @@ namespace squad_dma
             grpEsp.ResumeLayout(false);
             grpEsp.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)trkEspMaxDistance).EndInit();
-            ((System.ComponentModel.ISupportInitialize)trkFireSupportSpread).EndInit();
             ((System.ComponentModel.ISupportInitialize)trkEspVehicleMaxDistance).EndInit();
             tabRadar.ResumeLayout(false);
             tabRadar.PerformLayout();
@@ -1245,6 +1354,11 @@ namespace squad_dma
         private CheckBox chkFireSupport;
         private CheckBox chkThirdPersonPlayer;
         private CheckBox chkThirdPersonVehicle;
+        private CheckBox chkFreeCamera;
+        private CheckBox chkNoFoliage;
+        private Label lblKeybindFreeCamera;
+        private Button btnKeybindFreeCamera;
+        private CheckBox chkShowDiagnostics;
         private ComboBox cmbFireSupportMode;
         private Label lblFireSupportMode;
         private Label lblFireSupportSpread;
@@ -1273,8 +1387,10 @@ namespace squad_dma
         private Button btnKeybindQuickZoom;
         private Label lblTechMarkerScale;
         private TrackBar trkTechMarkerScale;
-        private TrackBar trkWidgetOpacity;
-        private Label lblWidgetOpacity;
+        private TrackBar trkAimviewOpacity;
+        private Label lblAimviewOpacity;
+        private TrackBar trkInfoWidgetOpacity;
+        private Label lblInfoWidgetOpacity;
         private GroupBox grpEsp;
         private CheckBox chkEnableEsp;
         private CheckBox chkEnableBones;

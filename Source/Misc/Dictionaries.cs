@@ -243,51 +243,72 @@ namespace squad_dma
         #endregion
 
         #region Icon Bitmaps
-        public static readonly Dictionary<ActorType, SKBitmap> BitMaps = new()
+        // Source SVG (relative to Icons/default) per actor type. SVGs are white-filled so the radar can tint them per team.
+        private static readonly Dictionary<ActorType, string> IconSvgs = new()
         {
-            {ActorType.FOBRadio, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.FOBRadio)},
-            {ActorType.Hab, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.Hab)},
-            {ActorType.AntiAir, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.AntiAir)},
-            {ActorType.APC, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.APC)},
-            {ActorType.AttackHelicopter, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.AttackHelicopter)},
-            {ActorType.LoachCAS, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.LoachCAS)},
-            {ActorType.LoachScout, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.LoachScout)},
-            {ActorType.Boat, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.Boat)},
-            {ActorType.BoatLogistics, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.BoatLogistics)},
-            {ActorType.DeployableAntiAir, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.DeployableAntiAir)},
-            {ActorType.DeployableAntitank, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.DeployableAntitank)},
-            {ActorType.DeployableAntitankGun, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.DeployableAntitankGun)},
-            {ActorType.DeployableGMG, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.DeployableGMG)},
-            {ActorType.DeployableHellCannon, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.DeployableHellCannon)},
-            {ActorType.DeployableHMG, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.DeployableHMG)},
-            {ActorType.DeployableMortars, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.DeployableMortars)},
-            {ActorType.DeployableRockets, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.DeployableRockets)},
-            {ActorType.Drone, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.Drone)},
-            {ActorType.IFV, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.IFV)},
-            {ActorType.JeepAntiAir, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.JeepAntiAir)},
-            {ActorType.JeepAntitank, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.JeepAntitank)},
-            {ActorType.JeepArtillery, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.JeepArtillery)},
-            {ActorType.JeepLogistics, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.JeepLogistics)},
-            {ActorType.JeepTransport, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.JeepTransport)},
-            {ActorType.JeepRWSTurret, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.JeepRWSTurret)},
-            {ActorType.JeepTurret, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.JeepTurret)},
-            {ActorType.Mine, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.Mine)},
-            {ActorType.Motorcycle, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.Motorcycle)},
-            {ActorType.RallyPoint, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.RallyPoint)},
-            {ActorType.Tank, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.Tank)},
-            {ActorType.TankMGS, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TankMGS)},
-            {ActorType.TrackedAPC, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TrackedAPC)},
-            {ActorType.TrackedLogistics, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TrackedLogistics)},
-            {ActorType.TrackedAPCArtillery, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TrackedAPCArtillery)},
-            {ActorType.TrackedIFV, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TrackedIFV)},
-            {ActorType.TrackedJeep, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TrackedJeep)},
-            {ActorType.TransportHelicopter, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TransportHelicopter)},
-            {ActorType.TruckAntiAir, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TruckAntiAir)},
-            {ActorType.TruckArtillery, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TruckArtillery)},
-            {ActorType.TruckLogistics, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TruckLogistics)},
-            {ActorType.TruckTransport, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TruckTransport)},
-            {ActorType.TruckTransportArmed, SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(Properties.Resources.TruckTransportArmed)},
+            {ActorType.FOBRadio, "deployables/deployable_fob.svg"},
+            {ActorType.Hab, "deployables/deployable_hab.svg"},
+            {ActorType.AntiAir, "vehicles/map_antiair.svg"},
+            {ActorType.APC, "vehicles/map_apc.svg"},
+            {ActorType.AttackHelicopter, "vehicles/map_attackhelo.svg"},
+            {ActorType.LoachCAS, "vehicles/T_map_helicopter_lightcas.svg"},
+            {ActorType.LoachScout, "vehicles/T_map_helicopter_scout.svg"},
+            {ActorType.Boat, "vehicles/map_boat.svg"},
+            {ActorType.BoatLogistics, "vehicles/T_map_boat_logistics.svg"},
+            {ActorType.DeployableAntiAir, "deployables/deployable_AntiAirGun.svg"},
+            {ActorType.DeployableAntitank, "deployables/deployable_anti_tank.svg"},
+            {ActorType.DeployableAntitankGun, "deployables/deployable_anti_tank_gun.svg"},
+            {ActorType.DeployableGMG, "deployables/deployable_GMG.svg"},
+            {ActorType.DeployableHellCannon, "deployables/deployable_hellcannon.svg"},
+            {ActorType.DeployableHMG, "deployables/deployable_HMG.svg"},
+            {ActorType.DeployableMortars, "deployables/deployable_mortars.svg"},
+            {ActorType.DeployableRockets, "deployables/deployable_ub32rockets.svg"},
+            {ActorType.Drone, "vehicles/map_handhelddrone.svg"},
+            {ActorType.IFV, "vehicles/map_ifv.svg"},
+            {ActorType.JeepAntiAir, "vehicles/T_map_jeep_antiair.svg"},
+            {ActorType.JeepAntitank, "vehicles/map_jeep_antitank.svg"},
+            {ActorType.JeepArtillery, "vehicles/map_jeep_artillery.svg"},
+            {ActorType.JeepLogistics, "vehicles/map_jeep_logistics.svg"},
+            {ActorType.JeepTransport, "vehicles/map_jeep_transport.svg"},
+            {ActorType.JeepRWSTurret, "vehicles/map_jeep_turret.svg"},
+            {ActorType.JeepTurret, "vehicles/map_jeep_turret.svg"},
+            {ActorType.Mine, "deployables/map_mine.svg"},
+            {ActorType.Motorcycle, "vehicles/map_motorcycle.svg"},
+            {ActorType.RallyPoint, "deployables/rallypoint.svg"},
+            {ActorType.Tank, "vehicles/map_tank.svg"},
+            {ActorType.TankMGS, "vehicles/T_map_mgs.svg"},
+            {ActorType.TrackedAPC, "vehicles/map_trackedapc.svg"},
+            {ActorType.TrackedLogistics, "vehicles/T_map_trackedapc_logistics.svg"},
+            {ActorType.TrackedAPCArtillery, "vehicles/T_map_trackedapc_artillery.svg"},
+            {ActorType.TrackedIFV, "vehicles/map_trackedifv.svg"},
+            {ActorType.TrackedJeep, "vehicles/map_trackedjeep.svg"},
+            {ActorType.TransportHelicopter, "vehicles/map_transporthelo.svg"},
+            {ActorType.TruckAntiAir, "vehicles/map_truck_antiair.svg"},
+            {ActorType.TruckArtillery, "vehicles/T_map_truck_artillery.svg"},
+            {ActorType.TruckLogistics, "vehicles/map_truck_logistics.svg"},
+            {ActorType.TruckTransport, "vehicles/map_truck_transport.svg"},
+            {ActorType.TruckTransportArmed, "vehicles/map_truck_transport_armed.svg"},
         };
+
+        public static readonly Dictionary<ActorType, SKBitmap> BitMaps = BuildIconBitmaps();
+
+        private static Dictionary<ActorType, SKBitmap> BuildIconBitmaps()
+        {
+            var icons = new Dictionary<ActorType, SKBitmap>(IconSvgs.Count);
+            foreach (var (type, path) in IconSvgs)
+            {
+                SKBitmap bitmap = null;
+                try { bitmap = SvgIcons.Load(path); } catch { }
+
+                // Fall back to the legacy PNG resource (named after the ActorType) if the SVG can't be rendered.
+                if (bitmap == null && Properties.Resources.ResourceManager.GetObject(type.ToString()) is System.Drawing.Bitmap png)
+                    bitmap = SkiaSharp.Views.Desktop.Extensions.ToSKBitmap(png);
+
+                if (bitmap != null)
+                    icons[type] = bitmap;
+            }
+            return icons;
+        }
         #endregion
 
         #region Actor Type Categories

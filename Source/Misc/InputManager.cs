@@ -22,7 +22,7 @@ namespace squad_dma
         private static int _initAttempts = 0;
         private const int MAX_ATTEMPTS = 3;
         private const int DELAY = 500;
-        private const int KEY_CHECK_DELAY = 100;
+        private const int KEY_CHECK_DELAY = 30; // keys drive the free camera, so they are polled faster
 
         private static int _currentBuild;
         private static int _updateBuildRevision;

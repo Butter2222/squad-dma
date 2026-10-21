@@ -24,6 +24,9 @@ namespace squad_dma {
 
         #region Program Entry Point
         [STAThread]
+        [System.Runtime.InteropServices.DllImport("winmm.dll")]
+        private static extern uint timeBeginPeriod(uint period);
+
         private static void Main(string[] args)
         {
             Console.OutputEncoding = System.Text.Encoding.Unicode;
@@ -43,6 +46,9 @@ namespace squad_dma {
                     }
                     
                     Game game = Memory._game;
+                    // Avoid blocking gen2 collections while the radar is running
+                    System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
+                    timeBeginPeriod(1); // 1 ms timer resolution so the frame limiter can sleep accurately
                     Application.Run(new MainForm());
                 }
             }

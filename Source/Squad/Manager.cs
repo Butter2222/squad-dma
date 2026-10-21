@@ -63,6 +63,8 @@ namespace squad_dma.Source.Squad
         private NoSway _noSway;  // Using state-aware version
         private InstantGrenade _instantGrenade;
         private ThirdPerson _thirdPerson;
+        private FreeCamera _freeCamera;
+        private RenderTweaks _renderTweaks;
 
         // Weapon manager
         private WeaponManager _weaponManager;
@@ -257,6 +259,8 @@ namespace squad_dma.Source.Squad
             _noSway = new NoSway(_playerController, _inGame, _game);
             _instantGrenade = new InstantGrenade(_playerController, _inGame);
             _thirdPerson = new ThirdPerson(_playerController, _inGame);
+            _freeCamera = new FreeCamera(_playerController, _inGame, _game);
+            _renderTweaks = new RenderTweaks(_playerController, _inGame, _game);
 
             // Register weapon features
             _weaponManager.RegisterFeature(_infiniteAmmo);
@@ -414,6 +418,9 @@ namespace squad_dma.Source.Squad
             if (_config.DisableCollision)
                 _collision.Apply();
                 
+            if (_config.SetFreeCamera)
+                _freeCamera.Apply(); // watchdog only, the camera runs on its own thread
+
             if (_config.NoCameraShake)
                 _noCameraShake.Apply();                
             // Apply QuickZoom continuously for smooth transitions
@@ -544,6 +551,15 @@ namespace squad_dma.Source.Squad
             _noSway.SetEnabled(enable);
         }
 
+
+        public void RefreshRenderTweaks() => _renderTweaks.Refresh();
+        public void ShutdownRenderTweaks() => _renderTweaks?.Shutdown();
+
+        public void SetFreeCamera(bool enable)
+        {
+            _freeCamera.SetEnabled(enable);
+        }
+
         public void SetInstantGrenade(bool enable)
         {
             _instantGrenade.SetEnabled(enable);
@@ -556,6 +572,8 @@ namespace squad_dma.Source.Squad
                 _cancellationTokenSource.Cancel(); // not disposed, the feature loop still reads its token while it winds down
             }
             _fireSupport?.Shutdown();
+            _freeCamera?.Shutdown();
+            _renderTweaks?.Shutdown();
             _weaponManager?.Dispose();
         }
         #endregion

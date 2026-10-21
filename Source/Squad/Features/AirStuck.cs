@@ -90,7 +90,7 @@ namespace squad_dma.Source.Squad.Features
                 EnqueueWrite<float>(characterMovement + CharacterMovementComponent.MaxCustomMovementSpeed, 2000.0f);
                 EnqueueWrite<float>(characterMovement + CharacterMovementComponent.MaxAcceleration, 2000.0f);
 
-                Logger.Debug($"[{_featureName}] Applied AirStuck: Flying mode enabled for scouting");
+                Logger.Debug($"[{_featureName}] Applied AirStuck: Flying mode enabled");
 
             }, "AirStuck flying movement modifications (6 memory addresses)");
         }

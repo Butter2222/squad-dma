@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using SkiaSharp;
 using squad_dma.Source.Misc;
 
@@ -46,12 +47,22 @@ namespace squad_dma
 
         private const int PinnedLevels = 3;        // levels 0-2 (21 tiles) stay loaded as the fallback
         private const int MaxCachedTiles = 320;    // about 80 MB of decoded tiles on top of the pinned ones
-        private const int MaxDecodesPerFrame = 24; // the rest are drawn from the coarser level and decoded on later frames
+        private const int MaxReadyPerFrame = 16;   // decoded tiles adopted per frame
+        private const int StaleFrames = 30;        // a queued tile that was not asked for in this many frames is skipped
 
         private readonly string _directory;
         private readonly int _width, _height;
-        private readonly Dictionary<long, Entry> _tiles = new();
+        private readonly Dictionary<long, Entry> _tiles = new();   // render thread only
         private long _frame;
+
+        // Tiles are decoded on a worker thread so a missing tile never stalls a frame: until it arrives the
+        // coarser level is drawn in its place. Newest requests are decoded first.
+        private readonly object _queueLock = new();
+        private readonly Stack<long> _requests = new();
+        private readonly Dictionary<long, long> _pending = new();  // key -> last frame the tile was wanted
+        private readonly ConcurrentQueue<(long Key, SKBitmap Bitmap)> _ready = new();
+        private readonly Thread _worker;
+        private volatile bool _disposed;
 
         private sealed class Entry
         {
@@ -72,6 +83,68 @@ namespace squad_dma
                 for (int x = 0; x < (1 << level); x++)
                     for (int y = 0; y < (1 << level); y++)
                         Load(level, x, y);
+
+            _worker = new Thread(DecodeLoop) { IsBackground = true, Name = "Map tile decoder", Priority = ThreadPriority.BelowNormal };
+            _worker.Start();
+        }
+
+        private void Request(long key)
+        {
+            lock (_queueLock)
+            {
+                bool queued = _pending.ContainsKey(key);
+                _pending[key] = _frame;
+                if (!queued)
+                {
+                    _requests.Push(key);
+                    PerfStats.TileQueue = _requests.Count;
+                    Monitor.Pulse(_queueLock);
+                }
+            }
+        }
+
+        private void DecodeLoop()
+        {
+            while (true)
+            {
+                long key;
+                lock (_queueLock)
+                {
+                    while (_requests.Count == 0 && !_disposed)
+                        Monitor.Wait(_queueLock);
+                    if (_disposed) return;
+
+                    key = _requests.Pop();
+                    PerfStats.TileQueue = _requests.Count;
+                    if (_pending.TryGetValue(key, out long wanted) && wanted < Volatile.Read(ref _frame) - StaleFrames)
+                    {
+                        _pending.Remove(key); // scrolled away before it was decoded
+                        continue;
+                    }
+                }
+
+                var bitmap = Decode(LevelOf(key), (int)((key >> 20) & 0xFFFFF), (int)(key & 0xFFFFF));
+
+                if (_disposed)
+                {
+                    bitmap?.Dispose();
+                    return;
+                }
+
+                _ready.Enqueue((key, bitmap));
+                lock (_queueLock) _pending.Remove(key);
+            }
+        }
+
+        /// <summary>Moves the tiles the worker finished into the cache.</summary>
+        private void AdoptReadyTiles()
+        {
+            for (int i = 0; i < MaxReadyPerFrame && _ready.TryDequeue(out var done); i++)
+            {
+                if (_tiles.TryGetValue(done.Key, out var old))
+                    old.Bitmap?.Dispose();
+                _tiles[done.Key] = new Entry { Bitmap = done.Bitmap, LastUsed = _frame };
+            }
         }
 
         public override int Width => _width;
@@ -96,7 +169,8 @@ namespace squad_dma
         public override void Draw(SKCanvas canvas, SKRect source, SKRect destination, SKPaint paint)
         {
             if (source.Width <= 0 || source.Height <= 0 || destination.Width <= 0) return;
-            _frame++;
+            Volatile.Write(ref _frame, _frame + 1);
+            AdoptReadyTiles();
 
             // Screen pixels per map pixel decides the level: one tile texel per screen pixel or finer
             double scale = destination.Width / source.Width;
@@ -112,7 +186,6 @@ namespace squad_dma
             int y1 = Math.Clamp((int)Math.Floor((source.Bottom - 1e-4) / tileMapH), 0, count - 1);
 
             double sx = destination.Width / source.Width, sy = destination.Height / source.Height;
-            int decodes = 0;
 
             canvas.Save();
             canvas.ClipRect(destination);
@@ -120,7 +193,7 @@ namespace squad_dma
             {
                 for (int tx = x0; tx <= x1; tx++)
                 {
-                    var bitmap = GetTile(level, tx, ty, ref decodes, out SKRect part);
+                    var bitmap = GetTile(level, tx, ty, out SKRect part);
                     if (bitmap == null) continue;
 
                     float left = (float)(destination.Left + (tx * tileMapW - source.Left) * sx);
@@ -133,13 +206,14 @@ namespace squad_dma
             canvas.Restore();
 
             if (_tiles.Count > MaxCachedTiles + 21) Evict();
+            PerfStats.TilesCached = _tiles.Count;
         }
 
         /// <summary>
         /// The tile, or while it isn't loaded yet the part of the nearest coarser loaded tile that covers the same
         /// area (<paramref name="part"/> is the region of that bitmap to draw).
         /// </summary>
-        private SKBitmap GetTile(int level, int x, int y, ref int decodes, out SKRect part)
+        private SKBitmap GetTile(int level, int x, int y, out SKRect part)
         {
             long key = Key(level, x, y);
             if (_tiles.TryGetValue(key, out var entry))
@@ -151,15 +225,9 @@ namespace squad_dma
                     return entry.Bitmap;
                 }
             }
-            else if (decodes < MaxDecodesPerFrame)
+            else
             {
-                decodes++;
-                var loaded = Load(level, x, y);
-                if (loaded != null)
-                {
-                    part = new SKRect(0, 0, TileSize, TileSize);
-                    return loaded;
-                }
+                Request(key);
             }
 
             // Coarser levels, which are loaded
@@ -182,6 +250,13 @@ namespace squad_dma
 
         private SKBitmap Load(int level, int x, int y)
         {
+            var bitmap = Decode(level, x, y);
+            _tiles[Key(level, x, y)] = new Entry { Bitmap = bitmap, LastUsed = _frame };
+            return bitmap;
+        }
+
+        private SKBitmap Decode(int level, int x, int y)
+        {
             SKBitmap bitmap = null;
             try
             {
@@ -198,7 +273,6 @@ namespace squad_dma
                 Logger.Error($"[Maps] HD tile {level}_{x}_{y} could not be read: {ex.Message}");
             }
 
-            _tiles[Key(level, x, y)] = new Entry { Bitmap = bitmap, LastUsed = _frame };
             return bitmap;
         }
 
@@ -224,6 +298,11 @@ namespace squad_dma
 
         public override void Dispose()
         {
+            _disposed = true;
+            lock (_queueLock) Monitor.PulseAll(_queueLock);
+            while (_ready.TryDequeue(out var done))
+                done.Bitmap?.Dispose();
+
             foreach (var entry in _tiles.Values)
                 entry.Bitmap?.Dispose();
             _tiles.Clear();

@@ -300,6 +300,10 @@ namespace squad_dma
                 if (value is T result) // We already know the Types match, this is to satisfy the compiler
                     Result = result;
             }
+            else if (Type == typeof(byte[])) // raw bytes, for reads whose layout is decided by the caller
+            {
+                Result = (T)(object)buffer;
+            }
             else if (Type == typeof(List<int>)) // indices
             {
                 var spanBuf = new Span<byte>(buffer);

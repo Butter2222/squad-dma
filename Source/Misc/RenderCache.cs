@@ -38,6 +38,7 @@ namespace squad_dma
         {
             _items.Clear();
             LocalPlayer = localPlayer;
+
             if (actors is null)
                 return;
 

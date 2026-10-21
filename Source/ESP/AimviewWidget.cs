@@ -61,6 +61,9 @@ namespace squad_dma
 
         private const int MaxLabelledEnemies = 8;
         private const float EdgeArrowLimit = 4f; // Enemies farther than this many view-widths off-center get no arrow
+        /// <summary>The aimview has its own opacity so it can be see-through while the data widgets stay readable.</summary>
+        protected override float WindowOpacity => Math.Clamp(Program.Config.AimviewOpacity / 100f, 0.1f, 1f);
+
 
         public AimviewWidget(SKGLControl parent, MainForm parentForm, SKRect location, bool minimized, float scale)
             : base(parent, "", new SKPoint(location.Left, location.Top), new SKSize(location.Width, location.Height), scale)

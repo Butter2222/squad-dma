@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace squad_dma
 {
@@ -169,10 +170,58 @@ namespace squad_dma
             }
         }
 
+        #region Actor list scan
+        // Slot pointer -> name id of every actor already evaluated (kept or rejected). A pointer in this set is not
+        // read again on the cheap scans, only brand new pointers are. The set is revalidated by the periodic full scan.
+        private readonly Dictionary<ulong, uint> _verified = new();
+        private readonly Dictionary<ulong, DateTime> _retryAt = new();
+        private readonly Dictionary<uint, string> _nameCache = new();
+        private DateTime _lastFullScan = DateTime.MinValue;
+
+        private const int FullScanIntervalMs = 5000;
+        private const int ScanChunkSize = 2048;
+        private const int RetryDelayMs = 3000;
+
+        private Dictionary<uint, string> ResolveNames(IEnumerable<uint> ids)
+        {
+            var missing = ids.Where(id => !_nameCache.ContainsKey(id)).Distinct().ToList();
+            if (missing.Count > 0)
+                foreach (var kv in Memory.GetNamesById(missing))
+                    _nameCache[kv.Key] = kv.Value;
+            return _nameCache;
+        }
+
+        /// <summary>The whole level actor array in one read, instead of one scatter entry per slot.</summary>
+        internal static ulong[] ReadActorPointers(ulong arrayPtr, int count)
+        {
+            try
+            {
+                return MemoryMarshal.Cast<byte, ulong>(Memory.ReadBuffer(arrayPtr, count * 8)).ToArray();
+            }
+            catch (DMAShutdown) { throw; }
+            catch { /* partial read, fall back to scatter below */ }
+
+            var result = new ulong[count];
+            for (int start = 0; start < count; start += ScanChunkSize)
+            {
+                int n = Math.Min(ScanChunkSize, count - start);
+                var map = new ScatterReadMap(n);
+                var round = map.AddRound();
+                for (int i = 0; i < n; i++)
+                    round.AddEntry<ulong>(i, 0, arrayPtr + (uint)((start + i) * 8));
+                map.Execute();
+                for (int i = 0; i < n; i++)
+                    if (map.Results[i].TryGetValue(0, out var r) && r.TryGetResult<ulong>(out var ptr))
+                        result[start + i] = ptr;
+            }
+            return result;
+        }
+
         private void UpdateVehiclesFromActorList()
         {
             try
             {
+                long scanStart = PerfStats.Begin();
                 var actorsTArray = _persistentLevel + Offsets.Level.Actors;
                 var actorCount = Memory.ReadValue<int>(actorsTArray + 0x8);
 
@@ -181,51 +230,100 @@ namespace squad_dma
                 var actorsArrayPtr = Memory.ReadPtr(actorsTArray);
                 if (actorsArrayPtr == 0) return;
 
-                var scatterMap = new ScatterReadMap(actorCount);
-                var actorRound = scatterMap.AddRound();
-                var idRound = scatterMap.AddRound();
-                var validationRound = scatterMap.AddRound();
+                var pointers = ReadActorPointers(actorsArrayPtr, actorCount);
 
-                for (int i = 0; i < actorCount; i++)
+                var now = DateTime.UtcNow;
+                bool fullScan = (now - _lastFullScan).TotalMilliseconds >= FullScanIntervalMs;
+
+                // Which actors exist is known from the pointer array alone; only unknown (or due) slots cost DMA reads.
+                var present = new HashSet<ulong>(actorCount);
+                var toCheck = new List<ulong>();
+                foreach (var p in pointers)
                 {
-                    var actorAddr = actorRound.AddEntry<ulong>(i, 0, actorsArrayPtr + (uint)(i * 0x8));
-                    var nameIdEntry = idRound.AddEntry<uint>(i, 1, actorAddr, null, Offsets.Actor.ID);
-                    
-                    // Consolidate validation reads into single round
-                    validationRound.AddEntry<byte>(i, 2, actorAddr, null, Offsets.ASQVehicle.VehicleType);
-                    validationRound.AddEntry<float>(i, 3, actorAddr, null, Offsets.ASQVehicle.MaxHealth);
-                    validationRound.AddEntry<int>(i, 4, actorAddr, null, Offsets.ASQVehicle.VehicleSeats + 0x8);
+                    if (p == 0 || !present.Add(p)) continue;
+                    if (fullScan || !_verified.ContainsKey(p) || (_retryAt.TryGetValue(p, out var due) && now >= due))
+                        toCheck.Add(p);
                 }
 
-                scatterMap.Execute();
-
-                var actorBaseWithName = new Dictionary<ulong, uint>();
-                var vehicleValidationData = new Dictionary<ulong, (uint nameId, byte vehicleType, float maxHealth, int seatCount)>();
-                
-                for (int i = 0; i < actorCount; i++)
+                foreach (var gone in _verified.Keys.Where(k => !present.Contains(k)).ToList())
                 {
-                    var r = scatterMap.Results[i];
-                    if (!r.TryGetValue(0, out var ar) || !ar.TryGetResult<ulong>(out var actorAddr) || actorAddr == 0) continue;
-                    if (!r.TryGetValue(1, out var ir) || !ir.TryGetResult<uint>(out var nameId) || nameId == 0) continue;
-                    
-                    actorBaseWithName[actorAddr] = nameId;
-                    
-                    // Store validation data for later processing
-                    if (r.TryGetValue(2, out var vtResult) && vtResult.TryGetResult<byte>(out var vtByte) &&
-                        r.TryGetValue(3, out var mhResult) && mhResult.TryGetResult<float>(out var maxHealth) &&
-                        r.TryGetValue(4, out var scResult) && scResult.TryGetResult<int>(out var seatCount))
+                    _verified.Remove(gone);
+                    _retryAt.Remove(gone);
+                }
+
+                var candidates = new Dictionary<ulong, uint>();
+                var validation = new Dictionary<ulong, (byte vehicleType, float maxHealth, int seatCount)>();
+
+                // Chunked so one scan never occupies the DMA link for long; the position loop interleaves between chunks.
+                for (int start = 0; start < toCheck.Count; start += ScanChunkSize)
+                {
+                    int n = Math.Min(ScanChunkSize, toCheck.Count - start);
+                    var map = new ScatterReadMap(n);
+                    var round = map.AddRound();
+
+                    for (int i = 0; i < n; i++)
                     {
-                        vehicleValidationData[actorAddr] = (nameId, vtByte, maxHealth, seatCount);
+                        var addr = toCheck[start + i];
+                        round.AddEntry<uint>(i, 0, addr, null, Offsets.Actor.ID);
+
+                        // Actors we already track don't need to be validated as vehicles again
+                        if (!_actors.ContainsKey(addr))
+                        {
+                            round.AddEntry<byte>(i, 1, addr, null, Offsets.ASQVehicle.VehicleType);
+                            round.AddEntry<float>(i, 2, addr, null, Offsets.ASQVehicle.MaxHealth);
+                            round.AddEntry<int>(i, 3, addr, null, Offsets.ASQVehicle.VehicleSeats + 0x8);
+                        }
                     }
+
+                    map.Execute();
+
+                    for (int i = 0; i < n; i++)
+                    {
+                        var addr = toCheck[start + i];
+                        var r = map.Results[i];
+                        if (!r.TryGetValue(0, out var ir) || !ir.TryGetResult<uint>(out var nameId) || nameId == 0) continue;
+
+                        if (_actors.TryGetValue(addr, out var existing))
+                        {
+                            if (existing.NameId == nameId)
+                                _verified[addr] = nameId;
+                            else if (existing.ActorType != ActorType.Player)
+                            {
+                                // The slot now holds a different actor: drop it, it is evaluated from scratch on the next scan.
+                                _actors.TryRemove(addr, out _);
+                                _verified.Remove(addr);
+                            }
+                            continue;
+                        }
+
+                        candidates[addr] = nameId;
+                        if (r.TryGetValue(1, out var vtResult) && vtResult.TryGetResult<byte>(out var vtByte) &&
+                            r.TryGetValue(2, out var mhResult) && mhResult.TryGetResult<float>(out var maxHealth) &&
+                            r.TryGetValue(3, out var scResult) && scResult.TryGetResult<int>(out var seatCount))
+                        {
+                            validation[addr] = (vtByte, maxHealth, seatCount);
+                        }
+                    }
+
+                    if (start + ScanChunkSize < toCheck.Count)
+                        Thread.Sleep(1);
                 }
 
-                ProcessVehicleEntities(actorBaseWithName, vehicleValidationData);
+                ProcessVehicleEntities(candidates, validation, present, now);
+
+                if (fullScan)
+                    _lastFullScan = now;
+
+                PerfStats.RecordActorScan(scanStart, fullScan);
             }
+            catch (DMAShutdown) { throw; }
+            catch (GameEnded) { throw; }
             catch (Exception ex)
             {
                 Logger.Error($"Error updating vehicles from ActorList: {ex}");
             }
         }
+        #endregion
 
         private void ProcessPlayerEntities(Dictionary<ulong, uint> playerBaseWithName, Dictionary<ulong, ulong> playerStateMap)
         {
@@ -266,81 +364,60 @@ namespace squad_dma
                 _actors.TryRemove(id, out _);
         }
 
-        private void ProcessVehicleEntities(Dictionary<ulong, uint> actorBaseWithName, Dictionary<ulong, (uint nameId, byte vehicleType, float maxHealth, int seatCount)> vehicleValidationData)
+        private void ProcessVehicleEntities(
+            Dictionary<ulong, uint> candidates,
+            Dictionary<ulong, (byte vehicleType, float maxHealth, int seatCount)> validation,
+            HashSet<ulong> present,
+            DateTime now)
         {
-            var notUpdated = new HashSet<ulong>(_actors
-                .Where(kv => kv.Value.ActorType != ActorType.Player)
-                .Select(kv => kv.Key));
+            var names = ResolveNames(candidates.Values);
 
-            foreach (var item in actorBaseWithName.ToList())
+            foreach (var (actorAddr, nameId) in candidates)
             {
-                if (_actors.TryGetValue(item.Key, out var existing) && existing.NameId == item.Value)
-                {
-                    notUpdated.Remove(item.Key);
-                    actorBaseWithName.Remove(item.Key);
-                }
-            }
+                if (!names.TryGetValue(nameId, out var actorName)) continue; // name not resolved yet, retried next scan
 
-            var names = Memory.GetNamesById([.. actorBaseWithName.Values.Distinct()]);
-
-            var deployables = names.Where(x => Names.TechNames.ContainsKey(x.Value)).ToDictionary();
-            foreach (var entry in actorBaseWithName.Where(a => deployables.ContainsKey(a.Value)).ToList())
-            {
-                var actorName = deployables[entry.Value];
-                var actorType = Names.TechNames[actorName];
-
-                if (_actors.TryGetValue(entry.Key, out var actor) && (actor.ErrorCount > 50 || actor.Base != entry.Key))
+                // Deployables are recognised by name alone
+                if (Names.TechNames.TryGetValue(actorName, out var techType))
                 {
-                    Logger.Error($"Existing actor '{actor.Base}' being reallocated...");
-                    ReallocateVehicleActor(entry.Key, Team.Unknown, actorType, entry.Value, actorName);
-                }
-                else if (!_actors.ContainsKey(entry.Key))
-                {
-                    ReallocateVehicleActor(entry.Key, Team.Unknown, actorType, entry.Value, actorName);
+                    ReallocateVehicleActor(actorAddr, Team.Unknown, techType, nameId, actorName);
+                    Verify(actorAddr, nameId);
+                    continue;
                 }
 
-                notUpdated.Remove(entry.Key);
-            }
+                if (!validation.TryGetValue(actorAddr, out var v)) continue;
 
-            // Process potential vehicles using pre-fetched validation data
-            var potentialVehicles = actorBaseWithName
-                .Where(a => !deployables.ContainsKey(a.Value))
-                .ToList();
-
-            foreach (var (actorAddr, nameId) in potentialVehicles)
-            {
-                if (!vehicleValidationData.TryGetValue(actorAddr, out var validationData)) continue;
-
-                var actorName = names.TryGetValue(nameId, out var n) ? n : "Unknown";
-                var vtByte = validationData.vehicleType;
-                var maxHealth = validationData.maxHealth;
-                var seatCount = validationData.seatCount;
-
-                var vehicleType = (ESQVehicleType)vtByte;
-                if (vehicleType == ESQVehicleType.None || vehicleType == ESQVehicleType.MAX || vtByte == 0 || vtByte > 18) continue;
-                if (_vehicleNameBlacklist.Any(b => actorName.Contains(b, StringComparison.OrdinalIgnoreCase))) continue;
-                if (seatCount < 1) continue;
+                var vehicleType = (ESQVehicleType)v.vehicleType;
+                if (vehicleType == ESQVehicleType.None || vehicleType == ESQVehicleType.MAX || v.vehicleType == 0 || v.vehicleType > 18 ||
+                    _vehicleNameBlacklist.Any(b => actorName.Contains(b, StringComparison.OrdinalIgnoreCase)) ||
+                    !Names.VehicleTypeMap.TryGetValue(vehicleType, out var actorType))
+                {
+                    Verify(actorAddr, nameId); // not a vehicle, left alone until the next full scan
+                    continue;
+                }
 
                 bool isHelicopter = vehicleType is ESQVehicleType.HelicopterTransport or ESQVehicleType.HelicopterAttack;
-                if (maxHealth <= 1.0f && !isHelicopter) continue;
-
-                if (!Names.VehicleTypeMap.TryGetValue(vehicleType, out var actorType)) continue;
-
-                if (_actors.TryGetValue(actorAddr, out var actor) && (actor.ErrorCount > 50 || actor.Base != actorAddr))
+                if (v.seatCount < 1 || (v.maxHealth <= 1.0f && !isHelicopter))
                 {
-                    Logger.Error($"Existing vehicle '{actor.Base}' being reallocated...");
-                    ReallocateVehicleActor(actorAddr, Team.Unknown, actorType, nameId, actorName);
-                }
-                else if (!_actors.ContainsKey(actorAddr))
-                {
-                    ReallocateVehicleActor(actorAddr, Team.Unknown, actorType, nameId, actorName);
+                    // Could still be initialising (spawner, template): look again shortly
+                    _verified[actorAddr] = nameId;
+                    _retryAt[actorAddr] = now.AddMilliseconds(RetryDelayMs);
+                    continue;
                 }
 
-                notUpdated.Remove(actorAddr);
+                ReallocateVehicleActor(actorAddr, Team.Unknown, actorType, nameId, actorName);
+                Verify(actorAddr, nameId);
             }
 
-            foreach (var id in notUpdated)
-                _actors.TryRemove(id, out _);
+            // Anything that left the level's actor array is gone
+            foreach (var kv in _actors)
+                if (kv.Value.ActorType != ActorType.Player && !present.Contains(kv.Key))
+                    _actors.TryRemove(kv.Key, out _);
+        }
+
+        private void Verify(ulong actorAddr, uint nameId)
+        {
+            _verified[actorAddr] = nameId;
+            _retryAt.Remove(actorAddr);
         }
 
         private void ReallocatePlayerActor(ulong pawnBase, ulong playerStateBase, Team team, uint nameId, string actorName)
@@ -371,10 +448,13 @@ namespace squad_dma
         {
             try
             {
-                var count = _actors.Count;
+                long perfStart = PerfStats.Begin();
+                // One snapshot for the whole pass: the discovery thread adds and removes actors while this runs.
+                var actorList = _actors.Values.ToArray();
+                var count = actorList.Length;
                 if (count < 1) throw new GameEnded();
 
-                var actorBases = _actors.Values.Select(a => a.Base).Order().ToArray();
+                Array.Sort(actorList, (a, b) => a.Base.CompareTo(b.Base));
 
                 var scatterMap = new ScatterReadMap(count);
                 var instanceRound = scatterMap.AddRound();
@@ -384,8 +464,8 @@ namespace squad_dma
 
                 for (int i = 0; i < count; i++)
                 {
-                    var actorAddr = actorBases[i];
-                    var actor = _actors[actorAddr];
+                    var actor = actorList[i];
+                    var actorAddr = actor.Base;
 
                     var rootComponent = instanceRound.AddEntry<ulong>(i, 1, actorAddr + Offsets.Actor.RootComponent);
 
@@ -446,7 +526,7 @@ namespace squad_dma
 
                 for (int i = 0; i < count; i++)
                 {
-                    var actor = _actors[actorBases[i]];
+                    var actor = actorList[i];
                     var r = scatterMap.Results[i];
 
                     float hp = 0;
@@ -583,6 +663,8 @@ namespace squad_dma
                         .Where(kv => _actors.ContainsKey(kv.Key))
                         .ToDictionary(kv => kv.Key, kv => kv.Value);
                 }
+
+                PerfStats.RecordDataPass(perfStart);
             }
             catch (GameEnded) { throw; }
             catch (Exception ex)

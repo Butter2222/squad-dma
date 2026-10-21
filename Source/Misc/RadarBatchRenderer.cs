@@ -22,6 +22,9 @@ namespace squad_dma
         private const float ChevronWing = 5.8f;   // half width across the wings
         private const float ChevronNotch = 3.2f;  // depth of the notch cut into the back
 
+        // Vehicle/deployable icons: constant on-screen size (~2x the chevron length), independent of map zoom, scaled by UI scale and the Tech Marker Scale slider.
+        private const float IconBaseSize = (ChevronTip + ChevronBack) * 2f;
+
         private float _scale = float.NaN;
 
         #region Paints (created once, reconfigured only when UI scale changes)
@@ -64,7 +67,7 @@ namespace squad_dma
         private readonly SKPaint _aaMarkText = new() { Color = SKColors.Yellow, IsAntialias = true, TextAlign = SKTextAlign.Left, Typeface = _arial };
 
         // Tech (vehicle / deployable) icon paints: neutral, friendly-tinted, enemy-tinted
-        private readonly SKPaint[] _techPaints = new SKPaint[3];
+        private readonly SKPaint[] _techPaints = new SKPaint[4];
         private bool _techPaintsDirty = true;
 
         // Overlay paints shared with MainForm POI / range drawing (previously `using var new SKPaint` per call)
@@ -107,10 +110,8 @@ namespace squad_dma
         private readonly List<PointLabel> _playerLabels = new(64);
         private readonly List<PointLabel> _vehicleLabels = new(32);
         private readonly List<PointLabel> _adminTexts = new(4);
-        private readonly List<TechItem>[] _techItems = { new(64), new(32), new(32) };
+        private readonly List<TechItem>[] _techItems = { new(64), new(32), new(32), new(16) };
 
-        private int _iconCount = -1;
-        private float _maxIconDim;
         #endregion
 
         public RadarBatchRenderer()
@@ -207,6 +208,12 @@ namespace squad_dma
                 FilterQuality = SKFilterQuality.High,
                 ColorFilter = SKColorFilter.CreateBlendMode(SKPaints.EnemyVehicle, SKBlendMode.Modulate)
             };
+            _techPaints[3] = new SKPaint
+            {
+                IsAntialias = true,
+                FilterQuality = SKFilterQuality.High,
+                ColorFilter = SKColorFilter.CreateBlendMode(SKPaints.Squad, SKBlendMode.Modulate)
+            };
             _techPaintsDirty = false;
         }
 
@@ -214,21 +221,15 @@ namespace squad_dma
         /// Off-screen margin (in canvas units) that keeps any marker, rotated icon or label that could still
         /// intersect the viewport from being culled.
         /// </summary>
-        private float ComputeCullMargin(float ui, float techScale)
+        private static float ComputeCullMargin(float ui, float iconPx)
         {
-            if (_iconCount != Names.BitMaps.Count)
-            {
-                float max = 0f;
-                foreach (var bmp in Names.BitMaps.Values)
-                    if (bmp != null)
-                        max = Math.Max(max, Math.Max(bmp.Width, bmp.Height));
-                _maxIconDim = max;
-                _iconCount = Names.BitMaps.Count;
-            }
-            // 0.2 = base icon scale, 1.5 = drone upscale, ~1.5 = rotated diagonal, plus room for label text
-            float iconSpan = 0.2f * techScale * _maxIconDim * 1.5f * 1.5f;
+            // 1.5 = drone upscale, ~1.5 = rotated diagonal, plus room for label text
+            float iconSpan = iconPx * 1.5f * 1.5f;
             return Math.Max(iconSpan, 40f * ui) + 80f * ui + 32f;
         }
+
+        /// <summary>On-screen size (canvas units) of a full-size vehicle/deployable icon; constant at every map zoom.</summary>
+        private static float ComputeIconPixels(float ui, MapParameters mapParams) => IconBaseSize * ui * mapParams.TechScale;
 
         public void DrawActors(
             SKCanvas canvas,
@@ -257,11 +258,12 @@ namespace squad_dma
             double sx = mapScale * mapParams.XScale;
             double sy = mapScale * mapParams.YScale;
 
-            float margin = ComputeCullMargin(ui, mapParams.TechScale);
+            float iconPx = ComputeIconPixels(ui, mapParams);
+            float margin = ComputeCullMargin(ui, iconPx);
             var cull = SKRect.Inflate(canvas.LocalClipBounds, margin, margin);
 
             var localPos = localPlayer.Position;
-            float techUnit = 0.2f * mapParams.TechScale;
+            float techUnit = iconPx / SvgIcons.LogicalSize; // logical icon units -> canvas units
             float labelDx = 15f * ui, labelDy = -8f * ui;
 
             _bodyOutlinePath.Rewind();
@@ -370,8 +372,8 @@ namespace squad_dma
                     float lx, ly;
                     if (icon != null)
                     {
-                        lx = x + icon.Width * techUnit * 0.5f + 5f * ui;
-                        ly = y - icon.Height * techUnit * 0.5f + 14f * ui * 1.3f - 4f * ui;
+                        lx = x + icon.Width / (float)SvgIcons.RasterScale * techUnit * 0.5f + 5f * ui;
+                        ly = y - icon.Height / (float)SvgIcons.RasterScale * techUnit * 0.5f + 14f * ui * 1.3f - 4f * ui;
                     }
                     else
                     {
@@ -396,11 +398,13 @@ namespace squad_dma
                 int tg = 0;
                 if (isVehicle || Names.Deployables.Contains(type))
                     tg = a.IsFriendly ? 1 : a.IsEnemy ? 2 : 0;
+                // a vehicle claimed by the local player's squad takes the squad color
+                if (isVehicle && tg == 1 && a.Actor.ClaimingSquadID != -1 && a.Actor.ClaimingSquadID == localPlayer.SquadID) tg = 3;
 
                 _techItems[tg].Add(new TechItem
                 {
                     X = x, Y = y,
-                    Width = icon.Width * scale, Height = icon.Height * scale,
+                    Width = icon.Width / (float)SvgIcons.RasterScale * scale, Height = icon.Height / (float)SvgIcons.RasterScale * scale,
                     Rotation = rotation, Icon = icon
                 });
             }

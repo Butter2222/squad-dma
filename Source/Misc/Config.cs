@@ -37,10 +37,23 @@ namespace squad_dma
         [JsonPropertyName("techMarkerScale")]
         public int TechMarkerScale { get; set; } = 100;
 
-        /// <summary>Opacity of the widget windows (aimview, target info, tickets), in percent. Saved under the old
-        /// "aimviewOpacity" key so an existing setting carries over.</summary>
+        /// <summary>How opaque the aimview window is, in percent. Kept under the old "aimviewOpacity" key (it used to
+        /// drive every widget), so an existing setting carries over.</summary>
         [JsonPropertyName("aimviewOpacity")]
-        public int WidgetOpacity { get; set; } = 100;
+        public int AimviewOpacity { get; set; } = 100;
+
+        /// <summary>How opaque the data widgets are (target info, tickets, diagnostics), in percent. Separate from the
+        /// aimview so the aimview can be see-through while the numbers stay readable.</summary>
+        [JsonPropertyName("infoWidgetOpacity")]
+        public int InfoWidgetOpacity { get; set; } = 90;
+
+        /// <summary>The status pill in the top-right corner of the radar (FPS, data rate, health dot).</summary>
+        [JsonPropertyName("showDiagnostics")]
+        public bool ShowDiagnostics { get; set; } = true;
+
+        /// <summary>The detailed diagnostics panel opened from the pill.</summary>
+        [JsonPropertyName("diagnosticsDetailed")]
+        public bool DiagnosticsDetailed { get; set; } = false;
 
         [JsonPropertyName("vsync")]
         public bool VSync { get; set; } = false;
@@ -152,6 +165,68 @@ namespace squad_dma
 
         [JsonPropertyName("airStuckEnabled")]
         public bool AirStuckEnabled { get; set; } = false;
+
+        [JsonPropertyName("freeCameraEnabled")]
+        public bool FreeCameraEnabled { get; set; } = false; // checkbox: the feature may be toggled with its keybind
+
+        [JsonPropertyName("setFreeCamera")]
+        public bool SetFreeCamera { get; set; } = false; // currently flying
+
+        // cm/s; the modifier keys scale it
+        [JsonPropertyName("freeCameraSpeed")]
+        public float FreeCameraSpeed { get; set; } = 1500f;
+
+        [JsonPropertyName("freeCameraFastMultiplier")]
+        public float FreeCameraFastMultiplier { get; set; } = 4f;
+
+        [JsonPropertyName("freeCameraSlowMultiplier")]
+        public float FreeCameraSlowMultiplier { get; set; } = 0.25f;
+
+        // Detailed [FreeCamera] diagnostics in the log (start values, heartbeat); off for normal use
+        [JsonPropertyName("freeCameraDebugLog")]
+        public bool FreeCameraDebugLog { get; set; } = false;
+
+        // Also holds the body still: animations paused and the body no longer follows the look direction
+        [JsonPropertyName("freeCameraFreezeBody")]
+        public bool FreeCameraFreezeBody { get; set; } = true;
+
+        // While the camera flies the soldier is held in place (MaxAcceleration 0), so the normal movement keys fly the camera.
+        [JsonPropertyName("freeCameraFreezeSoldier")]
+        public bool FreeCameraFreezeSoldier { get; set; } = true;
+
+        [JsonPropertyName("freeCameraKeyForward")]
+        public Keys FreeCameraKeyForward { get; set; } = Keys.W;
+
+        [JsonPropertyName("freeCameraKeyBack")]
+        public Keys FreeCameraKeyBack { get; set; } = Keys.S;
+
+        [JsonPropertyName("freeCameraKeyLeft")]
+        public Keys FreeCameraKeyLeft { get; set; } = Keys.A;
+
+        [JsonPropertyName("freeCameraKeyRight")]
+        public Keys FreeCameraKeyRight { get; set; } = Keys.D;
+
+        [JsonPropertyName("freeCameraKeyUp")]
+        public Keys FreeCameraKeyUp { get; set; } = Keys.Space;
+
+        [JsonPropertyName("freeCameraKeyDown")]
+        public Keys FreeCameraKeyDown { get; set; } = Keys.LControlKey;
+
+        [JsonPropertyName("freeCameraKeyFast")]
+        public Keys FreeCameraKeyFast { get; set; } = Keys.LShiftKey;
+
+        [JsonPropertyName("freeCameraKeySlow")]
+        public Keys FreeCameraKeySlow { get; set; } = Keys.LMenu;
+
+        // ---- Render tweaks (experimental): engine console variables, client side only ----
+        [JsonPropertyName("renderNoFoliage")]
+        public bool RenderNoFoliage { get; set; } = false;
+
+
+
+        // [RenderTweaks] detail in the log: every variable found, its original value, every time the game changes one back
+        [JsonPropertyName("renderTweaksDebugLog")]
+        public bool RenderTweaksDebugLog { get; set; } = true;
 
         [JsonPropertyName("disableCollision")]
         public bool DisableCollision { get; set; } = false;
@@ -351,6 +426,9 @@ namespace squad_dma
 
         [JsonPropertyName("keybindAirStuck")]
         public Keys KeybindAirStuck { get; set; } = Keys.None;
+
+        [JsonPropertyName("keybindFreeCamera")]
+        public Keys KeybindFreeCamera { get; set; } = Keys.None;
 
         [JsonPropertyName("keybindQuickZoom")]
         public Keys KeybindQuickZoom { get; set; } = Keys.None;

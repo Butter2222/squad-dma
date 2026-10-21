@@ -241,8 +241,8 @@ namespace squad_dma
                 DrawBorder(canvas);
         }
 
-        /// <summary>Opacity of the widget windows, 0.1 to 1, from the Widget Opacity setting. Shared by every widget.</summary>
-        protected static float WindowOpacity => Math.Clamp(Program.Config.WidgetOpacity / 100f, 0.1f, 1f);
+        /// <summary>Opacity of the widget window, 0.1 to 1. Data widgets use the Info Widget Opacity setting; the aimview has its own.</summary>
+        protected virtual float WindowOpacity => Math.Clamp(Program.Config.InfoWidgetOpacity / 100f, 0.1f, 1f);
 
         private readonly SKPaint _opacityPaint = new();
 

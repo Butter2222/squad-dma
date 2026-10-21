@@ -177,10 +177,12 @@ namespace squad_dma.Source.Squad.Features
                     _discoverSw.ElapsedMilliseconds >= (_tracked.Count == 0 ? EmptyDiscoveryIntervalMs : DiscoveryIntervalMs))
                 {
                     _forceDiscover = false;
+                    long scanStart = PerfStats.Begin();
                     try { Discover(); }
                     finally
                     {
                         // Restart the timer even when this throws, otherwise a broken read would be retried on every game tick.
+                        PerfStats.RecordObjectivesScan(scanStart);
                         _discoverSw.Restart();
                         _stateSw.Restart();
                     }
@@ -239,30 +241,41 @@ namespace squad_dma.Source.Squad.Features
                 ulong arrayPtr = Memory.ReadPtr(actorsTArray);
                 if (count < 1 || count > MaxActorsPerLevel || arrayPtr == 0) continue;
 
-                var scatter = new ScatterReadMap(count);
-                var actorRound = scatter.AddRound();
-                var idRound = scatter.AddRound();
-                for (int i = 0; i < count; i++)
-                {
-                    var actorAddr = actorRound.AddEntry<ulong>(i, 0, arrayPtr + (uint)(i * 0x8));
-                    idRound.AddEntry<uint>(i, 1, actorAddr, null, Offsets.Actor.ID);
-                    idRound.AddEntry<ulong>(i, 2, actorAddr, null, Offsets.UObject.Class);
-                }
-                scatter.Execute();
+                var pointers = RegisteredActors.ReadActorPointers(arrayPtr, count);
 
-                for (int i = 0; i < count; i++)
+                // Chunked so a scan of a big level never holds the DMA link for long
+                for (int start = 0; start < count; start += 2048)
                 {
-                    var r = scatter.Results[i];
-                    if (!r.TryGetValue(0, out var ar) || !ar.TryGetResult<ulong>(out var addr) || addr == 0) continue;
-                    if (!r.TryGetValue(1, out var ir) || !ir.TryGetResult<uint>(out var nameId) || nameId == 0) continue;
-                    actors.Add((addr, nameId));
-                    if (!_graphMatches.ContainsKey(nameId)) unknownIds.Add(nameId);
-
-                    if (r.TryGetValue(2, out var cr) && cr.TryGetResult<ulong>(out var cls) && IsUserPtr(cls))
+                    int n = Math.Min(2048, count - start);
+                    var scatter = new ScatterReadMap(n);
+                    var round = scatter.AddRound();
+                    for (int i = 0; i < n; i++)
                     {
-                        actorClasses.Add((addr, cls));
-                        if (!_zoneClassMatch.ContainsKey(cls)) unknownClasses.Add(cls);
+                        ulong actorAddr = pointers[start + i];
+                        if (actorAddr == 0) continue;
+                        round.AddEntry<uint>(i, 1, actorAddr, null, Offsets.Actor.ID);
+                        round.AddEntry<ulong>(i, 2, actorAddr, null, Offsets.UObject.Class);
                     }
+                    scatter.Execute();
+
+                    for (int i = 0; i < n; i++)
+                    {
+                        ulong addr = pointers[start + i];
+                        if (addr == 0) continue;
+                        var r = scatter.Results[i];
+                        if (!r.TryGetValue(1, out var ir) || !ir.TryGetResult<uint>(out var nameId) || nameId == 0) continue;
+                        actors.Add((addr, nameId));
+                        if (!_graphMatches.ContainsKey(nameId)) unknownIds.Add(nameId);
+
+                        if (r.TryGetValue(2, out var cr) && cr.TryGetResult<ulong>(out var cls) && IsUserPtr(cls))
+                        {
+                            actorClasses.Add((addr, cls));
+                            if (!_zoneClassMatch.ContainsKey(cls)) unknownClasses.Add(cls);
+                        }
+                    }
+
+                    if (start + 2048 < count)
+                        Thread.Sleep(1);
                 }
             }
 

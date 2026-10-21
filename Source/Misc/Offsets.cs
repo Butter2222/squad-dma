@@ -140,6 +140,9 @@
     {
         public const uint PlayerState = 0x2D8; // APlayerState*
         public const uint Controller = 0x2E8; // AController*
+        public const uint ControllerRotationFlags = 0x2C0; // uint8 bitfield: bit0 bUseControllerRotationPitch, bit1 bUseControllerRotationYaw, bit2 bUseControllerRotationRoll
+        public const uint UseControllerRotationPitchBit = 0x01;
+        public const uint UseControllerRotationYawBit = 0x02;
     }
 
     public struct Controller
@@ -147,6 +150,7 @@
         public const uint PlayerState = 0x2C0; // APlayerState*
         public const uint Pawn = 0x2F8; // APawn*
         public const uint Character = 0x308; // ACharacter*
+        public const uint ControlRotation = 0x330; // FRotator (doubles: Pitch, Yaw, Roll), where the player is looking
     }
 
     public struct PlayerController
@@ -198,6 +202,7 @@
 
     public struct FMinimalViewInfo
     {
+        public const uint Location = 0x0; // FVector (doubles)
         public const uint FOV = 0x30; // float
         public const uint AspectRatio = 0x5C; // float
         public const uint bConstrainAspectRatio = 0x68; // bit 0
@@ -285,6 +290,24 @@
         public const uint bIsCameraRecoilActive = 0x2C3A; // bool
         public const uint WeaponBasedFOV = 0x7C0; // float
         public const uint CachedAnimInstance1p = 0x2D50; // USQAnimInstanceSoldier1P*
+        public const uint ThirdPersonFlags = 0x1FD0; // uint8 bitfield: bit0 = bInThirdPersonView, bit1 = bCachedInThirdPerson
+        public const uint ThirdPersonViewBit = 0x01;
+        public const uint ViewMode3p = 0x2C91; // EThirdPersonCameraMode (uint8), see ThirdPersonCameraMode
+        public const uint ViewPos3p = 0x2C98; // FVector (doubles), where the stationary debug camera sits
+        public const uint ViewDistance3p = 0x2CB0; // float
+        public const uint ViewOrientation3p = 0x2CB8; // FRotator (doubles), how the debug camera looks
+        public const uint bAdjustingView3p = 0x2CF4; // bool
+    }
+
+    // EThirdPersonCameraMode values the soldier's third-person camera understands
+    public struct ThirdPersonCameraMode
+    {
+        public const byte None = 0;
+        public const byte CameraBone = 3;
+        public const byte DebugCameraFollowCharacter = 4;
+        public const byte DebugCameraFollowCharacterLocked = 5;
+        public const byte DebugCameraStationaryPan = 6;
+        public const byte DebugCameraStationary = 7; // camera stays at ViewPos3p
     }
 
     public struct USQItemStaticInfo
@@ -476,6 +499,12 @@
         public const uint FOVAngle = 0x33C; // float
     }
 
+    public struct USkeletalMeshComponent
+    {
+        public const uint AnimFlags = 0xAB0; // uint8 bitfield: bit3 bNoSkeletonUpdate, bit4 bPauseAnims
+        public const uint PauseAnimsBit = 0x10;
+    }
+
     public struct USkinnedMeshComponent
     {
         public const uint SkeletalMesh = 0x5A0; // USkeletalMesh*
@@ -508,6 +537,17 @@
         public const uint MaxFlySpeed = 0x334; // float
         public const uint MaxCustomMovementSpeed = 0x338; // float
         public const uint MaxAcceleration = 0x33C; // float
+    }
+
+    // Unreal's console variable registry (FConsoleManager::ConsoleObjects), found by scanning, not read from a fixed offset
+    public struct ConsoleRegistry
+    {
+        public const uint ElementStrideStringKey = 0x20; // TSetElement<TPair<FString, IConsoleObject*>>: FString (16) + pointer (8) + hash links (8)
+        public const uint ElementStrideNameKey = 0x18;   // the same with an FName key (8) instead of an FString
+        public const uint ValueOffsetStringKey = 0x10;   // IConsoleObject* inside an element
+        public const uint ValueOffsetNameKey = 0x08;
+        public const uint ObjectScanSize = 0x400;        // how much of a candidate singleton is searched for the map
+        public const uint CvarScanSize = 0x100;          // how much of a console variable object is searched for its value
     }
 
     public struct USQVehicleSeatComponent

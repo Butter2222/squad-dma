@@ -570,6 +570,7 @@ namespace squad_dma
         /// <param name="useCache">Use caching for this read (recommended).</param>
         internal static void ReadScatter(ReadOnlySpan<IScatterEntry> entries)
         {
+            long perfStart = PerfStats.Begin();
             var scatter = _process.Scatter_Initialize(Vmm.FLAG_NOCACHE);
             if (scatter == null)
             {
@@ -621,6 +622,11 @@ namespace squad_dma
             finally
             {
                 scatter.Close();
+
+                int failedItems = 0;
+                foreach (var entry in entries)
+                    if (entry != null && entry.IsFailed) failedItems++;
+                PerfStats.EndRead(perfStart, entries.Length, failedItems);
             }
         }
         #endregion
@@ -633,8 +639,11 @@ namespace squad_dma
         {
             if ((uint)size > PAGE_SIZE * 1500) throw new DMAException("Buffer length outside expected bounds!");
             ThrowIfDMAShutdown();
+            long perfStart = PerfStats.Begin();
             var buf = _process.MemRead(addr, (uint)size, Vmm.FLAG_NOCACHE);
-            if (buf.Length != size) throw new DMAException("Incomplete memory read!");
+            bool complete = buf.Length == size;
+            PerfStats.EndRead(perfStart, 1, complete ? 0 : 1);
+            if (!complete) throw new DMAException("Incomplete memory read!");
             return new Span<byte>(buf);
         }
 
@@ -690,16 +699,24 @@ namespace squad_dma
         /// <param name="addr">Address to read from.</param>
         public static T ReadValue<T>(ulong addr) where T : struct
         {
+            long perfStart = PerfStats.Begin();
+            int failed = 1;
             try
             {
                 int size = Marshal.SizeOf(typeof(T));
                 ThrowIfDMAShutdown();
                 var buf = _process.MemRead(addr, (uint)size, Vmm.FLAG_NOCACHE);
-                return MemoryMarshal.Read<T>(buf);
+                var value = MemoryMarshal.Read<T>(buf);
+                failed = 0;
+                return value;
             }
             catch (Exception ex)
             {
                 throw new DMAException($"ERROR reading {typeof(T)} value at 0x{addr:X}", ex);
+            }
+            finally
+            {
+                PerfStats.EndRead(perfStart, 1, failed);
             }
         }
 
@@ -804,14 +821,20 @@ namespace squad_dma
         public static void WriteValue<T>(ulong addr, T value)
         where T : unmanaged
         {
+            bool ok = false;
             try
             {
                 if (!_process.MemWriteStruct(addr, value))
                     throw new Exception("Memory Write Failed!");
+                ok = true;
             }
             catch (Exception ex)
             {
                 throw new DMAException($"[DMA] ERROR writing {typeof(T)} value at 0x{addr.ToString("X")}", ex);
+            }
+            finally
+            {
+                PerfStats.EndWrite(ok);
             }
         }
 
@@ -846,7 +869,9 @@ namespace squad_dma
                     }
                 }
 
-                if (!scatter.Execute())
+                bool executed = scatter.Execute();
+                PerfStats.EndWrite(executed);
+                if (!executed)
                     throw new Exception("Scatter write execution failed.");
             }
         }

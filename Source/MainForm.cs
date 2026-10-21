@@ -16,7 +16,7 @@ namespace squad_dma
         #region Fields
         private readonly Config _config;
         private SKGLControl _mapCanvas;
-        private readonly Stopwatch _fpsWatch = new();
+        private readonly Stopwatch _housekeepingWatch = new();
         private readonly object _renderLock = new();
         private readonly object _loadMapBitmapsLock = new();
         private readonly System.Timers.Timer _mapChangeTimer = new(100);
@@ -54,11 +54,11 @@ namespace squad_dma
         private AimviewWidget _aimviewWidget;
         private TInfoWidget _tInfoWidget;
         private TicketsWidget _ticketsWidget;
+        private DiagnosticsWidget _diagnostics;
 
         private bool _isFreeMapToggled;
         private bool _isDragging;
         private float _uiScale = 1.0f;
-        private int _fps;
         private int _mapSelectionIndex;
         private int _lastFriendlyTickets;
         private int _lastEnemyTickets;
@@ -270,6 +270,7 @@ namespace squad_dma
         {
             _tInfoWidget = new TInfoWidget(_mapCanvas, this, _uiScale);
             _ticketsWidget = new TicketsWidget(_mapCanvas, this, _uiScale);
+            _diagnostics = new DiagnosticsWidget(_mapCanvas, _uiScale);
         }
 
         private void InitializeTimers()
@@ -331,7 +332,7 @@ namespace squad_dma
         private void LoadInitialData()
         {
             LoadMaps();
-            _fpsWatch.Start();
+            _housekeepingWatch.Start();
         }
 
         private void InitializeColorsTab()
@@ -357,6 +358,12 @@ namespace squad_dma
             e.Cancel = true;
             this.Enabled = false;
 
+            // Put the soldier back first: the game keeps running after the radar closes and must not be left frozen
+            try { Memory._game?.ShutdownRenderTweaks(); }
+            catch (Exception ex) { Logger.Error($"[RenderTweaks] Could not restore the render settings while closing: {ex.Message}"); }
+            try { Memory._game?.SetFreeCamera(false); }
+            catch (Exception ex) { Logger.Error($"[FreeCamera] Could not switch it off while closing: {ex.Message}"); }
+
             Program.Log("Closing form");
             if (_espOverlay != null && !_espOverlay.IsDisposed)
             {
@@ -379,6 +386,8 @@ namespace squad_dma
 
             _ticketsWidget?.Dispose();
             _ticketsWidget = null;
+            _diagnostics?.Dispose();
+            _diagnostics = null;
 
             CleanupLoadedBitmaps();
             Config.ClearCache();
@@ -411,6 +420,11 @@ namespace squad_dma
                 }
                 
                 Config.SaveConfig(_config);
+                return true;
+            }
+            else if (keyData == _config.KeybindFreeCamera && chkFreeCamera.Checked)
+            {
+                ToggleFreeCamera();
                 return true;
             }
             else if (keyData == _config.KeybindToggleEnemyDistance)
@@ -485,6 +499,7 @@ namespace squad_dma
             // Keybind buttons
             btnKeybindSpeedHack.Text = _config.KeybindSpeedHack == Keys.None ? "None" : _config.KeybindSpeedHack.ToString();
             btnKeybindAirStuck.Text = _config.KeybindAirStuck == Keys.None ? "None" : _config.KeybindAirStuck.ToString();
+            btnKeybindFreeCamera.Text = _config.KeybindFreeCamera == Keys.None ? "None" : _config.KeybindFreeCamera.ToString();
             btnKeybindQuickZoom.Text = _config.KeybindQuickZoom == Keys.None ? "None" : _config.KeybindQuickZoom.ToString();
             btnKeybindToggleEnemyDistance.Text = _config.KeybindToggleEnemyDistance == Keys.None ? "None" : _config.KeybindToggleEnemyDistance.ToString();
             btnKeybindToggleMap.Text = _config.KeybindToggleMap == Keys.None ? "None" : _config.KeybindToggleMap.ToString();
@@ -537,6 +552,9 @@ namespace squad_dma
                 Config.SaveConfig(_config);
                 UpdateStatusIndicator(lblStatusSpeedHack, _config.SetSpeedHack);
             }
+            if (_config.KeybindFreeCamera != Keys.None && chkFreeCamera.Checked && InputManager.IsKeyPressed((int)_config.KeybindFreeCamera))
+                ToggleFreeCamera();
+
             if (InputManager.IsKeyPressed((int)_config.KeybindAirStuck) && chkAirStuck.Checked)
             {
                 _config.SetAirStuck = !_config.SetAirStuck;
@@ -714,6 +732,10 @@ namespace squad_dma
 
         private void skMapCanvas_MouseDown(object sender, MouseEventArgs e)
         {
+            // Clicks on the diagnostics pill or panel belong to it, not to the map
+            if (_diagnostics?.Contains(e.Location) == true)
+                return;
+
             if (e.Button == MouseButtons.Left && _isFreeMapToggled)
             {
                 _isDragging = true;
@@ -773,9 +795,10 @@ namespace squad_dma
         {
             try
             {
+                PerfStats.FrameBegin();
                 var canvas = e.Surface.Canvas;
                 canvas.Clear();
-                UpdateWindowTitle();
+                RunFrameHousekeeping();
 
                 if (IsReadyToRender())
                 {
@@ -783,11 +806,12 @@ namespace squad_dma
                     {
                         // Eliminates 5 redundant GetMapLocation() calls (each allocating MapParameters and running
                         // AspectFill) plus one per AA projectile: map parameters are computed once per frame.
-                        var mapParams = GetMapLocation();
-
                         // Eliminates live per-entity reads (locked Position getters, repeated team lookups) and the
                         // three separate dictionary enumerations: actors are copied once into a reusable snapshot.
+                        // Built first: it also advances the position smoothing the map centre depends on.
                         _frame.Build(AllActors, LocalPlayer);
+
+                        var mapParams = GetMapLocation();
 
                         // Eliminates per-frame List allocations for the dead-marker / AA lists.
                         _deadMarkerBuffer.Clear();
@@ -815,7 +839,11 @@ namespace squad_dma
                     DrawStatusText(canvas);
                 }
 
+                // Fixed status pill (and the detail panel when open), drawn over everything else
+                _diagnostics?.Draw(canvas);
+
                 canvas.Flush();
+                PerfStats.FrameEnd();
             }
             catch { }
         }
@@ -914,6 +942,7 @@ namespace squad_dma
             _aimviewWidget?.SetScaleFactor(_uiScale);
             _tInfoWidget?.SetScaleFactor(_uiScale);
             _ticketsWidget?.SetScaleFactor(_uiScale);
+            _diagnostics?.SetScaleFactor(_uiScale);
             
             if (_mapCanvas != null)
             {
@@ -1302,7 +1331,9 @@ namespace squad_dma
             chkEspShowHealth.Checked = _config.EspShowHealth;
             txtEspFontSize.Text = _config.ESPFontSize.ToString();
             trkTechMarkerScale.Value = _config.TechMarkerScale;
-            trkWidgetOpacity.Value = Math.Clamp(_config.WidgetOpacity, trkWidgetOpacity.Minimum, trkWidgetOpacity.Maximum);
+            trkAimviewOpacity.Value = Math.Clamp(_config.AimviewOpacity, trkAimviewOpacity.Minimum, trkAimviewOpacity.Maximum);
+            trkInfoWidgetOpacity.Value = Math.Clamp(_config.InfoWidgetOpacity, trkInfoWidgetOpacity.Minimum, trkInfoWidgetOpacity.Maximum);
+            UpdateOpacityLabels();
             #endregion
             #endregion
 
@@ -1319,6 +1350,9 @@ namespace squad_dma
             chkQuickSwap.Checked = _config.QuickSwap;
             chkForceFullAuto.Checked = _config.ForceFullAuto;
             chkNoCameraShake.Checked = _config.NoCameraShake;
+            chkFreeCamera.Checked = _config.FreeCameraEnabled;
+            chkNoFoliage.Checked = _config.RenderNoFoliage;
+            chkShowDiagnostics.Checked = _config.ShowDiagnostics;
             chkNoRecoil.Checked = _config.NoRecoil;
             chkNoSpread.Checked = _config.NoSpread;
             chkNoSway.Checked = _config.NoSway;
@@ -1372,8 +1406,31 @@ namespace squad_dma
 
             while (true)
             {
-                await Task.Run(() => Thread.SpinWait(25000)); // High performance async delay
+                // The wait happens on a pool thread, so the UI thread stays free for input and timers between frames.
+                await Task.Run(WaitForNextFrame);
                 _mapCanvas.Refresh(); // draw next frame
+            }
+        }
+
+        private const double TargetFrameMs = 1000.0 / 120;
+        private long _nextFrameTicks;
+
+        /// <summary>Caps the radar at ~120 fps: sleeps most of the gap, spins the last bit for accuracy.</summary>
+        private void WaitForNextFrame()
+        {
+            long now = Stopwatch.GetTimestamp();
+            long frame = (long)(TargetFrameMs * Stopwatch.Frequency / 1000.0);
+            if (_nextFrameTicks == 0 || now - _nextFrameTicks > frame * 4)
+                _nextFrameTicks = now; // first frame, or we fell far behind: don't try to catch up
+
+            _nextFrameTicks += frame;
+
+            while (true)
+            {
+                double remainingMs = (_nextFrameTicks - Stopwatch.GetTimestamp()) * 1000.0 / Stopwatch.Frequency;
+                if (remainingMs <= 0) return;
+                if (remainingMs > 2) Thread.Sleep(1);
+                else Thread.SpinWait(50);
             }
         }
 
@@ -1389,22 +1446,34 @@ namespace squad_dma
                 )
             );
 
+            // Load the new map first, outside the render lock, so painting is only held up for the swap itself.
+            var newMap = _maps[_mapSelectionIndex];
+            MapImage[] newImages = null;
+            try
+            {
+                newImages = new MapImage[newMap.ConfigFile.MapLayers.Count];
+                for (int i = 0; i < newImages.Length; i++)
+                    newImages[i] = newMap.ConfigFile.MapLayers[i].LoadImage();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"ERROR loading map {newMap.Name}: {ex}");
+            }
+
             lock (_renderLock)
             {
                 try
                 {
-                    _selectedMap = _maps[_mapSelectionIndex]; // Swap map
+                    _selectedMap = newMap; // Swap map
 
-                    if (_loadedBitmaps is not null)
+                    var oldImages = _loadedBitmaps;
+                    _loadedBitmaps = newImages;
+
+                    if (oldImages is not null)
                     {
-                        foreach (var bitmap in _loadedBitmaps)
+                        foreach (var bitmap in oldImages)
                             bitmap?.Dispose(); // Cleanup resources
                     }
-
-                    _loadedBitmaps = new MapImage[_selectedMap.ConfigFile.MapLayers.Count];
-
-                    for (int i = 0; i < _loadedBitmaps.Length; i++)
-                        _loadedBitmaps[i] = _selectedMap.ConfigFile.MapLayers[i].LoadImage(); // Load new bitmap(s)
 
                     TerrainHeightmap.Select(_selectedMap);
                 }
@@ -1430,6 +1499,7 @@ namespace squad_dma
         private void HandleGameStateChange()
         {
             var currentGameStatus = Memory.GameStatus;
+
             
             if (currentGameStatus == _previousGameStatus)
             {
@@ -1497,6 +1567,15 @@ namespace squad_dma
                             if (_config.SetSpeedHack)
                                 Memory._game.SetSpeedHack(true);
                             
+                            // The camera is never resumed on its own: a new session starts with the soldier's view
+                            if (_config.SetFreeCamera)
+                            {
+                                _config.SetFreeCamera = false;
+                            }
+
+                            if (_config.RenderNoFoliage)
+                                Memory._game.RefreshRenderTweaks();
+
                             if (_config.SetAirStuck)
                                 Memory._game.SetAirStuck(true);
                                 
@@ -1553,35 +1632,19 @@ namespace squad_dma
 
         #region Radar Tab
         #region Helper Functions
-        private void UpdateWindowTitle()
+        /// <summary>Per-frame upkeep while in a match: follows the map the game loaded and trims GPU resources once a second.</summary>
+        private void RunFrameHousekeeping()
         {
-            bool inGame = this.InGame;
-            var localPlayer = this.LocalPlayer;
+            if (!this.InGame || this.LocalPlayer is null)
+                return;
 
-            if (inGame && localPlayer is not null)
+            UpdateSelectedMap();
+
+            if (_housekeepingWatch.ElapsedMilliseconds >= 1000)
             {
-                UpdateSelectedMap();
-
-                if (_fpsWatch.ElapsedMilliseconds >= 1000)
-                {
-                    // Purge resources to mitigate memory leak
-                    _mapCanvas.GRContext.PurgeResources();
-
-                    var fps = _fps;
-                    var memTicks = Memory.Ticks;
-
-                    this.Invoke((MethodInvoker)delegate
-                    {
-                        this.Text = $"Squad DMA ({fps} fps)";
-                    });
-
-                    _fpsWatch.Restart();
-                    _fps = 0;
-                }
-                else
-                {
-                    _fps++;
-                }
+                // Only drop GPU resources that have gone unused; a full purge every second forced the map tiles to be re-uploaded.
+                _mapCanvas.GRContext.PurgeUnusedResources(10_000);
+                _housekeepingWatch.Restart();
             }
         }
 
@@ -2445,9 +2508,24 @@ namespace squad_dma
             Config.SaveConfig(_config);
         }
 
-        private void trkWidgetOpacity_Scroll(object sender, EventArgs e)
+        private void trkInfoWidgetOpacity_Scroll(object sender, EventArgs e)
         {
-            _config.WidgetOpacity = trkWidgetOpacity.Value;
+            _config.InfoWidgetOpacity = trkInfoWidgetOpacity.Value;
+            UpdateOpacityLabels();
+            _mapCanvas.Invalidate();
+            Config.SaveConfig(_config);
+        }
+
+        private void UpdateOpacityLabels()
+        {
+            lblAimviewOpacity.Text = $"Aimview Opacity: {trkAimviewOpacity.Value}%";
+            lblInfoWidgetOpacity.Text = $"Info Widget Opacity: {trkInfoWidgetOpacity.Value}%";
+        }
+
+        private void trkAimviewOpacity_Scroll(object sender, EventArgs e)
+        {
+            _config.AimviewOpacity = trkAimviewOpacity.Value;
+            UpdateOpacityLabels();
             _mapCanvas.Invalidate();
             Config.SaveConfig(_config);
         }
@@ -2681,6 +2759,49 @@ namespace squad_dma
             }
         }
 
+        private void ChkShowDiagnostics_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.ShowDiagnostics = chkShowDiagnostics.Checked;
+            Config.SaveConfig(_config);
+            _mapCanvas?.Invalidate();
+        }
+
+        private void ChkRenderTweak_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.RenderNoFoliage = chkNoFoliage.Checked;
+            Config.SaveConfig(_config);
+
+            if (InGame)
+                Memory._game?.RefreshRenderTweaks();
+        }
+
+        private void ChkFreeCamera_CheckedChanged(object sender, EventArgs e)
+        {
+            _config.FreeCameraEnabled = chkFreeCamera.Checked;
+
+            // Unchecking also stops a camera that is flying
+            if (!chkFreeCamera.Checked && _config.SetFreeCamera)
+            {
+                _config.SetFreeCamera = false;
+                if (InGame)
+                    Memory._game?.SetFreeCamera(false);
+            }
+
+            Config.SaveConfig(_config);
+        }
+
+        private void ToggleFreeCamera()
+        {
+            if (!InGame)
+            {
+                return;
+            }
+
+            _config.SetFreeCamera = !_config.SetFreeCamera;
+            Memory._game?.SetFreeCamera(_config.SetFreeCamera);
+            Config.SaveConfig(_config);
+        }
+
         private void ChkNoCameraShake_CheckedChanged(object sender, EventArgs e)
         {
             _config.NoCameraShake = chkNoCameraShake.Checked;
@@ -2837,6 +2958,10 @@ namespace squad_dma
             {
                 _config.KeybindSpeedHack = key;
             }
+            else if (_currentKeybindButton == btnKeybindFreeCamera)
+            {
+                _config.KeybindFreeCamera = key;
+            }
             else if (_currentKeybindButton == btnKeybindAirStuck)
             {
                 _config.KeybindAirStuck = key;
@@ -2866,6 +2991,11 @@ namespace squad_dma
         private void BtnKeybindSpeedHack_Click(object sender, EventArgs e)
         {
             StartKeybindCapture(btnKeybindSpeedHack);
+        }
+
+        private void BtnKeybindFreeCamera_Click(object sender, EventArgs e)
+        {
+            StartKeybindCapture(btnKeybindFreeCamera);
         }
 
         private void BtnKeybindAirStuck_Click(object sender, EventArgs e)

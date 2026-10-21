@@ -105,6 +105,9 @@ namespace squad_dma
         public void SetNoRecoil(bool enable) => _soldierManager?.SetNoRecoil(enable);
         public void SetNoSway(bool enable) => _soldierManager?.SetNoSway(enable);
         public void SetInstantGrenade(bool enable) => _soldierManager?.SetInstantGrenade(enable);
+        public void SetFreeCamera(bool enable) => _soldierManager?.SetFreeCamera(enable);
+        public void RefreshRenderTweaks() => _soldierManager?.RefreshRenderTweaks();
+        public void ShutdownRenderTweaks() => _soldierManager?.ShutdownRenderTweaks();
 
         public PlayerState GetPlayerState() => _currentPlayerState;
         
@@ -157,6 +160,7 @@ namespace squad_dma
                         _objectives = new Objectives(_gameWorld);
 
                         InitializeManagers();
+                        StartBackgroundWorkers();
                         
                         return;
                     }
@@ -178,11 +182,11 @@ namespace squad_dma
                     throw new GameEnded("Game has ended!");
                 }
 
+                RethrowWorkerFault();
                 ValidateWorld();
                 UpdateLocalPlayerInfo();
-                this._actors.UpdateList();
                 this._actors.UpdateAllPlayers();
-                _objectives?.Update();
+                // Actor discovery and objective scans run on their own threads (see StartBackgroundWorkers)
 
                 //_debugVehicles?.GatherVehicleInformation();
 
@@ -199,6 +203,65 @@ namespace squad_dma
             {
                 HandleUnexpectedException(ex);
             }
+        }
+        #endregion
+
+        #region Background workers
+        // The position loop (GameLoop) must never wait on the big scans, so those run beside it:
+        //  - actor discovery: reads the level's actor array, finds new/removed vehicles and deployables, players
+        //  - objectives: flag / zone discovery and state refresh
+        // A fatal error on either thread (game ended, DMA shut down) is handed to GameLoop, which handles it as before.
+        private CancellationTokenSource _workerCts;
+        private volatile Exception _workerFault;
+
+        private void StartBackgroundWorkers()
+        {
+            // The position loop needs actors on its very first pass, so the first list is built before it starts.
+            _actors.UpdateList();
+
+            _workerFault = null;
+            _workerCts?.Cancel();
+            var cts = _workerCts = new CancellationTokenSource();
+            var actors = _actors;
+            var objectives = _objectives;
+
+            StartWorker("Actor discovery", cts.Token, actors.UpdateList, 50);
+            StartWorker("Objectives", cts.Token, () => objectives?.Update(), 100);
+        }
+
+        private void StartWorker(string name, CancellationToken token, Action work, int idleMs)
+        {
+            new Thread(() =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        work();
+                    }
+                    catch (Exception ex) when (ex is DMAShutdown or GameEnded)
+                    {
+                        _workerFault = ex;
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"{name} worker error: {ex.Message}");
+                        if (token.WaitHandle.WaitOne(1000)) return;
+                    }
+
+                    if (token.WaitHandle.WaitOne(idleMs)) return;
+                }
+            })
+            { IsBackground = true, Name = name }.Start();
+        }
+
+        private void RethrowWorkerFault()
+        {
+            var fault = _workerFault;
+            if (fault == null) return;
+            _workerFault = null;
+            throw fault;
         }
         #endregion
 
@@ -314,6 +377,7 @@ namespace squad_dma
         private void EndSession()
         {
             this._inGame = false;
+            _workerCts?.Cancel();
 
             var manager = _soldierManager;
             _soldierManager = null;
